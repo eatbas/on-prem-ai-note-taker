@@ -32,6 +32,60 @@ check_docker_compose() {
     echo "✅ Docker Compose is available"
 }
 
+# Function to update codebase from Git
+update_codebase() {
+    echo ""
+    echo "📥 Updating codebase from Git..."
+    echo "================================"
+    
+    # Check if we're in a git repository
+    if [ ! -d ".git" ]; then
+        echo "❌ Not a git repository. Skipping git update."
+        return
+    fi
+    
+    # Check if there are uncommitted changes
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "⚠️  Warning: You have uncommitted changes:"
+        git status --short
+        echo ""
+        read -p "Do you want to stash changes before pulling? (y/N): " -n 1 -r
+        echo
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            echo "📦 Stashing uncommitted changes..."
+            git stash push -m "Auto-stash before restart: $(date)"
+            echo "✅ Changes stashed"
+        else
+            echo "❌ Aborting due to uncommitted changes. Please commit or stash them first."
+            exit 1
+        fi
+    fi
+    
+    # Fetch latest changes
+    echo "📡 Fetching latest changes from remote..."
+    git fetch origin
+    
+    # Check if we're behind the remote
+    local current_branch=$(git branch --show-current)
+    local behind_count=$(git rev-list HEAD..origin/$current_branch --count)
+    
+    if [ "$behind_count" -gt 0 ]; then
+        echo "🔄 Pulling $behind_count new commits from origin/$current_branch..."
+        git pull origin $current_branch
+        echo "✅ Codebase updated successfully"
+    else
+        echo "✅ Codebase is already up to date"
+    fi
+    
+    # Show current commit info
+    echo ""
+    echo "📋 Current commit info:"
+    echo "   Branch: $(git branch --show-current)"
+    echo "   Commit: $(git rev-parse --short HEAD)"
+    echo "   Message: $(git log -1 --pretty=format:'%s')"
+    echo "   Date: $(git log -1 --pretty=format:'%cd' --date=short)"
+}
+
 # Function to show current service status
 show_status() {
     echo ""
@@ -135,16 +189,20 @@ main() {
     echo "============================="
     echo "This script will:"
     echo "  1. Check Docker and Docker Compose"
-    echo "  2. Stop all running services"
-    echo "  3. Clean up Docker resources"
-    echo "  4. Start services with updated code"
-    echo "  5. Wait for services to be healthy"
-    echo "  6. Show final status"
+    echo "  2. Update codebase from Git (auto-stash if needed)"
+    echo "  3. Stop all running services"
+    echo "  4. Clean up Docker resources"
+    echo "  5. Start services with updated code"
+    echo "  6. Wait for services to be healthy"
+    echo "  7. Show final status"
     echo ""
     
     # Check prerequisites
     check_docker
     check_docker_compose
+    
+    # Update codebase from Git
+    update_codebase
     
     # Show current status
     show_status
