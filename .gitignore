@@ -9,6 +9,7 @@ backend/**/*.pyc
 
 # Env
 .env
+frontend/.env.local
 
 # OS
 *.DS_Store
