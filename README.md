@@ -247,6 +247,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 **Your meetings. Your data. Your control.**
 
+**Vibe Coded with ❤️ via Cursor**
+
 [![Download Latest Release](https://img.shields.io/badge/Download-Latest%20Release-blue?style=for-the-badge&logo=github)](https://github.com/eatbas/on-prem-ai-note-taker/releases)
 
 </div>
