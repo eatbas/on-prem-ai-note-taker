@@ -1,4 +1,11 @@
-const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
+const apiBase = (() => {
+	try {
+		// @ts-ignore
+		const fromPreload = (window as any).API_BASE_URL as string | undefined
+		if (fromPreload) return fromPreload
+	} catch {}
+	return (import.meta as any).env.VITE_API_BASE_URL || '/api'
+})()
 
 function getUserId(): string | undefined {
 	try {
@@ -11,6 +18,14 @@ function getUserId(): string | undefined {
 }
 
 function getAuthHeader(): Record<string, string> {
+	try {
+		// @ts-ignore
+		const basic = (window as any).BASIC_AUTH as { username?: string; password?: string } | undefined
+		if (basic?.username && basic?.password) {
+			const token = btoa(`${basic.username}:${basic.password}`)
+			return { Authorization: `Basic ${token}` }
+		}
+	} catch {}
 	const u = (import.meta as any).env.VITE_BASIC_AUTH_USERNAME as string | undefined
 	const p = (import.meta as any).env.VITE_BASIC_AUTH_PASSWORD as string | undefined
 	if (u && p) {

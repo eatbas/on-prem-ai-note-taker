@@ -35,6 +35,11 @@
 				"from": "../backend",
 				"to": "backend",
 				"filter": ["**/*", "!__pycache__", "!*.pyc", "!venv", "!.env*"]
+			},
+			{
+				"from": "../frontend/dist",
+				"to": "dist",
+				"filter": ["**/*"]
 			}
 		],
 		"extraMetadata": {

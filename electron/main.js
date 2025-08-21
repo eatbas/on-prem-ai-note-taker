@@ -22,10 +22,21 @@ function startBackend() {
 	
 	console.log('🚀 Starting embedded backend...')
 	
-	// Get the path to the Python executable
-	const pythonPath = process.platform === 'win32' 
-		? path.join(process.resourcesPath, 'backend', 'venv', 'Scripts', 'python.exe')
-		: path.join(process.resourcesPath, 'backend', 'venv', 'bin', 'python')
+	// Get the path to the Python executable - try system Python first
+	let pythonPath = 'python3'
+	if (process.platform === 'win32') {
+		pythonPath = 'python'
+	}
+	
+	// Check if Python is available
+	const { execSync } = require('child_process')
+	try {
+		execSync(`${pythonPath} --version`, { stdio: 'pipe' })
+	} catch (error) {
+		console.error('❌ Python not found. Please install Python 3.8+')
+		dialog.showErrorBox('Python Required', 'Please install Python 3.8 or later from python.org')
+		return
+	}
 	
 	const backendPath = path.join(process.resourcesPath, 'backend')
 	
@@ -43,6 +54,69 @@ function startBackend() {
 		BASIC_AUTH_USERNAME: 'electron',
 		BASIC_AUTH_PASSWORD: 'electron-local',
 		LOG_LEVEL: 'INFO'
+	}
+	
+	// Install Python dependencies if needed
+	try {
+		console.log('📦 Checking Python dependencies...')
+		
+		// Check if key dependencies are already installed
+		try {
+			execSync(`${pythonPath} -c "import fastapi, uvicorn, sqlalchemy, aiosqlite"`, {
+				cwd: backendPath,
+				env: env,
+				stdio: 'pipe'
+			})
+			console.log('✅ Dependencies already installed, skipping installation')
+		} catch (importError) {
+			console.log('📦 Installing Python dependencies...')
+			
+			// First, upgrade pip to avoid compatibility issues
+			console.log('🔄 Upgrading pip...')
+			execSync(`${pythonPath} -m pip install --upgrade pip`, {
+				cwd: backendPath,
+				env: env,
+				stdio: 'pipe'
+			})
+			
+			// Install dependencies with verbose output and user flag
+			console.log('📦 Installing required packages...')
+			execSync(`${pythonPath} -m pip install --user -r ${path.join(backendPath, 'requirements.txt')}`, {
+				cwd: backendPath,
+				env: env,
+				stdio: 'pipe'
+			})
+			
+			console.log('✅ Dependencies installed successfully')
+		}
+	} catch (error) {
+		console.error('❌ Failed to install dependencies:', error.message)
+		
+		// Try alternative installation method
+		try {
+			console.log('🔄 Trying alternative installation method...')
+			execSync(`${pythonPath} -m pip install --user fastapi uvicorn sqlalchemy aiosqlite python-multipart`, {
+				cwd: backendPath,
+				env: env,
+				stdio: 'pipe'
+			})
+			console.log('✅ Core dependencies installed with alternative method')
+		} catch (altError) {
+			console.error('❌ Alternative installation also failed:', altError.message)
+			
+			// Show detailed error dialog
+			dialog.showErrorBox('Python Dependency Error', 
+				`Failed to install Python dependencies.\n\n` +
+				`Error: ${error.message}\n\n` +
+				`Please ensure:\n` +
+				`1. You have internet connection\n` +
+				`2. Python 3.8+ is properly installed\n` +
+				`3. You have write permissions to install packages\n\n` +
+				`You can also try installing manually:\n` +
+				`pip3 install fastapi uvicorn sqlalchemy aiosqlite python-multipart`
+			)
+			return
+		}
 	}
 	
 	// Start the backend process
@@ -68,18 +142,29 @@ function startBackend() {
 
 // Create the main application window
 function createWindow() {
-	// Create the browser window
+	// Create the browser window with responsive design
 	mainWindow = new BrowserWindow({
 		width: 1400,
 		height: 900,
+		minWidth: 800,
+		minHeight: 600,
 		webPreferences: {
 			preload: path.join(__dirname, 'preload.js'),
 			contextIsolation: true,
 			nodeIntegration: false,
-			webSecurity: true
+			webSecurity: true,
+			enableRemoteModule: false
 		},
 		icon: path.join(__dirname, 'icon.png'), // Add an icon if available
-		title: 'On-Prem AI Note Taker'
+		title: 'On-Prem AI Note Taker',
+		show: false, // Don't show until ready
+		backgroundColor: '#ffffff'
+	})
+
+	// Show window when ready to prevent visual flash
+	mainWindow.once('ready-to-show', () => {
+		mainWindow.show()
+		mainWindow.focus()
 	})
 
 	// Create application menu
@@ -140,22 +225,50 @@ function createWindow() {
 	// Load the app
 	if (isDev) {
 		// In development, load from Vite dev server
+		console.log(`🌐 Loading frontend from Vite dev server: http://localhost:${FRONTEND_PORT}`)
 		mainWindow.loadURL(`http://localhost:${FRONTEND_PORT}`)
 		mainWindow.webContents.openDevTools()
 	} else {
-		// In production, load from built files
-		const indexPath = path.join(__dirname, 'dist', 'index.html')
-		mainWindow.loadFile(indexPath)
+		// In production, load from bundled dist files
+		const indexPath = path.join(process.resourcesPath, 'dist', 'index.html')
+		console.log(`📁 Loading frontend from: ${indexPath}`)
+		
+		// Check if the file exists
+		if (fs.existsSync(indexPath)) {
+			mainWindow.loadFile(indexPath)
+		} else {
+			console.error(`❌ Frontend file not found at: ${indexPath}`)
+			// Show error dialog
+			dialog.showErrorBox('Frontend Error', 
+				`Frontend files not found at:\n${indexPath}\n\n` +
+				`This usually means the app wasn't built correctly.\n` +
+				`Please rebuild the app using:\n` +
+				`./scripts/build-desktop-app.sh`
+			)
+			return
+		}
 	}
 	
-	// Wait for backend to be ready
-	if (!isDev) {
-		mainWindow.webContents.on('did-fail-load', () => {
-			setTimeout(() => {
-				mainWindow.reload()
-			}, 1000)
-		})
-	}
+	// Handle loading errors
+	mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+		console.error(`❌ Frontend failed to load: ${errorDescription} (${errorCode})`)
+		console.error(`URL: ${validatedURL}`)
+		
+		if (!isDev) {
+			// In production, show error dialog
+			dialog.showErrorBox('Loading Error', 
+				`Failed to load the application:\n\n` +
+				`Error: ${errorDescription}\n` +
+				`Code: ${errorCode}\n\n` +
+				`Please try restarting the app or rebuilding it.`
+			)
+		}
+	})
+	
+	// Handle successful load
+	mainWindow.webContents.on('did-finish-load', () => {
+		console.log('✅ Frontend loaded successfully')
+	})
 	
 	mainWindow.on('closed', () => {
 		mainWindow = null
