@@ -33,6 +33,10 @@ class Settings:
 	ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
 	ollama_timeout_seconds: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
 
+	# Basic Auth (optional; if both empty, auth is disabled)
+	basic_auth_username: str = os.getenv("BASIC_AUTH_USERNAME", "")
+	basic_auth_password: str = os.getenv("BASIC_AUTH_PASSWORD", "")
+
 
 settings = Settings()
 

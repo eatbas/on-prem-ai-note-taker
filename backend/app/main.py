@@ -5,9 +5,11 @@ import tempfile
 from typing import Any, Dict, List, Optional
 import asyncio
 import logging
+import secrets
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
 
 from faster_whisper import WhisperModel
@@ -36,6 +38,22 @@ app.add_middleware(
 	allow_methods=["*"],
 	allow_headers=["*"],
 )
+
+# Optional Basic Auth
+security = HTTPBasic()
+
+def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
+	"""Enforce HTTP Basic auth if username/password are set in settings.
+	If not set, auth is disabled and the request is allowed."""
+	if not settings.basic_auth_username and not settings.basic_auth_password:
+		return None
+	if not credentials:
+		raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
+	is_user_ok = secrets.compare_digest(credentials.username or "", settings.basic_auth_username)
+	is_pass_ok = secrets.compare_digest(credentials.password or "", settings.basic_auth_password)
+	if not (is_user_ok and is_pass_ok):
+		raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
+	return None
 
 
 class TranscriptionSegment(BaseModel):
@@ -108,6 +126,7 @@ async def transcribe(
 	language: Optional[str] = Form(default=None),
 	vad_filter: bool = Form(default=True),
 	x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+	_: None = Depends(require_basic_auth),
 ) -> TranscriptionResponse:
 	sem = get_transcribe_semaphore()
 	model = get_whisper_model()
@@ -169,6 +188,7 @@ async def transcribe_and_summarize(
 	language: Optional[str] = Form(default=None),
 	vad_filter: bool = Form(default=True),
 	x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+	_: None = Depends(require_basic_auth),
 ) -> TranscribeAndSummarizeResponse:
 	sem = get_transcribe_semaphore()
 	async with sem:

@@ -174,6 +174,7 @@ Backend env vars:
 
 Frontend env:
 - `VITE_API_BASE_URL` (default `/api` when served via Nginx inside container)
+- `VITE_BASIC_AUTH_USERNAME`, `VITE_BASIC_AUTH_PASSWORD` (optional; if set, client sends Authorization: Basic)
 
 ---
 
@@ -207,6 +208,43 @@ npm run build:win
 To point the desktop app at a remote VPS UI:
 ```powershell
 $env:APP_URL="https://yourdomain.com"; npm run dev
+```
+
+### Example .env
+```ini
+# ===== Application =====
+APP_HOST=0.0.0.0
+APP_PORT=8000
+ALLOWED_ORIGINS=*
+WHISPER_MODEL=base
+WHISPER_COMPUTE_TYPE=auto
+WHISPER_DOWNLOAD_ROOT=
+OLLAMA_BASE_URL=http://ollama:11434
+OLLAMA_MODEL=llama3.1:8b
+OLLAMA_TIMEOUT_SECONDS=120
+MAX_UPLOAD_MB=200
+MAX_CONCURRENCY=2
+LOG_LEVEL=INFO
+
+# Backend Auth
+BASIC_AUTH_USERNAME=
+BASIC_AUTH_PASSWORD=
+
+# Frontend
+VITE_API_BASE_URL=/api
+VITE_BASIC_AUTH_USERNAME=
+VITE_BASIC_AUTH_PASSWORD=
+
+# Proxy (optional)
+EXCHANGE_PROXY_URL=
+
+# VPS (optional helpers)
+VPS_HOST=
+VPS_USER=
+VPS_PORT=22
+VPS_SSH_KEY=
+
+PUBLIC_BASE_URL=
 ```
 
 ---

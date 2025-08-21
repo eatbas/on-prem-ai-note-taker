@@ -10,6 +10,16 @@ function getUserId(): string | undefined {
 	return localStorage.getItem('user_id') || undefined
 }
 
+function getAuthHeader(): Record<string, string> {
+	const u = (import.meta as any).env.VITE_BASIC_AUTH_USERNAME as string | undefined
+	const p = (import.meta as any).env.VITE_BASIC_AUTH_PASSWORD as string | undefined
+	if (u && p) {
+		const token = btoa(`${u}:${p}`)
+		return { Authorization: `Basic ${token}` }
+	}
+	return {}
+}
+
 export async function transcribe(file: File, opts?: { language?: string; vadFilter?: boolean }) {
 	const form = new FormData()
 	form.append('file', file)
@@ -19,7 +29,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	const resp = await fetch(`${apiBase}/transcribe`, {
 		method: 'POST',
 		body: form,
-		headers: { 'X-User-Id': getUserId() || '' },
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
 	})
 	if (!resp.ok) throw new Error(`Transcribe failed: ${resp.status}`)
 	return resp.json()
@@ -28,7 +38,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 export async function summarize(text: string) {
 	const resp = await fetch(`${apiBase}/summarize`, {
 		method: 'POST',
-		headers: { 'Content-Type': 'application/json' },
+		headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
 		body: JSON.stringify({ text }),
 	})
 	if (!resp.ok) throw new Error(`Summarize failed: ${resp.status}`)
@@ -44,7 +54,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	const resp = await fetch(`${apiBase}/transcribe-and-summarize`, {
 		method: 'POST',
 		body: form,
-		headers: { 'X-User-Id': getUserId() || '' },
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
 	})
 	if (!resp.ok) throw new Error(`Transcribe+Summarize failed: ${resp.status}`)
 	return resp.json()

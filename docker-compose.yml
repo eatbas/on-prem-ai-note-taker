@@ -28,6 +28,8 @@ services:
       WHISPER_DOWNLOAD_ROOT: /models
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-}
+      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
     ports:
       - "8000:8000"
     healthcheck:
