@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Optional
 import asyncio
 import logging
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -107,6 +107,7 @@ async def transcribe(
 	file: UploadFile = File(...),
 	language: Optional[str] = Form(default=None),
 	vad_filter: bool = Form(default=True),
+	x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
 ) -> TranscriptionResponse:
 	sem = get_transcribe_semaphore()
 	model = get_whisper_model()
@@ -117,7 +118,7 @@ async def transcribe(
 		size_mb = len(content) / (1024 * 1024)
 		if size_mb > settings.max_upload_mb:
 			raise HTTPException(status_code=413, detail=f"File too large: {size_mb:.1f} MB > {settings.max_upload_mb} MB")
-		logger.info("Transcribe request: filename=%s size_mb=%.2f lang=%s", file.filename, size_mb, language)
+		logger.info("Transcribe request: filename=%s size_mb=%.2f lang=%s user=%s", file.filename, size_mb, language, x_user_id)
 
 		# Save to a temp file for faster-whisper consumption
 		with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename or "audio")[1]) as tmp:
@@ -167,10 +168,11 @@ async def transcribe_and_summarize(
 	file: UploadFile = File(...),
 	language: Optional[str] = Form(default=None),
 	vad_filter: bool = Form(default=True),
+	x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
 ) -> TranscribeAndSummarizeResponse:
 	sem = get_transcribe_semaphore()
 	async with sem:
-		transcript = await transcribe(file=file, language=language, vad_filter=vad_filter)  # type: ignore[arg-type]
+		transcript = await transcribe(file=file, language=language, vad_filter=vad_filter, x_user_id=x_user_id)  # type: ignore[arg-type]
 		summary = _ollama_client.summarize(transcript.text)
 		return TranscribeAndSummarizeResponse(transcript=transcript, summary=summary)
 

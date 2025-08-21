@@ -1,5 +1,15 @@
 const apiBase = import.meta.env.VITE_API_BASE_URL || '/api'
 
+function getUserId(): string | undefined {
+	try {
+		// Electron-preload may set window.USER_ID
+		// @ts-ignore
+		const fromGlobal = (window as any).USER_ID as string | undefined
+		if (fromGlobal) return fromGlobal
+	} catch {}
+	return localStorage.getItem('user_id') || undefined
+}
+
 export async function transcribe(file: File, opts?: { language?: string; vadFilter?: boolean }) {
 	const form = new FormData()
 	form.append('file', file)
@@ -9,6 +19,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	const resp = await fetch(`${apiBase}/transcribe`, {
 		method: 'POST',
 		body: form,
+		headers: { 'X-User-Id': getUserId() || '' },
 	})
 	if (!resp.ok) throw new Error(`Transcribe failed: ${resp.status}`)
 	return resp.json()
@@ -33,6 +44,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	const resp = await fetch(`${apiBase}/transcribe-and-summarize`, {
 		method: 'POST',
 		body: form,
+		headers: { 'X-User-Id': getUserId() || '' },
 	})
 	if (!resp.ok) throw new Error(`Transcribe+Summarize failed: ${resp.status}`)
 	return resp.json()

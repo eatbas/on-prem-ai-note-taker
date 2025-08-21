@@ -9,6 +9,8 @@ End-to-end, fully local note-taking app:
 - Upload audio/video; transcribe locally via faster-whisper
 - Summarize transcript via your local Ollama model
 - One-click Transcribe + Summarize
+- Offline-first capture (chunks saved in IndexedDB when offline; auto-sync when online)
+- Dashboard with tags, search, resend queued meetings, and per-meeting details view
 
 ### Architecture
 - `backend/`: FastAPI API
@@ -71,7 +73,7 @@ Requirements: Python 3.11, FFmpeg
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate    # Windows: .venv\\Scripts\\activate
+source .venv/bin/activate    # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
 # Optional: set envs
@@ -88,6 +90,11 @@ npm install
 npm run dev
 # App on http://localhost:5173
 ```
+
+Offline dev:
+- Start recording on the home page; chunks are saved every 5s.
+- If offline, recordings stay queued and visible on the dashboard.
+- When connectivity returns, queued meetings auto-sync; or click Send to retry.
 
 Run Ollama locally on your machine (outside Docker) if you prefer:
 ```bash
@@ -167,6 +174,23 @@ Backend env vars:
 
 Frontend env:
 - `VITE_API_BASE_URL` (default `/api` when served via Nginx inside container)
+
+---
+
+## Desktop app (Windows executable)
+
+The app can be wrapped in Electron to deliver a Windows `.exe` that opens the dashboard and provides the Windows username to the web app.
+
+- Identity: expose `process.env.USERNAME` via a `preload` script to `window.USER_ID`. The frontend automatically adds `X-User-Id` to upload requests when available.
+- Packaging: use `electron-builder` to create a `win` target.
+- Updates: either periodically ship a new installer, or integrate `electron-updater` pointing to your private file server.
+
+Preload example:
+```ts
+// electron/preload.ts
+import { contextBridge } from 'electron'
+contextBridge.exposeInMainWorld('USER_ID', process.env.USERNAME || '')
+```
 
 ---
 

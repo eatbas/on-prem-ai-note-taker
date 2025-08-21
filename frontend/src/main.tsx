@@ -1,6 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import { syncAllQueued, watchOnline } from './offline'
 
 const rootEl = document.getElementById('root')!
 createRoot(rootEl).render(
@@ -8,5 +9,12 @@ createRoot(rootEl).render(
 		<App />
 	</React.StrictMode>
 )
+
+// background: attempt sync when coming online
+watchOnline(async (online) => {
+	if (online) {
+		try { await syncAllQueued() } catch {}
+	}
+})
 
 
