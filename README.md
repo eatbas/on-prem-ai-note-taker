@@ -1,31 +1,102 @@
-## On-Prem AI Note Taker
+# 🎤 On-Prem AI Note Taker
 
-End-to-end, fully local note-taking app:
-- Backend: FastAPI + faster-whisper (speech-to-text) + Ollama (LLM summarization)
-- Frontend: Vite + React
-- Deploy: Docker Compose (backend, frontend, Ollama)
+> **End-to-end, fully local AI-powered note-taking application with speech-to-text and intelligent summarization**
 
-### Features
-- Upload audio/video; transcribe locally via faster-whisper
-- Summarize transcript via your local Ollama model
-- One-click Transcribe + Summarize
-- Offline-first capture (chunks saved in IndexedDB when offline; auto-sync when online)
-- Dashboard with tags, search (title/summary/transcript), resend queued meetings, and per-meeting details view
+[![Project Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=for-the-badge)](https://github.com/your-username/on-prem-ai-note-taker)
+[![Last Commit](https://img.shields.io/github/last-commit/your-username/on-prem-ai-note-taker)](https://github.com/your-username/on-prem-ai-note-taker/commits/main)
+[![Issues](https://img.shields.io/github/issues/your-username/on-prem-ai-note-taker)](https://github.com/your-username/on-prem-ai-note-taker/issues)
+[![Stars](https://img.shields.io/github/stars/your-username/on-prem-ai-note-taker)](https://github.com/your-username/on-prem-ai-note-taker/stargazers)
 
-### Architecture
-- `backend/`: FastAPI API
-  - `/api/transcribe` — accepts `multipart/form-data` with `file`
-  - `/api/summarize` — accepts JSON `{ text }`
-  - `/api/transcribe-and-summarize` — accepts file, returns transcript + summary
-- `frontend/`: React single-page app
-- `ollama` service: runs your LLM locally in the same Docker network
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](https://www.docker.com/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![React](https://img.shields.io/badge/React-Frontend-blue?logo=react)](https://reactjs.org/)
+[![Ollama](https://img.shields.io/badge/Ollama-LLM-orange?logo=ollama)](https://ollama.com/)
+
+## ✨ Features
+
+- 🎙️ **Audio/Video Transcription** - Powered by faster-whisper
+- 🤖 **AI Summarization** - Intelligent meeting notes via Ollama LLM
+- 🔄 **One-Click Processing** - Transcribe + Summarize in a single action
+- 📱 **Offline-First Design** - Record locally, sync when online
+- 🏷️ **Smart Organization** - Tags, search, and meeting management
+- 🛡️ **100% Private** - All processing happens on your infrastructure
+- 🌐 **VPS Ready** - Deploy backend on VPS, frontend locally
+
+## 🏗️ Architecture
+
+```
+┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
+│   Local Frontend│    │   VPS Backend   │    │   Ollama LLM    │
+│   (React + Vite)│◄──►│   (FastAPI)     │◄──►│   (Local Model) │
+│   Port 5173     │    │   Port 8000     │    │   Port 11434    │
+└─────────────────┘    └─────────────────┘    └─────────────────┘
+```
+
+- **`backend/`**: FastAPI API with speech-to-text and LLM integration
+- **`frontend/`**: React single-page app with offline capabilities
+- **`ollama/`**: Local LLM service for intelligent summarization
+
+## 🚀 Quick Start
+
+### **Option 1: VPS Backend + Local Frontend (Recommended)**
+```bash
+# 1. Clone repository
+git clone <your-repo-url>
+cd on-prem-ai-note-taker
+
+# 2. Start VPS backend
+docker compose up -d --build
+
+# 3. Set up local frontend
+cd frontend
+npm install
+npm run dev
+```
+
+### **Option 2: Everything Local**
+```bash
+# Start all services locally
+docker compose up -d --build
+```
+
+## 📚 **📖 Detailed Documentation**
+
+For comprehensive setup guides, troubleshooting, and advanced configuration, see the **[`documents/`](documents/) folder**:
+
+- **[🚀 Quick Start Guide](documents/03-QUICK-START.md)** - Get running in 3 simple steps
+- **[💻 Frontend Setup](documents/02-FRONTEND-SETUP.md)** - Local computer configuration
+- **[🖥️ Backend Management](documents/01-BACKEND-SETUP.md)** - VPS service management
+- **[🎮 Easy Launchers](documents/README.md)** - One-click startup scripts
+
+## 🔧 API Endpoints
+
+- **`/api/transcribe`** — Audio/video transcription
+- **`/api/summarize`** — Text summarization
+- **`/api/transcribe-and-summarize`** — Combined processing
+- **`/api/health`** — Service health check
+
+## 📋 Table of Contents
+
+- [🚀 Quick Start](#-quick-start)
+- [📚 Documentation](#-documentation)
+- [🔧 API Endpoints](#-api-endpoints)
+- [🐳 Docker Quickstart](#-docker-quickstart)
+- [💻 Local Development](#-local-development)
+- [☁️ VPS Installation](#️-vps-installation)
+- [⚙️ Configuration](#️-configuration)
+- [🖥️ Desktop App](#️-desktop-app)
+- [🔒 Security Features](#-security-features)
+- [📖 References](#-references)
 
 ---
 
-## Quickstart (Docker Compose)
+## 🐳 Docker Quickstart
 
-Requirements:
-- Docker and Docker Compose installed
+### Requirements
+- **Docker** (version 20.10+)
+- **Docker Compose** (version 2.0+)
+- **4GB+ RAM** (for Ollama models)
+- **2GB+ disk space** (for AI models)
 
 1) Clone and enter the repo
 ```bash
@@ -162,7 +233,15 @@ TLS: Use Certbot or a reverse proxy like Caddy/Traefik as you prefer.
 
 ---
 
-## Configuration
+## 🔒 Security Features
+
+- **🔐 Built-in Authentication** - HTTP Basic Auth with configurable credentials
+- **🌐 CORS Protection** - Restrict access to authorized domains only
+- **🛡️ Firewall Ready** - UFW firewall configuration scripts included
+- **🔒 Credential Management** - Secure environment variable handling
+- **🌍 Network Isolation** - Docker network isolation for services
+
+## ⚙️ Configuration
 
 Backend env vars:
 - `APP_HOST` (default `0.0.0.0`)
@@ -249,16 +328,47 @@ PUBLIC_BASE_URL=
 
 ---
 
-## Notes and Tips
-- The first transcription will download the Whisper model files; allow time and disk space.
-- If using GPU builds of Ollama/Whisper, refer to their docs for GPU flags and base images.
-- Large models need more RAM/VRAM; consider `small` or `medium` for modest servers.
+## 💡 Tips & Best Practices
+
+- **🎯 First Run**: Initial transcription downloads Whisper models (~1GB) - be patient!
+- **🖥️ Resource Management**: Use `small` or `medium` Whisper models for modest servers
+- **🚀 GPU Acceleration**: Enable GPU builds for faster processing (see Ollama/Whisper docs)
+- **🔒 Security**: Always change default credentials and enable firewall
+- **📊 Monitoring**: Use `docker compose logs -f` for real-time service monitoring
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🌟 Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=your-username/on-prem-ai-note-taker&type=Date)](https://star-history.com/#your-username/on-prem-ai-note-taker&Date)
 
 ---
 
-## References
-- Ollama docs: `https://ollama.com`
-- faster-whisper: `https://github.com/guillaumekln/faster-whisper`
-- FastAPI: `https://fastapi.tiangolo.com`
+## 📖 References
+
+- [🐙 Ollama Documentation](https://ollama.com)
+- [🎤 Faster-Whisper](https://github.com/guillaumekln/faster-whisper)
+- [⚡ FastAPI](https://fastapi.tiangolo.com)
+- [🐳 Docker Compose](https://docs.docker.com/compose/)
+
+---
+
+<div align="center">
+
+**🎉 Ready to build amazing AI-powered notes? Start with the [Quick Start Guide](documents/03-QUICK-START.md)!**
+
+[![Get Started](https://img.shields.io/badge/Get%20Started-Quick%20Start%20Guide-blue?style=for-the-badge&logo=rocket)](documents/03-QUICK-START.md)
+
+</div>
 
 
