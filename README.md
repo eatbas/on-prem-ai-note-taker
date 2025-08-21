@@ -143,6 +143,35 @@ echo "VPS_HOST=your.vps.ip.address" > .env
 
 The installer will be in `electron/dist-electron/`
 
+## 🚀 Quick Reference Commands
+
+### **VPS Management**
+```bash
+# Quick restart with Git update (recommended)
+./restart-services.sh
+
+# Check service status
+docker compose ps
+
+# View logs
+docker compose logs -f
+
+# Manual restart
+docker compose down && docker compose up -d --build
+```
+
+### **Desktop App Development**
+```bash
+# Build desktop app
+./scripts/build-desktop-app.sh
+
+# Run frontend locally
+cd frontend && npm run dev
+
+# Run backend locally
+cd backend && python -m uvicorn app.main:app --reload
+```
+
 ## 🚨 Common Issues & Fixes
 
 ### "Media devices not supported"
@@ -195,6 +224,49 @@ docker compose exec ollama ollama pull llama3.1:8b
 
 That's it! Your VPS is ready. Note the IP address for the desktop app configuration.
 
+### 🔄 VPS Service Management
+
+After initial setup, use the automated restart script to update and restart services:
+
+#### **Quick Restart (Recommended)**
+```bash
+# After any code updates, simply run:
+./restart-services.sh
+```
+
+This script automatically:
+- ✅ **Updates codebase** from Git repository
+- ✅ **Handles uncommitted changes** (auto-stash or abort)
+- ✅ **Restarts all services** with latest code
+- ✅ **Verifies health** before completing
+- ✅ **Shows connection URLs** for your services
+
+#### **Manual Service Management**
+```bash
+# Check service status
+docker compose ps
+
+# Stop services
+docker compose down
+
+# Start services
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Rebuild and restart
+docker compose up -d --build
+```
+
+#### **Git Integration Features**
+The restart script includes smart Git handling:
+- **Auto-detect repository** - Works in any git repo
+- **Uncommitted changes** - Asks if you want to stash them
+- **Smart pulling** - Only pulls if there are new commits
+- **Commit information** - Shows current branch and commit details
+- **Safe operations** - Won't overwrite your local changes
+
 ## 📋 Project Structure
 
 ```
@@ -204,6 +276,7 @@ on-prem-ai-note-taker/
 ├── electron/         # Desktop app wrapper
 ├── scripts/          # Build and setup scripts
 ├── documents/        # Additional documentation
+├── restart-services.sh # VPS service restart automation
 └── docker-compose.yml # VPS services configuration
 ```
 
