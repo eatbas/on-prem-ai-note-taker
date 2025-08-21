@@ -1,0 +1,43 @@
+{
+	"name": "on-prem-ai-note-taker-electron",
+	"version": "0.1.0",
+	"private": true,
+	"main": "main.js",
+	"description": "Electron wrapper for On-Prem AI Note Taker",
+	"scripts": {
+		"dev": "electron .",
+		"build:win": "electron-builder --win nsis",
+		"start": "electron .",
+		"postinstall": "electron-builder install-app-deps"
+	},
+	"devDependencies": {
+		"electron": "30.0.9",
+		"electron-builder": "24.13.3"
+	},
+	"build": {
+		"appId": "com.onprem.note",
+		"productName": "On-Prem AI Note Taker",
+		"directories": {
+			"buildResources": "build"
+		},
+		"files": [
+			"main.js",
+			"preload.js"
+		],
+		"extraMetadata": {
+			"name": "on-prem-ai-note-taker-electron"
+		},
+		"win": {
+			"target": ["nsis"],
+			"artifactName": "OnPremNoteTaker-Setup-${version}.exe"
+		},
+		"nsis": {
+			"oneClick": true,
+			"perMachine": false,
+			"allowElevation": true,
+			"allowToChangeInstallationDirectory": false
+		}
+	}
+}
+
+

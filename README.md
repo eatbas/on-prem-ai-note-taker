@@ -192,6 +192,23 @@ import { contextBridge } from 'electron'
 contextBridge.exposeInMainWorld('USER_ID', process.env.USERNAME || '')
 ```
 
+### Build the .exe
+```bash
+# In one terminal: start backend+frontend containers
+docker compose up -d --build
+
+# In another terminal: run from electron folder
+cd electron
+npm install
+npm run build:win
+# Output installer: electron/dist/OnPremNoteTaker-Setup-<version>.exe
+```
+
+To point the desktop app at a remote VPS UI:
+```powershell
+$env:APP_URL="https://yourdomain.com"; npm run dev
+```
+
 ---
 
 ## Notes and Tips
