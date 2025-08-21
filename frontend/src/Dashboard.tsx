@@ -40,7 +40,7 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 	return (
 		<div>
 			<div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-				<input placeholder="Search meetings" value={text} onChange={e => setText(e.target.value)} />
+				<input placeholder="Search title, summary, transcript" value={text} onChange={e => setText(e.target.value)} />
 				<select value={tag} onChange={e => setTag(e.target.value)}>
 					<option value="">All tags</option>
 					{tags.map(([t]) => (
@@ -55,7 +55,7 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 					<li key={m.id} style={{ display: 'flex', gap: 8, padding: 8, borderBottom: '1px solid #eee' }}>
 						<div style={{ flex: 1 }}>
 							<div style={{ fontWeight: 600 }}>{m.title}</div>
-							<div style={{ fontSize: 12, opacity: 0.8 }}>status: {m.status}</div>
+							<div style={{ fontSize: 12, opacity: 0.8 }}>status: {m.status}{m.__hit ? ` • match: ${m.__hit}` : ''}</div>
 						</div>
 						<div style={{ display: 'flex', gap: 8 }}>
 							<button onClick={() => onOpen(m.id)}>Open</button>

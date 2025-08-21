@@ -1,16 +1,20 @@
 import { useEffect, useState } from 'react'
 import { db } from './db'
-import { syncMeeting } from './offline'
+import { syncMeeting, updateMeetingTags } from './offline'
 
 export default function MeetingView({ meetingId }: { meetingId: string }) {
 	const [meeting, setMeeting] = useState<any>(null)
 	const [note, setNote] = useState<any>(null)
 	const [sending, setSending] = useState(false)
+    const [tagsInput, setTagsInput] = useState('')
+    const [search, setSearch] = useState('')
 
 	useEffect(() => {
 		async function load() {
 			setMeeting(await db.meetings.get(meetingId))
 			setNote(await db.notes.get(meetingId))
+            const m = await db.meetings.get(meetingId)
+            setTagsInput((m?.tags || []).join(', '))
 		}
 		load()
 	}, [meetingId])
@@ -25,6 +29,12 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 		}
 	}
 
+    async function saveTags() {
+        const tags = tagsInput.split(',').map(t => t.trim()).filter(Boolean)
+        await updateMeetingTags(meetingId, tags)
+        setMeeting(await db.meetings.get(meetingId))
+    }
+
 	if (!meeting) return <div>Loading…</div>
 
 	return (
@@ -38,9 +48,15 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 			</div>
 			<div>
 				<h3>Summary</h3>
+				<input placeholder="Search in note" value={search} onChange={e => setSearch(e.target.value)} />
 				<textarea rows={15} style={{ width: '100%' }} value={note?.summary || ''} readOnly />
 				<h3>Transcript</h3>
 				<textarea rows={20} style={{ width: '100%' }} value={note?.transcript || ''} readOnly />
+			</div>
+			<div>
+				<h3>Tags</h3>
+				<input value={tagsInput} onChange={e => setTagsInput(e.target.value)} placeholder="tag1, tag2" />
+				<button onClick={saveTags}>Save Tags</button>
 			</div>
 		</div>
 	)

@@ -10,7 +10,7 @@ End-to-end, fully local note-taking app:
 - Summarize transcript via your local Ollama model
 - One-click Transcribe + Summarize
 - Offline-first capture (chunks saved in IndexedDB when offline; auto-sync when online)
-- Dashboard with tags, search, resend queued meetings, and per-meeting details view
+- Dashboard with tags, search (title/summary/transcript), resend queued meetings, and per-meeting details view
 
 ### Architecture
 - `backend/`: FastAPI API
