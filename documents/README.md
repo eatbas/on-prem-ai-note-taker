@@ -24,6 +24,12 @@ This folder contains everything you need to understand and manage your AI Note T
 - **Daily Workflow**
 - **Quick Troubleshooting**
 
+### **🖥️ [04-ELECTRON-SETUP.md](04-ELECTRON-SETUP.md)**
+- **Desktop App Creation**
+- **Windows .exe Builder**
+- **User Identity Integration**
+- **Distribution & Updates**
+
 ## 🎮 **Easy Launcher Scripts:**
 
 ### **Windows Users:**

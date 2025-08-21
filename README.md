@@ -2,10 +2,10 @@
 
 > **End-to-end, fully local AI-powered note-taking application with speech-to-text and intelligent summarization**
 
-[![Project Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=for-the-badge)](https://github.com/your-username/on-prem-ai-note-taker)
-[![Last Commit](https://img.shields.io/github/last-commit/your-username/on-prem-ai-note-taker)](https://github.com/your-username/on-prem-ai-note-taker/commits/main)
-[![Issues](https://img.shields.io/github/issues/your-username/on-prem-ai-note-taker)](https://github.com/your-username/on-prem-ai-note-taker/issues)
-[![Stars](https://img.shields.io/github/stars/your-username/on-prem-ai-note-taker)](https://github.com/your-username/on-prem-ai-note-taker/stargazers)
+[![Project Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=for-the-badge)](https://github.com/eatbas/on-prem-ai-note-taker)
+[![Last Commit](https://img.shields.io/github/last-commit/eatbas/on-prem-ai-note-taker)](https://github.com/eatbas/on-prem-ai-note-taker/commits/main)
+[![Issues](https://img.shields.io/github/issues/eatbas/on-prem-ai-note-taker)](https://github.com/eatbas/on-prem-ai-note-taker/issues)
+[![Stars](https://img.shields.io/github/stars/eatbas/on-prem-ai-note-taker)](https://github.com/eatbas/on-prem-ai-note-taker/stargazers)
 
 [![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](https://www.docker.com/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-Backend-green?logo=fastapi)](https://fastapi.tiangolo.com/)
@@ -30,11 +30,32 @@
 │   (React + Vite)│◄──►│   (FastAPI)     │◄──►│   (Local Model) │
 │   Port 5173     │    │   Port 8000     │    │   Port 11434    │
 └─────────────────┘    └─────────────────┘    └─────────────────┘
+                    │
+                    ▼
+            ┌─────────────────┐
+            │  Desktop App    │
+            │   (Electron)    │
+            │   Windows .exe  │
+            └─────────────────┘
 ```
 
 - **`backend/`**: FastAPI API with speech-to-text and LLM integration
 - **`frontend/`**: React single-page app with offline capabilities
 - **`ollama/`**: Local LLM service for intelligent summarization
+- **`electron/`**: Desktop application wrapper for Windows/macOS/Linux
+
+## 📁 **Project Structure**
+
+```
+on-prem-ai-note-taker/
+├── 📱 frontend/            ← React web application
+├── 🖥️ electron/            ← Desktop app wrapper
+├── 🚀 backend/             ← FastAPI server
+├── 🤖 ollama/              ← LLM service
+├── 📚 documents/           ← Complete documentation
+├── 🐍 py/                  ← Python utilities
+└── 📋 Configuration files
+```
 
 ## 🚀 Quick Start
 
@@ -51,12 +72,28 @@ docker compose up -d --build
 cd frontend
 npm install
 npm run dev
+
+# 4. Create desktop app (optional)
+cd ../electron
+npm install
+npm run dev          # Development mode
+npm run build:win    # Build Windows installer
 ```
 
 ### **Option 2: Everything Local**
 ```bash
 # Start all services locally
 docker compose up -d --build
+```
+
+### **Option 3: Desktop App Only**
+```bash
+# Build standalone desktop application
+cd electron
+npm install
+npm run build:win    # Windows
+npm run build:mac    # macOS
+npm run build:linux  # Linux
 ```
 
 ## 📚 **📖 Detailed Documentation**
@@ -66,6 +103,7 @@ For comprehensive setup guides, troubleshooting, and advanced configuration, see
 - **[🚀 Quick Start Guide](documents/03-QUICK-START.md)** - Get running in 3 simple steps
 - **[💻 Frontend Setup](documents/02-FRONTEND-SETUP.md)** - Local computer configuration
 - **[🖥️ Backend Management](documents/01-BACKEND-SETUP.md)** - VPS service management
+- **[🖥️ Desktop App Creation](documents/04-ELECTRON-SETUP.md)** - Build Windows .exe
 - **[🎮 Easy Launchers](documents/README.md)** - One-click startup scripts
 
 ## 🔧 API Endpoints
@@ -257,9 +295,23 @@ Frontend env:
 
 ---
 
-## Desktop app (Windows executable)
+## 🖥️ Desktop App (Electron UI)
 
-The app can be wrapped in Electron to deliver a Windows `.exe` that opens the dashboard and provides the Windows username to the web app.
+**Create a native desktop application** from your web app using Electron! This gives you a professional Windows `.exe` that runs independently with a native desktop experience.
+
+### 🎯 **What You Get:**
+- **🖥️ Native Desktop App** - Looks and feels like a real Windows application
+- **🚀 Standalone Executable** - No need to open browser or run commands
+- **👤 User Identity** - Automatically detects Windows username
+- **📱 System Integration** - Desktop shortcuts, taskbar, notifications
+- **🔒 Offline Capable** - Works even without internet connection
+
+### 🛠️ **How It Works:**
+The Electron wrapper takes your React web app and packages it into a native desktop application that:
+- Opens the dashboard automatically
+- Provides `process.env.USERNAME` to the web app
+- Sends `X-User-Id` header with every API request
+- Maintains all your AI note-taking functionality
 
 - Identity: expose `process.env.USERNAME` via a `preload` script to `window.USER_ID`. The frontend automatically adds `X-User-Id` to upload requests when available.
 - Packaging: use `electron-builder` to create a `win` target.
@@ -272,21 +324,51 @@ import { contextBridge } from 'electron'
 contextBridge.exposeInMainWorld('USER_ID', process.env.USERNAME || '')
 ```
 
-### Build the .exe
+### 🚀 **Build Your Desktop App**
+
 ```bash
-# In one terminal: start backend+frontend containers
+# 1. Start your backend services (VPS or local)
 docker compose up -d --build
 
-# In another terminal: run from electron folder
+# 2. Build the desktop application
 cd electron
 npm install
 npm run build:win
-# Output installer: electron/dist/OnPremNoteTaker-Setup-<version>.exe
+
+# 3. Your installer is ready!
+# Output: electron/dist/OnPremNoteTaker-Setup-<version>.exe
 ```
 
-To point the desktop app at a remote VPS UI:
+### 📦 **What Gets Created:**
+- **Windows Installer** - Professional `.exe` installer
+- **Desktop Shortcut** - Automatic desktop icon creation
+- **Start Menu Entry** - App appears in Windows start menu
+- **System Integration** - Full Windows application experience
+
+### 🔧 **Development Workflow:**
+
+#### **Local Development:**
+```bash
+cd electron
+npm install
+npm run dev          # Opens desktop app in development mode
+```
+
+#### **Point to Remote VPS:**
 ```powershell
-$env:APP_URL="https://yourdomain.com"; npm run dev
+# Windows PowerShell
+$env:APP_URL="http://95.111.244.159:8000"; npm run dev
+
+# Or set in .env file
+echo "APP_URL=http://95.111.244.159:8000" > .env
+npm run dev
+```
+
+#### **Production Build:**
+```bash
+npm run build:win    # Creates Windows installer
+npm run build:mac    # Creates macOS app (if on Mac)
+npm run build:linux  # Creates Linux app (if on Linux)
 ```
 
 ### Example .env
@@ -350,7 +432,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🌟 Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=your-username/on-prem-ai-note-taker&type=Date)](https://star-history.com/#your-username/on-prem-ai-note-taker&Date)
+[![Star History Chart](https://api.star-history.com/svg?repos=eatbas/on-prem-ai-note-taker&type=Date)](https://star-history.com/#eatbas/on-prem-ai-note-taker&Date)
 
 ---
 
