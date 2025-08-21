@@ -1,0 +1,38 @@
+# ===== FRONTEND .env.local TEMPLATE =====
+# Copy this content to: frontend/.env.local
+# This file connects your local frontend to the VPS backend
+
+# ===== VPS Backend Connection =====
+# Your VPS backend API endpoint
+VITE_API_BASE_URL=http://95.111.244.159:8000/api
+
+# ===== Authentication Credentials =====
+# IMPORTANT: Set these to match your VPS backend credentials
+# These are the same username/password you set in your VPS .env file
+VITE_BASIC_AUTH_USERNAME=your_username_here
+VITE_BASIC_AUTH_PASSWORD=your_password_here
+
+# ===== Frontend Settings =====
+# Frontend will run on this port locally
+VITE_FRONTEND_PORT=5173
+VITE_FRONTEND_HOST=localhost
+
+# ===== Development Settings =====
+# Enable debug mode for development
+VITE_DEBUG=true
+VITE_LOG_LEVEL=info
+
+# ===== SETUP INSTRUCTIONS =====
+# 1. Create a file called .env.local in your frontend folder
+# 2. Copy the content above into that file
+# 3. Replace 'your_username_here' with your actual VPS username
+# 4. Replace 'your_password_here' with your actual VPS password
+# 5. Make sure these match the credentials in your VPS .env file
+# 6. This file should be on your local computer, not on the VPS
+# 7. Your frontend will run at http://localhost:5173
+# 8. Your backend is at http://95.111.244.159:8000
+
+# ===== EXAMPLE WITH REAL CREDENTIALS =====
+# VITE_API_BASE_URL=http://95.111.244.159:8000/api
+# VITE_BASIC_AUTH_USERNAME=myadmin
+# VITE_BASIC_AUTH_PASSWORD=MySecurePass123!
