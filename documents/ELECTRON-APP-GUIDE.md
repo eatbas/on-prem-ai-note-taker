@@ -52,15 +52,18 @@ If you want to build the application yourself:
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/on-prem-ai-note-taker.git
+git clone https://github.com/eatbas/on-prem-ai-note-taker.git
 cd on-prem-ai-note-taker
 
-# Build the Electron app
-cd electron
-npm install
-npm run build:app
+# Set your VPS credentials
+echo "VPS_HOST=your.vps.ip.address" > .env
+echo "BASIC_AUTH_USERNAME=your_username" >> .env
+echo "BASIC_AUTH_PASSWORD=your_password" >> .env
 
-# The executable will be in electron/dist-electron/
+# Build the desktop app (one command)
+./scripts/build-desktop-app.sh
+
+# The installer will be in electron/dist-electron/
 ```
 
 ## 🔧 For Developers
@@ -75,17 +78,31 @@ npm run build:app
 
 1. **Clone the repository:**
 ```bash
-git clone https://github.com/yourusername/on-prem-ai-note-taker.git
+git clone https://github.com/eatbas/on-prem-ai-note-taker.git
 cd on-prem-ai-note-taker
 ```
 
-2. **Set up the VPS IP:**
+2. **Set up the VPS credentials:**
 ```bash
-# Create .env file with your VPS IP
-echo "VPS_HOST=95.111.244.159" > .env
+# Create .env file with your VPS credentials
+echo "VPS_HOST=your.vps.ip.address" > .env
+echo "BASIC_AUTH_USERNAME=your_username" >> .env
+echo "BASIC_AUTH_PASSWORD=your_password" >> .env
 ```
 
-3. **Start development mode:**
+3. **Build and test:**
+```bash
+# Build the desktop app
+./scripts/build-desktop-app.sh
+
+# Install and test the app
+# Find installer in electron/dist-electron/
+```
+
+### Alternative: Development Mode
+
+For active development, you can run components separately:
+
 ```bash
 # Terminal 1: Start backend
 cd backend
@@ -108,15 +125,14 @@ npm run dev
 ### Building for Distribution
 
 ```bash
-# Build for Windows
+# Build for your platform (recommended)
+./scripts/build-desktop-app.sh
+
+# Or build manually
 cd electron
-npm run build:win
-
-# Build for macOS
-npm run build:mac
-
-# Build for Linux
-npm run build:linux
+npm run build:win    # Windows
+npm run build:mac    # macOS
+npm run build:linux  # Linux
 ```
 
 ## 📁 Data Storage
@@ -139,12 +155,14 @@ All your data is stored locally:
 The app can be configured through environment variables:
 
 ```bash
-# VPS Configuration (optional)
+# VPS Configuration (required)
 VPS_HOST=your.vps.ip.address
+BASIC_AUTH_USERNAME=your_username
+BASIC_AUTH_PASSWORD=your_password
 
-# Local ports (optional)
-BACKEND_PORT=8001
-FRONTEND_PORT=5173
+# Optional: AI Model Settings
+WHISPER_MODEL=base
+OLLAMA_MODEL=llama3.1:8b
 ```
 
 ## 🎤 Features
@@ -159,8 +177,8 @@ FRONTEND_PORT=5173
 ## 🔧 Troubleshooting
 
 ### App won't start
-- Check if ports 8001 and 5173 are available
-- Verify VPS is accessible
+- Check if the app built successfully
+- Verify VPS credentials in `.env` file
 - Check firewall settings
 
 ### Recording issues
@@ -169,21 +187,28 @@ FRONTEND_PORT=5173
 - Try restarting the app
 
 ### Connection errors
-- Verify VPS IP is correct
+- Verify VPS IP is correct in `.env`
 - Check network connection
 - Ensure VPS services are running
 
+### Build issues
+- Check Node.js version (18+ required)
+- Check Python version (3.8+ required)
+- Verify all dependencies are installed
+- Check VPS credentials are correct
+
 ## 📞 Support
 
-- GitHub Issues: [Report bugs](https://github.com/yourusername/on-prem-ai-note-taker/issues)
-- Documentation: [Read more](https://github.com/yourusername/on-prem-ai-note-taker/docs)
+- GitHub Issues: [Report bugs](https://github.com/eatbas/on-prem-ai-note-taker/issues)
+- Documentation: [Read more](documents/)
 
 ## 🚀 Next Steps
 
-1. **Start recording** your first meeting
-2. **Review transcriptions** in the dashboard
-3. **Export summaries** for sharing
-4. **Customize settings** as needed
+1. **Build your desktop app**: `./scripts/build-desktop-app.sh`
+2. **Install and test** the application
+3. **Start recording** your first meeting
+4. **Review transcriptions** in the dashboard
+5. **Export summaries** for sharing
 
 ---
 

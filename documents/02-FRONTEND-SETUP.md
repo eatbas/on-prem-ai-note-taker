@@ -1,52 +1,41 @@
-# 💻 Local Frontend Setup Guide
+# 💻 Local Development Setup Guide
 
 ## 📍 **What You'll Do on Your Local Computer**
 
-This guide will help you set up the frontend on your local computer to connect to your VPS backend.
+This guide will help you set up the development environment on your local computer to build and test your AI Note Taker desktop application.
 
 ## 🎯 **Prerequisites:**
 
 - **Node.js** (version 18 or higher)
 - **npm** or **yarn**
+- **Python 3.8+** (for backend development)
 - **Git** (to clone the repository)
 - **Your VPS backend running** (already done!)
 
 ## 📥 **Step 1: Get the Code**
 
-### **Option A: Clone from Your Repository**
+### **Clone the Repository:**
 ```bash
-git clone <your-repository-url>
+git clone https://github.com/eatbas/on-prem-ai-note-taker.git
 cd on-prem-ai-note-taker
-```
-
-### **Option B: Download from VPS**
-If you want to copy the files from your VPS:
-```bash
-# From your VPS, create a zip file
-zip -r frontend-code.zip frontend/
-
-# Download to your local computer
-# Then extract and navigate to the frontend folder
 ```
 
 ## 🔐 **Step 2: Set Up Environment Variables**
 
-### **Create .env.local File:**
-In the `frontend` folder, create a file called `.env.local`:
+### **Create .env File:**
+In the project root, create a file called `.env`:
 
 ```env
 # VPS Backend Connection
-VITE_API_BASE_URL=http://95.111.244.159:8000/api
+VPS_HOST=95.111.244.159
 
 # Your VPS Credentials (must match your VPS .env file)
-VITE_BASIC_AUTH_USERNAME=your_username_here
-VITE_BASIC_AUTH_PASSWORD=your_password_here
+BASIC_AUTH_USERNAME=your_username_here
+BASIC_AUTH_PASSWORD=your_password_here
 
-# Frontend Settings
-VITE_FRONTEND_PORT=5173
-VITE_FRONTEND_HOST=localhost
-VITE_DEBUG=true
-VITE_LOG_LEVEL=info
+# Optional: AI Model Settings
+WHISPER_MODEL=base
+OLLAMA_MODEL=llama3.1:8b
 ```
 
 ### **Important Security Notes:**
@@ -56,113 +45,120 @@ VITE_LOG_LEVEL=info
 
 ## 📦 **Step 3: Install Dependencies**
 
+### **Frontend Dependencies:**
 ```bash
 cd frontend
 npm install
+cd ..
 ```
 
-**Expected output:**
-- Dependencies will be installed
-- `node_modules` folder created
-- No errors should occur
-
-## 🚀 **Step 4: Start Development Server**
-
+### **Backend Dependencies:**
 ```bash
-npm run dev
+cd backend
+python3 -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -r requirements.txt
+cd ..
 ```
 
-**Expected output:**
-```
-  VITE v5.4.1  ready in 500 ms
-
-  ➜  Local:   http://localhost:5173/
-  ➜  Network: http://192.168.1.100:5173/
-  ➜  press h to show help
+### **Electron Dependencies:**
+```bash
+cd electron
+npm install
+cd ..
 ```
 
-## 🌐 **Step 5: Access Your App**
+## 🚀 **Step 4: Development Options**
 
-Open your browser and go to:
-**http://localhost:5173**
+### **Option 1: Build Desktop App (Recommended)**
+```bash
+# Build complete desktop application
+./scripts/build-desktop-app.sh
 
-## 🔗 **Step 6: Test Connection to VPS**
+# Install and test the app
+# Find installer in electron/dist-electron/
+```
+
+### **Option 2: Run Components Separately**
+```bash
+# Terminal 1: Frontend development server
+cd frontend && npm run dev
+
+# Terminal 2: Backend development server
+cd backend && source venv/bin/activate && python -m uvicorn app.main:app --reload --port 8001
+
+# Terminal 3: Electron app
+cd electron && npm run dev
+```
+
+## 🌐 **Step 5: Access Your Development Environment**
+
+- **Frontend Dev Server**: http://localhost:5173
+- **Backend Dev Server**: http://localhost:8001
+- **Desktop App**: Launches from Electron
+
+## 🔗 **Step 6: Test Your Setup**
 
 ### **What Should Happen:**
 1. ✅ Frontend loads without errors
-2. ✅ No CORS errors in browser console
-3. ✅ App connects to your VPS backend
-4. ✅ You can upload audio files
-5. ✅ Transcription and summarization work
+2. ✅ Backend responds to health checks
+3. ✅ Desktop app launches successfully
+4. ✅ App connects to your VPS backend
+5. ✅ You can upload audio files
+6. ✅ Transcription and summarization work
 
 ### **If You Get Errors:**
-1. **Check browser console** (F12 → Console)
-2. **Verify your credentials** in `.env.local`
+1. **Check terminal output** for error messages
+2. **Verify your credentials** in `.env`
 3. **Ensure VPS is running** (check VPS status)
 4. **Check network connectivity** to VPS IP
 
-## 🛠️ **Alternative: Use Pre-built Version (No npm run build)**
+## 🛠️ **Development Workflow:**
 
-### **Option 1: Use Development Server (Recommended)**
+### **Daily Development:**
 ```bash
-npm run dev
+# Make changes to code
+# Test changes in development mode
+# Build new desktop app when ready
+./scripts/build-desktop-app.sh
 ```
-- ✅ **Fast development**
-- ✅ **Hot reload on changes**
-- ✅ **No building required**
-- ✅ **Easy debugging**
 
-### **Option 2: Use Preview Mode**
-```bash
-npm run preview
-```
-- 🔄 **Uses pre-built files**
-- 🚀 **Production-like environment**
-- 📁 **Requires dist folder**
+### **Adding New Features:**
+1. Edit files in `frontend/src/` or `backend/app/` folders
+2. Test in development mode
+3. Build new desktop app: `./scripts/build-desktop-app.sh`
+4. Install and test new version
 
 ## 📁 **File Structure on Your Computer:**
 
 ```
 on-prem-ai-note-taker/
+├── .env                    ← Your credentials here
 ├── frontend/
-│   ├── .env.local          ← Your credentials here
 │   ├── package.json
 │   ├── src/                ← React source code
 │   ├── public/             ← Static assets
 │   └── node_modules/       ← Dependencies
-├── documents/              ← This documentation
-└── README.md
+├── backend/
+│   ├── app/                ← Python backend code
+│   ├── requirements.txt
+│   └── venv/               ← Python virtual environment
+├── electron/
+│   ├── main.js             ← Electron main process
+│   ├── package.json
+│   └── node_modules/       ← Electron dependencies
+├── scripts/                 ← Build and utility scripts
+└── documents/               ← This documentation
 ```
-
-## 🔧 **Development Workflow:**
-
-### **Daily Development:**
-```bash
-# Start development server
-npm run dev
-
-# Make changes to code
-# Save files → automatic reload
-
-# Stop server
-Ctrl + C
-```
-
-### **Adding New Features:**
-1. Edit files in `src/` folder
-2. Save changes
-3. Browser automatically reloads
-4. Test functionality
-5. Repeat
 
 ## 🧪 **Testing Your Setup:**
 
-### **Test 1: Basic Connection**
-- ✅ Frontend loads
-- ✅ No console errors
-- ✅ App interface appears
+### **Test 1: Basic Build**
+- ✅ App builds successfully
+- ✅ No build errors
+- ✅ Desktop app launches
 
-### **Test 2: Audio Upload**
+### **Test 2: Audio Recording**
 - ✅ Click record button
 - ✅ Speak into microphone
 - ✅ Audio gets sent to VPS
@@ -178,55 +174,70 @@ Ctrl + C
 
 ### **Common Issues:**
 
-1. **"Module not found" errors:**
+1. **"Build failed" errors:**
    ```bash
+   # Check Node.js version (needs 18+)
+   node --version
+   
+   # Check Python version (needs 3.8+)
+   python3 --version
+   
    # Reinstall dependencies
-   rm -rf node_modules package-lock.json
-   npm install
+   cd frontend && rm -rf node_modules && npm install
+   cd ../backend && rm -rf venv && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
    ```
 
 2. **"Cannot connect to VPS" errors:**
    - Check VPS is running
-   - Verify IP address in `.env.local`
+   - Verify IP address in `.env`
    - Check credentials match VPS
 
-3. **"CORS" errors:**
-   - Ensure VPS CORS settings include localhost
-   - Check VPS is running and accessible
+3. **"Permission denied" errors:**
+   ```bash
+   # Make build script executable
+   chmod +x scripts/build-desktop-app.sh
+   ```
 
-4. **"Authentication failed" errors:**
-   - Verify username/password in `.env.local`
-   - Check VPS `.env` file has same credentials
+4. **"Module not found" errors:**
+   - Ensure all dependencies are installed
+   - Check virtual environment is activated for backend
+   - Verify Node.js modules are installed
 
 ### **Reset Everything:**
 ```bash
-# Stop development server
-Ctrl + C
+# Clear all dependencies
+rm -rf frontend/node_modules backend/venv electron/node_modules
 
-# Clear everything
-rm -rf node_modules package-lock.json
+# Reinstall everything
+cd frontend && npm install
+cd ../backend && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
+cd ../electron && npm install
 
-# Reinstall
-npm install
-
-# Start fresh
-npm run dev
+# Try building again
+cd .. && ./scripts/build-desktop-app.sh
 ```
 
-## 📱 **Access from Other Devices:**
+## 📱 **Cross-Platform Development:**
 
-### **Same Network:**
-- Use your computer's IP address
-- Example: `http://192.168.1.100:5173`
+### **Windows:**
+- Use `scripts\build-desktop-app.bat`
+- Generates `.exe` installer
+- Test on Windows machine
 
-### **Different Network:**
-- Set up port forwarding on your router
-- Or use VPN to connect to your local network
+### **macOS:**
+- Use `./scripts/build-desktop-app.sh`
+- Generates `.dmg` installer
+- Test on Mac machine
+
+### **Linux:**
+- Use `./scripts/build-desktop-app.sh`
+- Generates `.AppImage` and `.deb`
+- Test on Linux machine
 
 ## 🎉 **Success Indicators:**
 
-- ✅ Frontend loads at http://localhost:5173
-- ✅ No errors in browser console
+- ✅ App builds without errors
+- ✅ Desktop app launches successfully
 - ✅ Can record/upload audio
 - ✅ Transcription works
 - ✅ AI summarization works
@@ -236,9 +247,9 @@ npm run dev
 
 1. **Check VPS status** first
 2. **Verify credentials** match
-3. **Check browser console** for errors
-4. **Ensure network connectivity** to VPS
+3. **Check build output** for errors
+4. **Ensure all dependencies** are installed
 
 ---
 
-**🚀 Your frontend is now ready to connect to your VPS backend!**
+**🚀 Your development environment is now ready to build amazing desktop applications!**

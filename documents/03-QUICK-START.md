@@ -1,37 +1,41 @@
-# 🚀 Quick Start Guide - No Building Required!
+# 🚀 Quick Start Guide - Build Your Desktop App!
 
-## 🎯 **The Simple Way to Run Your App**
+## 🎯 **The Simple Way to Build Your AI Note Taker**
 
-This guide shows you the **easiest way** to get your AI Note Taker running on your local computer.
+This guide shows you the **easiest way** to build and run your AI Note Taker desktop application.
 
 ## ⚡ **3 Simple Commands to Get Started:**
 
 ```bash
-# 1. Navigate to frontend folder
-cd frontend
+# 1. Clone the repository
+git clone https://github.com/eatbas/on-prem-ai-note-taker.git
+cd on-prem-ai-note-taker
 
-# 2. Install dependencies (only needed once)
-npm install
+# 2. Set your VPS credentials
+echo "VPS_HOST=your.vps.ip.address" > .env
 
-# 3. Start the app
-npm run dev
+# 3. Build the desktop app
+./scripts/build-desktop-app.sh
 ```
 
 **That's it!** 🎉
 
-## 🌐 **Access Your App:**
+## 🖥️ **What You Get:**
 
-Open your browser and go to:
-**http://localhost:5173**
+A complete desktop application that:
+- ✅ **Installs like any app** (Windows .exe, Mac .dmg, Linux .AppImage)
+- ✅ **Works offline** for viewing existing notes
+- ✅ **Connects to VPS** for AI processing
+- ✅ **Stores everything locally** on your computer
 
 ## 🔐 **Before You Start - Set Credentials:**
 
-Create `frontend/.env.local` file with:
+Create `.env` file in the project root with:
 
 ```env
-VITE_API_BASE_URL=http://95.111.244.159:8000/api
-VITE_BASIC_AUTH_USERNAME=your_username
-VITE_BASIC_AUTH_PASSWORD=your_password
+VPS_HOST=your.vps.ip.address
+BASIC_AUTH_USERNAME=your_username
+BASIC_AUTH_PASSWORD=your_password
 ```
 
 ## 📋 **Complete Setup Checklist:**
@@ -43,56 +47,55 @@ VITE_BASIC_AUTH_PASSWORD=your_password
 - [x] CORS settings applied
 
 ### **On Your Local Computer:**
-- [ ] Download/copy frontend code
-- [ ] Create `.env.local` with credentials
-- [ ] Run `npm install`
-- [ ] Run `npm run dev`
-- [ ] Open http://localhost:5173
+- [ ] Clone repository
+- [ ] Create `.env` with VPS credentials
+- [ ] Run build script
+- [ ] Install the desktop app
+- [ ] Launch and start recording!
 
 ## 🛠️ **What Each Command Does:**
 
-### **`npm install`**
-- Downloads all required packages
-- Creates `node_modules` folder
-- Only needed **once** or when adding new features
+### **`git clone`**
+- Downloads complete project code
+- Includes frontend, backend, and build scripts
+- Only needed **once**
 
-### **`npm run dev`**
-- Starts development server
-- Watches for file changes
-- Automatically reloads browser
-- **No building required!**
+### **`echo "VPS_HOST=..." > .env`**
+- Creates configuration file
+- Sets your VPS IP address
+- Required for app to connect to AI services
 
-### **`npm run build` (Optional)**
-- Creates production files
-- **You don't need this for development**
-- Only use if you want to deploy
+### **`./scripts/build-desktop-app.sh`**
+- Builds React frontend for production
+- Packages Python backend with dependencies
+- Creates Electron desktop application
+- Generates native installer for your platform
 
 ## 🔄 **Daily Workflow:**
 
-### **Start Development:**
+### **Build New Version:**
 ```bash
-cd frontend
-npm run dev
+./scripts/build-desktop-app.sh
 ```
 
-### **Stop Development:**
-```bash
-Ctrl + C
-```
+### **Install and Test:**
+1. Find installer in `electron/dist-electron/`
+2. Install the application
+3. Launch and test new features
 
 ### **Make Changes:**
-1. Edit files in `src/` folder
+1. Edit files in `frontend/src/` or `backend/app/` folders
 2. Save changes
-3. Browser automatically reloads
-4. See changes instantly!
+3. Rebuild: `./scripts/build-desktop-app.sh`
+4. Install and test new version
 
 ## 🧪 **Test Your Setup:**
 
 ### **Quick Test:**
-1. ✅ App loads at http://localhost:5173
-2. ✅ No red errors in browser console
-3. ✅ Can see the app interface
-4. ✅ Try recording audio
+1. ✅ App builds successfully
+2. ✅ No build errors
+3. ✅ Desktop app launches
+4. ✅ Can see the app interface
 
 ### **Full Test:**
 1. ✅ Record audio
@@ -102,53 +105,64 @@ Ctrl + C
 
 ## 🆘 **If Something Goes Wrong:**
 
-### **"Module not found" errors:**
+### **"Build failed" errors:**
 ```bash
-rm -rf node_modules package-lock.json
-npm install
+# Check Node.js version (needs 18+)
+node --version
+
+# Check Python version (needs 3.8+)
+python3 --version
+
+# Reinstall dependencies
+cd frontend && rm -rf node_modules && npm install
+cd ../backend && rm -rf venv && python3 -m venv venv && source venv/bin/activate && pip install -r requirements.txt
 ```
 
 ### **"Cannot connect" errors:**
 - Check VPS is running
-- Verify credentials in `.env.local`
-- Check IP address (95.111.244.159)
+- Verify credentials in `.env` file
+- Check IP address in `.env` file
 
-### **"Port already in use":**
+### **"Permission denied":**
 ```bash
-# Find what's using port 5173
-lsof -i :5173
-
-# Kill the process
-kill -9 <PID>
+# Make script executable
+chmod +x scripts/build-desktop-app.sh
 ```
 
-## 📱 **Access from Other Devices:**
+## 📱 **Cross-Platform Support:**
 
-### **Same WiFi Network:**
-- Use your computer's IP address
-- Example: `http://192.168.1.100:5173`
+### **Windows:**
+- Generates `.exe` installer
+- Installs to Program Files
+- Creates Start Menu shortcut
 
-### **From Phone/Tablet:**
-- Connect to same WiFi
-- Use your computer's IP address
-- Full mobile experience!
+### **macOS:**
+- Generates `.dmg` installer
+- Drag to Applications folder
+- Works with Gatekeeper
+
+### **Linux:**
+- Generates `.AppImage` and `.deb`
+- AppImage runs anywhere
+- .deb for system integration
 
 ## 🎯 **Success Indicators:**
 
-- ✅ **App loads** without errors
-- ✅ **No console errors** (F12 → Console)
+- ✅ **App builds** without errors
+- ✅ **Installer created** in `electron/dist-electron/`
+- ✅ **Desktop app launches** successfully
 - ✅ **Can record audio**
 - ✅ **Connected to VPS backend**
 - ✅ **AI features work**
 
 ## 🚀 **Ready to Start?**
 
-1. **Copy frontend code** to your computer
-2. **Create `.env.local`** with your credentials
-3. **Run the 3 commands** above
-4. **Open http://localhost:5173**
+1. **Clone the repository** to your computer
+2. **Create `.env`** with your VPS credentials
+3. **Run the build script** above
+4. **Install the desktop app**
 5. **Start building amazing AI notes!**
 
 ---
 
-**💡 Remember: `npm run dev` is your friend - no building needed!**
+**💡 Remember: Build once, install anywhere! Your desktop app is completely self-contained.**
