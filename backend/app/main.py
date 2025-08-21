@@ -6,16 +6,19 @@ from typing import Any, Dict, List, Optional
 import asyncio
 import logging
 import secrets
+import uuid
 
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from pydantic import BaseModel
+from sqlalchemy.orm import Session
 
 from faster_whisper import WhisperModel
 
 from .config import settings
 from .ollama_client import OllamaClient
+from .database import get_db, get_or_create_user, Meeting, Transcription, Summary
 
 
 app = FastAPI(title="On-Prem AI Note Taker", version="0.1.0")
@@ -189,12 +192,155 @@ async def transcribe_and_summarize(
 	vad_filter: bool = Form(default=True),
 	x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
 	_: None = Depends(require_basic_auth),
+	db: Session = Depends(get_db),
 ) -> TranscribeAndSummarizeResponse:
 	sem = get_transcribe_semaphore()
 	async with sem:
+		# Get or create user
+		user = get_or_create_user(db)
+		
+		# Create meeting record
+		meeting_id = str(uuid.uuid4())
+		meeting = Meeting(
+			id=meeting_id,
+			user_id=user.id,
+			title=f"Meeting {meeting_id[:8]}",  # Default title
+		)
+		db.add(meeting)
+		
+		# Transcribe
 		transcript = await transcribe(file=file, language=language, vad_filter=vad_filter, x_user_id=x_user_id)  # type: ignore[arg-type]
+		
+		# Save transcription to database
+		transcription = Transcription(
+			meeting_id=meeting_id,
+			text=transcript.text,
+			language=transcript.language,
+		)
+		db.add(transcription)
+		
+		# Update meeting duration if available
+		if transcript.duration:
+			meeting.duration = transcript.duration
+		
+		# Summarize
 		summary = _ollama_client.summarize(transcript.text)
+		
+		# Save summary to database
+		summary_obj = Summary(
+			meeting_id=meeting_id,
+			summary_text=summary,
+			model_used=settings.ollama_model,
+		)
+		db.add(summary_obj)
+		
+		# Commit all changes
+		db.commit()
+		
 		return TranscribeAndSummarizeResponse(transcript=transcript, summary=summary)
+
+
+class MeetingResponse(BaseModel):
+	id: str
+	title: str
+	created_at: str
+	transcription: Optional[str]
+	summary: Optional[str]
+	duration: Optional[float]
+
+
+@app.get("/api/meetings")
+async def list_meetings(
+	_auth: None = Depends(require_basic_auth),
+	db: Session = Depends(get_db),
+) -> List[MeetingResponse]:
+	"""List all meetings for the current user"""
+	user = get_or_create_user(db)
+	
+	meetings = db.query(Meeting).filter(
+		Meeting.user_id == user.id
+	).order_by(Meeting.created_at.desc()).all()
+	
+	response = []
+	for meeting in meetings:
+		# Get first transcription and summary
+		transcription = db.query(Transcription).filter(
+			Transcription.meeting_id == meeting.id
+		).first()
+		
+		summary = db.query(Summary).filter(
+			Summary.meeting_id == meeting.id
+		).first()
+		
+		response.append(MeetingResponse(
+			id=meeting.id,
+			title=meeting.title,
+			created_at=meeting.created_at.isoformat(),
+			transcription=transcription.text if transcription else None,
+			summary=summary.summary_text if summary else None,
+			duration=meeting.duration,
+		))
+	
+	return response
+
+
+@app.get("/api/meetings/{meeting_id}")
+async def get_meeting(
+	meeting_id: str,
+	_auth: None = Depends(require_basic_auth),
+	db: Session = Depends(get_db),
+) -> MeetingResponse:
+	"""Get a specific meeting by ID"""
+	user = get_or_create_user(db)
+	
+	meeting = db.query(Meeting).filter(
+		Meeting.id == meeting_id,
+		Meeting.user_id == user.id
+	).first()
+	
+	if not meeting:
+		raise HTTPException(status_code=404, detail="Meeting not found")
+	
+	transcription = db.query(Transcription).filter(
+		Transcription.meeting_id == meeting.id
+	).first()
+	
+	summary = db.query(Summary).filter(
+		Summary.meeting_id == meeting.id
+	).first()
+	
+	return MeetingResponse(
+		id=meeting.id,
+		title=meeting.title,
+		created_at=meeting.created_at.isoformat(),
+		transcription=transcription.text if transcription else None,
+		summary=summary.summary_text if summary else None,
+		duration=meeting.duration,
+	)
+
+
+@app.put("/api/meetings/{meeting_id}")
+async def update_meeting(
+	meeting_id: str,
+	title: str = Form(...),
+	_auth: None = Depends(require_basic_auth),
+	db: Session = Depends(get_db),
+) -> MeetingResponse:
+	"""Update meeting title"""
+	user = get_or_create_user(db)
+	
+	meeting = db.query(Meeting).filter(
+		Meeting.id == meeting_id,
+		Meeting.user_id == user.id
+	).first()
+	
+	if not meeting:
+		raise HTTPException(status_code=404, detail="Meeting not found")
+	
+	meeting.title = title
+	db.commit()
+	
+	return await get_meeting(meeting_id, _auth, db)
 
 
 

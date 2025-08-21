@@ -148,6 +148,25 @@ This directory contains scripts to help you check your VPS status and set up you
 
 ---
 
+### 8. `setup-frontend.sh` - Local Frontend Setup
+**Purpose**: Set up and start your local frontend connecting to local backend
+
+**Usage**:
+```bash
+./scripts/setup-frontend.sh
+```
+
+**What it does**:
+- 🐍 Checks Node.js and npm installation
+- 📦 Installs frontend dependencies
+- ⚙️ Creates frontend environment configuration
+- 🔗 Connects to local backend on port 8001
+- 🚀 Starts frontend development server on port 5173
+
+**Access**: Frontend will be available at http://localhost:5173
+
+---
+
 ## 🚀 Quick Start Guide
 
 ### Option 1: Use Interactive Menu (Recommended)
@@ -176,6 +195,18 @@ VPS_IP=$(./scripts/get-vps-ip-only.sh)
 # Get VPS IP and do everything
 VPS_IP=$(./scripts/get-vps-ip-only.sh)
 ./scripts/quick-start.sh $VPS_IP
+```
+
+### Option 4: Complete Local Development Setup
+```bash
+# 1. Start VPS services (if needed)
+./scripts/check-vps-status.sh $(./scripts/get-vps-ip-only.sh)
+
+# 2. Set up local backend
+./scripts/setup-local-backend.sh $(./scripts/get-vps-ip-only.sh)
+
+# 3. Set up local frontend
+./scripts/setup-frontend.sh
 ```
 
 ---

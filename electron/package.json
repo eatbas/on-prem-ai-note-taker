@@ -7,6 +7,10 @@
 	"scripts": {
 		"dev": "electron .",
 		"build:win": "electron-builder --win nsis",
+		"build:mac": "electron-builder --mac dmg",
+		"build:linux": "electron-builder --linux AppImage deb",
+		"build:all": "electron-builder -mwl",
+		"build:app": "node build-app.js",
 		"start": "electron .",
 		"postinstall": "electron-builder install-app-deps"
 	},
@@ -18,24 +22,49 @@
 		"appId": "com.onprem.note",
 		"productName": "On-Prem AI Note Taker",
 		"directories": {
-			"buildResources": "build"
+			"buildResources": "build",
+			"output": "dist-electron"
 		},
 		"files": [
 			"main.js",
-			"preload.js"
+			"preload.js",
+			"dist/**/*"
+		],
+		"extraResources": [
+			{
+				"from": "../backend",
+				"to": "backend",
+				"filter": ["**/*", "!__pycache__", "!*.pyc", "!venv", "!.env*"]
+			}
 		],
 		"extraMetadata": {
-			"name": "on-prem-ai-note-taker-electron"
+			"name": "on-prem-ai-note-taker",
+			"version": "1.0.0"
 		},
 		"win": {
 			"target": ["nsis"],
-			"artifactName": "OnPremNoteTaker-Setup-${version}.exe"
+			"artifactName": "OnPremNoteTaker-Setup-${version}.exe",
+			"icon": "icon.ico"
 		},
 		"nsis": {
-			"oneClick": true,
+			"oneClick": false,
 			"perMachine": false,
 			"allowElevation": true,
-			"allowToChangeInstallationDirectory": false
+			"allowToChangeInstallationDirectory": true,
+			"createDesktopShortcut": true,
+			"createStartMenuShortcut": true,
+			"shortcutName": "On-Prem AI Note Taker"
+		},
+		"mac": {
+			"target": ["dmg"],
+			"artifactName": "OnPremNoteTaker-${version}.dmg",
+			"icon": "icon.icns"
+		},
+		"linux": {
+			"target": ["AppImage", "deb"],
+			"artifactName": "OnPremNoteTaker-${version}.${ext}",
+			"icon": "icon.png",
+			"category": "Office"
 		}
 	}
 }

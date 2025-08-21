@@ -5,6 +5,7 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const [recording, setRecording] = useState(false)
 	const [meetingId, setMeetingId] = useState<string | null>(null)
+	const [error, setError] = useState<string | null>(null)
 	const chunkIndexRef = useRef(0)
 
 	useEffect(() => {
@@ -16,32 +17,59 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 	}, [])
 
 	async function start() {
-		const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-		const rec = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-		const meeting = await createMeeting('New meeting')
-		setMeetingId(meeting.id)
-		onCreated(meeting.id)
-		chunkIndexRef.current = 0
-
-		rec.ondataavailable = async (e: BlobEvent) => {
-			if (e.data && e.data.size > 0 && meetingId) {
-				await addChunk(meetingId, e.data, chunkIndexRef.current++)
+		try {
+			// Check if media devices are supported
+			if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+				throw new Error('Media devices not supported in this browser')
 			}
+
+			// Check if we're running on HTTPS or localhost
+			if (location.protocol !== 'https:' && location.hostname !== 'localhost' && !location.hostname.startsWith('192.168.')) {
+				throw new Error('Microphone access requires HTTPS or localhost. Current protocol: ' + location.protocol)
+			}
+
+			setError(null)
+			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+			const rec = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+			const meeting = await createMeeting('New meeting')
+			setMeetingId(meeting.id)
+			onCreated(meeting.id)
+			chunkIndexRef.current = 0
+
+			rec.ondataavailable = async (e: BlobEvent) => {
+				if (e.data && e.data.size > 0 && meetingId) {
+					await addChunk(meetingId, e.data, chunkIndexRef.current++)
+				}
+			}
+			rec.start(5000) // 5s chunks
+			mediaRecorderRef.current = rec
+			setRecording(true)
+		} catch (err) {
+			console.error('Failed to start recording:', err)
+			setError(err instanceof Error ? err.message : 'Failed to start recording')
 		}
-		rec.start(5000) // 5s chunks
-		mediaRecorderRef.current = rec
-		setRecording(true)
 	}
 
 	function stop() {
-		mediaRecorderRef.current?.stop()
+		if (mediaRecorderRef.current) {
+			mediaRecorderRef.current.stop()
+			// Stop all tracks to release microphone
+			mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
+		}
 		setRecording(false)
 	}
 
 	return (
-		<div style={{ display: 'flex', gap: 8 }}>
-			<button onClick={start} disabled={recording}>Start Recording</button>
-			<button onClick={stop} disabled={!recording}>Stop</button>
+		<div>
+			<div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+				<button onClick={start} disabled={recording}>Start Recording</button>
+				<button onClick={stop} disabled={!recording}>Stop</button>
+			</div>
+			{error && (
+				<div style={{ color: 'red', marginTop: 8 }}>
+					⚠️ {error}
+				</div>
+			)}
 		</div>
 	)
 }

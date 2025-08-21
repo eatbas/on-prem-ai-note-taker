@@ -60,4 +60,35 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	return resp.json()
 }
 
+export async function getMeetings() {
+	const resp = await fetch(`${apiBase}/meetings`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get meetings failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function getMeeting(meetingId: string) {
+	const resp = await fetch(`${apiBase}/meetings/${meetingId}`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get meeting failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function updateMeeting(meetingId: string, title: string) {
+	const form = new FormData()
+	form.append('title', title)
+	
+	const resp = await fetch(`${apiBase}/meetings/${meetingId}`, {
+		method: 'PUT',
+		body: form,
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Update meeting failed: ${resp.status}`)
+	return resp.json()
+}
+
 
