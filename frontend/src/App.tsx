@@ -1,4 +1,5 @@
 import { BrowserRouter, HashRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
+import { useState } from 'react'
 import Recorder from './Recorder'
 import Dashboard from './Dashboard'
 import MeetingView from './MeetingView'
@@ -7,6 +8,7 @@ const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLow
 
 function AppShell() {
 	const navigate = useNavigate()
+	const [refreshSignal, setRefreshSignal] = useState(0)
 	return (
 		<div style={{ 
 			maxWidth: '100%', 
@@ -54,7 +56,7 @@ function AppShell() {
 				</header>
 				
 				{/* Stay on dashboard when recording starts; meeting can be opened from the list */}
-				<Recorder onCreated={() => { /* no navigation */ }} />
+				<Recorder onCreated={() => { /* no navigation */ }} onStopped={() => setRefreshSignal(Date.now())} />
 				
 				<div style={{ 
 					margin: '32px 0',
@@ -62,7 +64,7 @@ function AppShell() {
 					background: 'linear-gradient(90deg, transparent, #e2e8f0, transparent)'
 				}} />
 				
-				<Dashboard onOpen={(id) => navigate(`/meeting/${id}`)} />
+				<Dashboard onOpen={(id) => navigate(`/meeting/${id}`)} refreshSignal={refreshSignal} />
 			</div>
 		</div>
 	)

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { addChunk, createMeeting } from './offline'
 import { db } from './db'
 
-export default function Recorder({ onCreated }: { onCreated: (meetingId: string) => void }) {
+export default function Recorder({ onCreated, onStopped }: { onCreated: (meetingId: string) => void; onStopped?: (meetingId: string) => void }) {
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const [recording, setRecording] = useState(false)
 	const [meetingId, setMeetingId] = useState<string | null>(null)
@@ -130,13 +130,14 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 			const now = new Date()
 			const human = now.toLocaleString()
 			const meeting = await createMeeting(`Meeting ${human}`)
-			setMeetingId(meeting.id)
-			onCreated(meeting.id)
+			const createdId = meeting.id
+			setMeetingId(createdId)
+			onCreated(createdId)
 			chunkIndexRef.current = 0
 
 			rec.ondataavailable = async (e: BlobEvent) => {
-				if (e.data && e.data.size > 0 && meetingId) {
-					await addChunk(meetingId, e.data, chunkIndexRef.current++)
+				if (e.data && e.data.size > 0) {
+					await addChunk(createdId, e.data, chunkIndexRef.current++)
 				}
 			}
 
@@ -177,6 +178,7 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 				// @ts-ignore - duration is optional
 				db.meetings.update(meetingId, { title, updatedAt: Date.now(), duration: recordingTime })
 			}
+			if (onStopped) onStopped(meetingId)
 		}
 		setRecordingTime(0)
 	}
@@ -189,10 +191,10 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 	}
 
 	return (
-		<div>
+		<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 			{/* Microphone Selection (only show if multiple mics available) */}
 			{availableMics.length > 1 && (
-				<div style={{ marginBottom: 16 }}>
+				<div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
 					<label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
 						🎤 Microphone:
 					</label>
@@ -221,6 +223,7 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 					borderRadius: '8px',
 					display: 'flex',
 					alignItems: 'center',
+					justifyContent: 'center',
 					gap: '12px'
 				}}>
 					<div style={{ 
@@ -237,7 +240,7 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 			)}
 
 			{/* Recording Controls */}
-			<div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+			<div style={{ display: 'flex', gap: 8, marginBottom: 8, justifyContent: 'center' }}>
 				<button 
 					onClick={start} 
 					disabled={recording}

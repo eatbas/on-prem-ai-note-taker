@@ -3,7 +3,7 @@ import { listMeetings, syncMeeting, watchOnline } from './offline'
 import { getMeetings, getVpsHealth, updateMeeting } from './api'
 import { db } from './db'
 
-export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => void }) {
+export default function Dashboard({ onOpen, refreshSignal }: { onOpen: (meetingId: string) => void; refreshSignal?: number }) {
 	const [text, setText] = useState('')
 	const [tag, setTag] = useState('')
 	const [online, setOnline] = useState(true)
@@ -37,9 +37,15 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 		setError(null)
 		try {
 			if (online) {
-				// Fetch from backend when online
-				const backendMeetings = await getMeetings()
-				setMeetings(backendMeetings)
+				// Fetch from backend and merge with local unsent meetings so newly created appear immediately
+				const [backendMeetings, localMeetings] = await Promise.all([
+					getMeetings(),
+					listMeetings({ text, tag })
+				])
+				const byId = new Map<string, any>()
+				for (const m of localMeetings) byId.set(m.id, m)
+				for (const m of backendMeetings as any[]) byId.set(m.id, m)
+				setMeetings(Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0)))
 			} else {
 				// Use local data when offline
 				setMeetings(await listMeetings({ text, tag }))
@@ -58,6 +64,14 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 		refresh()
 	}, [text, tag, online])
 
+	// Re-run refresh when parent bumps refreshSignal (e.g., on recording stop)
+	useEffect(() => {
+		if (typeof refreshSignal !== 'undefined') {
+			refresh()
+		}
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [refreshSignal])
+
 	const tags = useMemo(() => {
 		const all: Record<string, number> = {}
 		meetings.forEach(m => m.tags?.forEach((t: string) => (all[t] = (all[t] || 0) + 1)))
@@ -75,18 +89,7 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 	}
 
 	return (
-		<div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16 }}>
-			{/* Sidebar */}
-			<aside style={{ borderRight: '1px solid #e2e8f0', paddingRight: 12 }}>
-				<div style={{ fontWeight: 700, marginBottom: 12 }}>Navigation</div>
-				<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-					<a href="#/" style={{ textDecoration: 'none' }}>🏠 Home</a>
-					<a href="#/" style={{ textDecoration: 'none' }}>🗂️ Meetings</a>
-					<a href="#/" style={{ textDecoration: 'none' }}>🔍 Search</a>
-				</div>
-			</aside>
-
-			<div>
+		<div>
 			<div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
 				<input 
 					placeholder="Search title, summary, transcript" 
