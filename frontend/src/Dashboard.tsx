@@ -180,7 +180,6 @@ export default function Dashboard({ onOpen, refreshSignal }: { onOpen: (meetingI
 					</li>
 				))}
 			</ul>
-			</div>
 		</div>
 	)
 }
