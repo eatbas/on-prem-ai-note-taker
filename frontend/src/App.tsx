@@ -1,14 +1,41 @@
 import { BrowserRouter, HashRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import Recorder from './Recorder'
 import Dashboard from './Dashboard'
 import MeetingView from './MeetingView'
+import { watchOnline } from './offline'
+import { getVpsHealth } from './api'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
 function AppShell() {
 	const navigate = useNavigate()
 	const [refreshSignal, setRefreshSignal] = useState(0)
+	const [text, setText] = useState('')
+	const [tag, setTag] = useState('')
+	const [online, setOnline] = useState(true)
+	const [vpsUp, setVpsUp] = useState<boolean | null>(null)
+
+	useEffect(() => {
+		const stop = watchOnline(setOnline)
+		return stop
+	}, [])
+
+	useEffect(() => {
+		let stopped = false
+		async function poll() {
+			try {
+				const res = await getVpsHealth()
+				if (!stopped) setVpsUp(res.status === 'ok')
+			} catch {
+				if (!stopped) setVpsUp(false)
+			}
+		}
+		poll()
+		const id = setInterval(poll, 15000)
+		return () => { stopped = true; clearInterval(id) }
+	}, [])
+
 	return (
 		<div style={{ 
 			maxWidth: '100%', 
@@ -56,7 +83,16 @@ function AppShell() {
 				</header>
 				
 				{/* Stay on dashboard when recording starts; meeting can be opened from the list */}
-				<Recorder onCreated={() => { /* no navigation */ }} onStopped={() => setRefreshSignal(Date.now())} />
+				<Recorder 
+					onCreated={() => { /* no navigation */ }} 
+					onStopped={() => setRefreshSignal(Date.now())}
+					text={text}
+					setText={setText}
+					tag={tag}
+					setTag={setTag}
+					online={online}
+					vpsUp={vpsUp}
+				/>
 				
 				<div style={{ 
 					margin: '32px 0',
@@ -64,7 +100,16 @@ function AppShell() {
 					background: 'linear-gradient(90deg, transparent, #e2e8f0, transparent)'
 				}} />
 				
-				<Dashboard onOpen={(id) => navigate(`/meeting/${id}`)} refreshSignal={refreshSignal} />
+				<Dashboard 
+					onOpen={(id) => navigate(`/meeting/${id}`)} 
+					refreshSignal={refreshSignal}
+					text={text}
+					setText={setText}
+					tag={tag}
+					setTag={setTag}
+					online={online}
+					vpsUp={vpsUp}
+				/>
 			</div>
 		</div>
 	)

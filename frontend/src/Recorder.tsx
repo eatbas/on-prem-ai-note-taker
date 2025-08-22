@@ -2,7 +2,25 @@ import { useEffect, useRef, useState } from 'react'
 import { addChunk, createMeeting, syncMeeting } from './offline'
 import { db } from './db'
 
-export default function Recorder({ onCreated, onStopped }: { onCreated: (meetingId: string) => void; onStopped?: (meetingId: string) => void }) {
+export default function Recorder({ 
+	onCreated, 
+	onStopped,
+	text,
+	setText,
+	tag,
+	setTag,
+	online,
+	vpsUp
+}: { 
+	onCreated: (meetingId: string) => void; 
+	onStopped?: (meetingId: string) => void;
+	text: string;
+	setText: (text: string) => void;
+	tag: string;
+	setTag: (tag: string) => void;
+	online: boolean;
+	vpsUp: boolean | null;
+}) {
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const [recording, setRecording] = useState(false)
 	const [meetingId, setMeetingId] = useState<string | null>(null)
@@ -11,16 +29,139 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 	const [retryCount, setRetryCount] = useState(0)
 	const [uploadProgress, setUploadProgress] = useState(0)
 	const [totalChunks, setTotalChunks] = useState(0)
+	const [showMicModal, setShowMicModal] = useState(false)
+	const [systemAudioLevel, setSystemAudioLevel] = useState(0)
+	const [microphoneLevel, setMicrophoneLevel] = useState(0)
 	const chunkIndexRef = useRef(0)
 	const [recordingTime, setRecordingTime] = useState(0)
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
 	const [selectedMic, setSelectedMic] = useState<string>('')
 	const recordingIntervalRef = useRef<number | null>(null)
+	const audioContextRef = useRef<AudioContext | null>(null)
+	const analyserRef = useRef<AnalyserNode | null>(null)
+	const microphoneAnalyserRef = useRef<AnalyserNode | null>(null)
+	const animationFrameRef = useRef<number | null>(null)
+
+	// Electron API integration
+	useEffect(() => {
+		// Listen for tray actions from main process
+		if (window.electronAPI) {
+			window.electronAPI.onTrayAction((action) => {
+				if (action === 'start-recording' && !recording) {
+					start()
+				}
+			})
+			
+			// Cleanup listener on unmount
+			return () => {
+				window.electronAPI.removeTrayActionListener()
+			}
+		}
+	}, [recording])
+
+	// Update Electron tray when recording state changes
+	useEffect(() => {
+		if (window.electronAPI) {
+			window.electronAPI.sendRecordingState(recording)
+		}
+	}, [recording])
+
+	// Send recording data updates to standalone window
+	useEffect(() => {
+		if (window.electronAPI && recording) {
+			// Send recording state to main process for standalone window
+			window.electronAPI.sendRecordingState(recording)
+		}
+	}, [recording, recordingTime, systemAudioLevel, microphoneLevel])
+
+	// Listen for stop recording command from standalone window
+	useEffect(() => {
+		if (window.electronAPI) {
+			const handleStopRecording = () => {
+				if (recording) {
+					stop()
+				}
+			}
+			
+			window.electronAPI.onTrayAction((action) => {
+				if (action === 'stop-recording') {
+					handleStopRecording()
+				}
+			})
+			
+			return () => {
+				window.electronAPI.removeTrayActionListener()
+			}
+		}
+	}, [recording])
 
 	useEffect(() => {
-		// Load available microphones when component mounts
-		getAvailableMics()
+		// Load available microphones
+		async function loadMicrophones() {
+			try {
+				const devices = await navigator.mediaDevices.enumerateDevices()
+				const audioInputs = devices.filter(device => device.kind === 'audioinput')
+				
+				// Filter out virtual/duplicate devices and only keep real microphones
+				const realMics = audioInputs.filter(device => {
+					const label = device.label.toLowerCase()
+					
+					// Filter out common virtual/duplicate devices
+					const virtualKeywords = [
+						'virtual', 'loopback', 'stereo mix', 'what u hear', 'wave out mix',
+						'stereo', 'mix', 'monitor', 'output', 'speakers', 'headphones',
+						'default', 'system', 'audio', 'sound', 'media', 'communications'
+					]
+					
+					// Check if device label contains virtual keywords
+					const isVirtual = virtualKeywords.some(keyword => label.includes(keyword))
+					
+					// Check if device has a meaningful label (not just "default" or empty)
+					const hasMeaningfulLabel = device.label && device.label.trim() !== '' && 
+						!label.includes('default') && !label.includes('system')
+					
+					// Check if device ID is not just a placeholder
+					const hasValidId = device.deviceId && device.deviceId.length > 10
+					
+					return !isVirtual && hasMeaningfulLabel && hasValidId
+				})
+				
+				// If no real mics found, fall back to all audio inputs but filter obvious virtual ones
+				const availableMics = realMics.length > 0 ? realMics : audioInputs.filter(device => {
+					const label = device.label.toLowerCase()
+					return !label.includes('virtual') && !label.includes('loopback') && 
+						   !label.includes('stereo mix') && !label.includes('what u hear')
+				})
+				
+				setAvailableMics(availableMics)
+				
+				// Set default microphone if available
+				if (availableMics.length > 0 && !selectedMic) {
+					setSelectedMic(availableMics[0].deviceId)
+				}
+				
+				console.log('Available microphones:', availableMics.map(mic => ({
+					label: mic.label,
+					deviceId: mic.deviceId.slice(0, 20) + '...',
+					kind: mic.kind
+				})))
+				
+			} catch (err) {
+				console.error('Failed to load microphones:', err)
+			}
+		}
 		
+		loadMicrophones()
+		
+		// Listen for device changes
+		navigator.mediaDevices.addEventListener('devicechange', loadMicrophones)
+		
+		return () => {
+			navigator.mediaDevices.removeEventListener('devicechange', loadMicrophones)
+		}
+	}, [selectedMic])
+
+	useEffect(() => {
 		return () => {
 			if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
 				mediaRecorderRef.current.stop()
@@ -30,37 +171,6 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 			}
 		}
 	}, [])
-
-	// Get available microphones (filters Windows "Default"/"Communications" duplicates)
-	async function getAvailableMics() {
-		try {
-			// Try to ensure labels are populated (permission prompt); stop tracks immediately
-			try {
-				const tmp = await navigator.mediaDevices.getUserMedia({ audio: true })
-				tmp.getTracks().forEach(t => t.stop())
-			} catch {
-				// ignore if user blocks; we'll still list device ids
-			}
-
-			const devices = await navigator.mediaDevices.enumerateDevices()
-			let mics = devices.filter(d => d.kind === 'audioinput')
-			// Remove Windows virtual entries
-			mics = mics.filter(d => d.deviceId !== 'default' && d.deviceId !== 'communications')
-			// De-dupe by groupId or label
-			const seen = new Set<string>()
-			mics = mics.filter(d => {
-				const key = d.groupId || d.label || d.deviceId
-				if (seen.has(key)) return false
-				seen.add(key)
-				return true
-			})
-			setAvailableMics(mics)
-			// Set default mic to first available
-			if (mics.length > 0 && !selectedMic) setSelectedMic(mics[0].deviceId)
-		} catch (err) {
-			console.error('Failed to get microphones:', err)
-		}
-	}
 
 	async function start() {
 		try {
@@ -80,49 +190,88 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 			}
 
 			setError(null)
+			setShowMicModal(true)
+		} catch (err) {
+			console.error('Failed to start recording:', err)
+			setError(err instanceof Error ? err.message : 'Failed to start recording')
+		}
+	}
+
+	async function startRecordingWithSelectedMic() {
+		try {
+			setError(null)
 			setRecordingTime(0)
+
+			// Automatically select the first available microphone if none is selected
+			if (!selectedMic && availableMics.length > 0) {
+				setSelectedMic(availableMics[0].deviceId)
+			}
 
 			// Create a combined stream with both system audio and microphone
 			let combinedStream: MediaStream
+			let systemAudioStreams: MediaStream[] = []
+			let micStream: MediaStream
 
 			try {
-				// First, try to get system audio (desktop capture)
-				let systemAudioStream: MediaStream | null = null
+				// Get ALL available system audio sources (desktop capture)
 				if (typeof window !== 'undefined' && (window as any).desktopCapture) {
 					try {
 						const sources = await (window as any).desktopCapture.getSources(['audio'])
-						if (sources.length > 0) {
-							const source = sources[0]
-							systemAudioStream = await navigator.mediaDevices.getUserMedia({
-								audio: {
-									mandatory: {
-										chromeMediaSource: 'desktop',
-										chromeMediaSourceId: source.id
-									}
-								} as any
-							})
+						console.log('Available audio sources:', sources)
+						
+						// Capture from ALL audio sources, not just the first one
+						for (const source of sources) {
+							try {
+								const audioStream = await navigator.mediaDevices.getUserMedia({
+									audio: {
+										mandatory: {
+											chromeMediaSource: 'desktop',
+											chromeMediaSourceId: source.id
+										}
+									} as any
+								})
+								systemAudioStreams.push(audioStream)
+								console.log(`Successfully captured audio from: ${source.name || source.id}`)
+							} catch (err) {
+								console.log(`Failed to capture audio from source ${source.name || source.id}:`, err)
+							}
+						}
+						
+						if (systemAudioStreams.length > 0) {
+							console.log(`Successfully captured audio from ${systemAudioStreams.length} system audio sources`)
+						} else {
+							console.log('No system audio sources could be captured')
 						}
 					} catch (err) {
-						console.log('System audio capture not available, continuing with microphone only')
+						console.log('System audio capture not available, continuing with microphone only:', err)
 					}
 				}
 
-				// Get microphone stream
-				const micStream = await navigator.mediaDevices.getUserMedia({
+				// Get microphone stream - use selected mic or first available
+				const micToUse = selectedMic || (availableMics.length > 0 ? availableMics[0].deviceId : undefined)
+				micStream = await navigator.mediaDevices.getUserMedia({
 					audio: {
-						deviceId: selectedMic ? { exact: selectedMic } : undefined
+						deviceId: micToUse ? { exact: micToUse } : undefined
 					}
 				})
 
-				// Combine streams if we have both
-				if (systemAudioStream) {
-					// Combine system audio and microphone
-					const tracks = [...systemAudioStream.getAudioTracks(), ...micStream.getAudioTracks()]
-					combinedStream = new MediaStream(tracks)
-				} else {
-					// Only microphone available
-					combinedStream = micStream
-				}
+				// Combine ALL streams: microphone + all system audio sources
+				const allTracks: MediaStreamTrack[] = []
+				
+				// Add microphone tracks
+				allTracks.push(...micStream.getAudioTracks())
+				
+				// Add ALL system audio tracks
+				systemAudioStreams.forEach(stream => {
+					allTracks.push(...stream.getAudioTracks())
+				})
+				
+				// Create combined stream with all audio sources
+				combinedStream = new MediaStream(allTracks)
+				
+				console.log(`Combined stream created with ${allTracks.length} audio tracks:`)
+				console.log(`- Microphone tracks: ${micStream.getAudioTracks().length}`)
+				console.log(`- System audio tracks: ${systemAudioStreams.reduce((total, stream) => total + stream.getAudioTracks().length, 0)}`)
 
 			} catch (err) {
 				console.error('Failed to get audio streams:', err)
@@ -151,6 +300,10 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 			rec.start(5000) // 5s chunks
 			mediaRecorderRef.current = rec
 			setRecording(true)
+			setShowMicModal(false)
+
+			// Start audio level monitoring with ALL system audio streams
+			startAudioLevelMonitoring(systemAudioStreams, micStream)
 
 			// Start recording timer
 			recordingIntervalRef.current = window.setInterval(() => {
@@ -175,6 +328,9 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 			clearInterval(recordingIntervalRef.current)
 			recordingIntervalRef.current = null
 		}
+		
+		// Stop audio level monitoring
+		stopAudioLevelMonitoring()
 		
 		setRecording(false)
 		// Ask for meeting name and persist duration locally
@@ -227,13 +383,6 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 		setRecordingTime(0)
 	}
 
-	// Format recording time as MM:SS
-	function formatTime(seconds: number): string {
-		const mins = Math.floor(seconds / 60)
-		const secs = seconds % 60
-		return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-	}
-
 	// Helper function for retrying sync with exponential backoff
 	async function retrySync(meetingId: string, attempt: number) {
 		try {
@@ -267,6 +416,98 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 		}
 	}
 
+	// Format time for display (MM:SS)
+	function formatTime(seconds: number): string {
+		const mins = Math.floor(seconds / 60)
+		const secs = seconds % 60
+		return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
+	}
+
+	// Audio level monitoring functions
+	function startAudioLevelMonitoring(systemStreams: MediaStream[], micStream: MediaStream) {
+		if (audioContextRef.current) {
+			audioContextRef.current.close()
+		}
+		
+		audioContextRef.current = new AudioContext()
+		
+		// Monitor system audio levels from ALL sources
+		if (systemStreams.length > 0 && audioContextRef.current) {
+			systemStreams.forEach(stream => {
+				const systemSource = audioContextRef.current!.createMediaStreamSource(stream)
+				analyserRef.current = audioContextRef.current!.createAnalyser()
+				analyserRef.current.fftSize = 256
+				analyserRef.current.smoothingTimeConstant = 0.3
+				analyserRef.current.minDecibels = -90
+				analyserRef.current.maxDecibels = -10
+				systemSource.connect(analyserRef.current)
+			})
+		}
+		
+		// Monitor microphone levels
+		if (audioContextRef.current) {
+			const micSource = audioContextRef.current.createMediaStreamSource(micStream)
+			microphoneAnalyserRef.current = audioContextRef.current.createAnalyser()
+			microphoneAnalyserRef.current.fftSize = 256
+			microphoneAnalyserRef.current.smoothingTimeConstant = 0.3
+			microphoneAnalyserRef.current.minDecibels = -90
+			microphoneAnalyserRef.current.maxDecibels = -10
+			micSource.connect(microphoneAnalyserRef.current)
+		}
+		
+		// Start monitoring loop
+		function updateAudioLevels() {
+			if (analyserRef.current) {
+				const systemData = new Uint8Array(analyserRef.current.frequencyBinCount)
+				analyserRef.current.getByteFrequencyData(systemData)
+				// Calculate RMS (Root Mean Square) for better level representation
+				const systemSum = systemData.reduce((sum, value) => sum + value * value, 0)
+				const systemRms = Math.sqrt(systemSum / systemData.length)
+				const normalizedSystemLevel = systemRms / 255
+				setSystemAudioLevel(normalizedSystemLevel)
+				
+				// Debug logging
+				if (normalizedSystemLevel > 0.1) {
+					console.log('System Audio Level:', normalizedSystemLevel.toFixed(3))
+				}
+			}
+			
+			if (microphoneAnalyserRef.current) {
+				const micData = new Uint8Array(microphoneAnalyserRef.current.frequencyBinCount)
+				microphoneAnalyserRef.current.getByteFrequencyData(micData)
+				// Calculate RMS (Root Mean Square) for better level representation
+				const micSum = micData.reduce((sum, value) => sum + value * value, 0)
+				const micRms = Math.sqrt(micSum / micData.length)
+				const normalizedMicLevel = micRms / 255
+				setMicrophoneLevel(normalizedMicLevel)
+				
+				// Debug logging
+				if (normalizedMicLevel > 0.1) {
+					console.log('Microphone Level:', normalizedMicLevel.toFixed(3))
+				}
+			}
+			
+			animationFrameRef.current = requestAnimationFrame(updateAudioLevels)
+		}
+		
+		updateAudioLevels()
+	}
+
+	function stopAudioLevelMonitoring() {
+		if (animationFrameRef.current) {
+			cancelAnimationFrame(animationFrameRef.current)
+			animationFrameRef.current = null
+		}
+		
+		if (audioContextRef.current) {
+			audioContextRef.current.close()
+			audioContextRef.current = null
+		}
+		
+		setSystemAudioLevel(0)
+		setMicrophoneLevel(0)
+	}
+
 	return (
 		<div style={{ 
 			display: 'flex', 
@@ -276,83 +517,99 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 			textAlign: 'center',
 			minHeight: '200px'
 		}}>
-			{/* Microphone Visual - Always show */}
-			<div style={{ 
-				marginBottom: 24, 
-				display: 'flex', 
-				flexDirection: 'column', 
-				alignItems: 'center' 
+			{/* Main Content Area with Microphone and Status Side by Side */}
+			<div style={{
+				display: 'flex',
+				gap: '48px',
+				alignItems: 'flex-start',
+				marginBottom: '32px',
+				width: '100%',
+				maxWidth: '900px'
 			}}>
+				{/* Left Side - Microphone Selection */}
 				<div style={{ 
-					fontSize: '48px', 
-					marginBottom: 12,
-					opacity: recording ? 1 : 0.7,
-					transform: recording ? 'scale(1.1)' : 'scale(1)',
-					transition: 'all 0.3s ease',
-					filter: recording ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none'
-				}}>
-					🎤
-				</div>
-				{/* Microphone Selection */}
-				{availableMics.length > 1 && (
-					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-						<label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', fontSize: '14px' }}>
-							Select Microphone:
-						</label>
-						<select 
-							value={selectedMic} 
-							onChange={(e) => setSelectedMic(e.target.value)}
-							disabled={recording}
-							style={{ 
-								padding: '8px 12px', 
-								borderRadius: '6px', 
-								border: '1px solid #d1d5db',
-								backgroundColor: 'white',
-								fontSize: '14px',
-								minWidth: '200px'
-							}}
-						>
-							{availableMics.map(mic => (
-								<option key={mic.deviceId} value={mic.deviceId}>
-									{mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`}
-								</option>
-							))}
-						</select>
-					</div>
-				)}
-			</div>
-
-			{/* Recording Status */}
-			{recording && (
-				<div style={{ 
-					marginBottom: 16, 
-					padding: '12px 16px', 
-					backgroundColor: '#dcfce7', 
-					border: '1px solid #22c55e',
-					borderRadius: '8px',
-					display: 'flex',
+					display: 'flex', 
+					flexDirection: 'column', 
 					alignItems: 'center',
-					justifyContent: 'center',
-					gap: '12px'
+					flex: 1
 				}}>
+					{/* Microphone Visual */}
 					<div style={{ 
-						width: '12px', 
-						height: '12px', 
-						backgroundColor: '#ef4444', 
-						borderRadius: '50%',
-						animation: 'pulse 1.5s infinite'
-					}}></div>
-					<span style={{ fontWeight: 'bold', color: '#166534' }}>
-						Recording... {formatTime(recordingTime)}
-					</span>
+						marginBottom: 24, 
+						display: 'flex', 
+						flexDirection: 'column', 
+						alignItems: 'center' 
+					}}>
+						<div style={{ 
+							fontSize: '48px', 
+							marginBottom: 12,
+							opacity: recording ? 1 : 0.7,
+							transform: recording ? 'scale(1.1)' : 'scale(1)',
+							transition: 'all 0.3s ease',
+							filter: recording ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none'
+						}}>
+							🎤
+						</div>
+						
+						{/* Microphone Selection */}
+						<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+							<label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', fontSize: '14px' }}>
+								Select Microphone:
+							</label>
+							<select 
+								value={selectedMic} 
+								onChange={(e) => setSelectedMic(e.target.value)}
+								disabled={recording}
+								style={{ 
+									padding: '8px 12px', 
+									borderRadius: '6px', 
+									border: '1px solid #d1d5db',
+									backgroundColor: 'white',
+									fontSize: '14px',
+									minWidth: '200px'
+								}}
+							>
+								{availableMics.map(mic => {
+									// Clean up the label for display
+									let displayLabel = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`
+									
+									// Remove common prefixes/suffixes that make labels confusing
+									displayLabel = displayLabel
+										.replace(/^default\s*-\s*/i, '')
+										.replace(/^microphone\s*-\s*/i, '')
+										.replace(/^audio\s*input\s*-\s*/i, '')
+										.replace(/\(.*?\)/g, '') // Remove text in parentheses
+										.replace(/\s+/g, ' ') // Normalize whitespace
+										.trim()
+									
+									return (
+										<option key={mic.deviceId} value={mic.deviceId}>
+											{displayLabel}
+										</option>
+									)
+								})}
+							</select>
+							{/* Show current microphone info */}
+							{selectedMic && (
+								<div style={{ 
+									marginTop: '8px', 
+									fontSize: '12px', 
+									color: '#6b7280',
+									textAlign: 'center'
+								}}>
+									🎤 Using: {availableMics.find(mic => mic.deviceId === selectedMic)?.label || 'Selected microphone'}
+								</div>
+							)}
+						</div>
+					</div>
 				</div>
-			)}
+			</div>
 
 			{/* Recording Controls */}
 			<div style={{ 
 				display: 'flex', 
 				gap: 16, 
-				marginBottom: 24, 
+				marginBottom: 32, 
 				justifyContent: 'center',
 				alignItems: 'center' 
 			}}>
@@ -397,6 +654,274 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 					⏹️ Stop Recording
 				</button>
 			</div>
+
+			{/* Recording Status */}
+			{recording && (
+				<div style={{ 
+					marginBottom: 16, 
+					padding: '12px 16px', 
+					backgroundColor: '#dcfce7', 
+					border: '1px solid #22c55e',
+					borderRadius: '8px',
+					display: 'flex',
+					flexDirection: 'column',
+					gap: '12px'
+				}}>
+					<div style={{ 
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						gap: '12px'
+					}}>
+						<div style={{ 
+							width: '12px', 
+							height: '12px', 
+							backgroundColor: '#ef4444', 
+							borderRadius: '50%',
+							animation: 'pulse 1.5s infinite'
+						}}></div>
+						<span style={{ fontWeight: 'bold', color: '#166534' }}>
+							Recording... {formatTime(recordingTime)}
+						</span>
+					</div>
+					
+					{/* Audio Level Bars */}
+					<div style={{ 
+						display: 'flex', 
+						gap: '16px', 
+						justifyContent: 'center',
+						alignItems: 'center'
+					}}>
+						{/* System Audio Level */}
+						<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+							<span style={{ fontSize: '12px', color: '#64748b' }}>🖥️ System Audio</span>
+							<div style={{ 
+								width: '60px', 
+								height: '120px', 
+								backgroundColor: '#f1f5f9', 
+								border: '1px solid #e2e8f0',
+								borderRadius: '4px',
+								overflow: 'hidden',
+								display: 'flex',
+								flexDirection: 'column-reverse',
+								alignItems: 'stretch',
+								position: 'relative'
+							}}>
+								<div style={{ 
+									height: `${Math.max(4, systemAudioLevel * 120)}px`, 
+									backgroundColor: '#3b82f6',
+									transition: 'height 0.05s ease',
+									minHeight: '4px',
+									boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
+								}}></div>
+								{/* Level indicator line */}
+								<div style={{
+									position: 'absolute',
+									top: `${120 - (systemAudioLevel * 120)}px`,
+									left: 0,
+									right: 0,
+									height: '2px',
+									backgroundColor: '#1e40af',
+									boxShadow: '0 0 4px rgba(30, 64, 175, 0.8)'
+								}}></div>
+							</div>
+							<span style={{ 
+								fontSize: '10px', 
+								color: '#6b7280',
+								fontFamily: 'monospace'
+							}}>
+								{Math.round(systemAudioLevel * 100)}%
+							</span>
+							{/* Debug indicator */}
+							<div style={{
+								width: '8px',
+								height: '8px',
+								borderRadius: '50%',
+								backgroundColor: systemAudioLevel > 0.01 ? '#10b981' : '#ef4444',
+								animation: systemAudioLevel > 0.01 ? 'pulse 1s infinite' : 'none'
+							}}></div>
+						</div>
+						
+						{/* Microphone Level */}
+						<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
+							<span style={{ fontSize: '12px', color: '#64748b' }}>🎤 Microphone</span>
+							<div style={{ 
+								width: '60px', 
+								height: '120px', 
+								backgroundColor: '#f1f5f9', 
+								border: '1px solid #e2e8f0',
+								borderRadius: '4px',
+								overflow: 'hidden',
+								display: 'flex',
+								flexDirection: 'column-reverse',
+								alignItems: 'stretch',
+								position: 'relative'
+							}}>
+								<div style={{ 
+									height: `${Math.max(4, microphoneLevel * 120)}px`, 
+									backgroundColor: '#10b981',
+									transition: 'height 0.05s ease',
+									minHeight: '4px',
+									boxShadow: '0 0 8px rgba(16, 185, 129, 0.5)'
+								}}></div>
+								{/* Level indicator line */}
+								<div style={{
+									position: 'absolute',
+									top: `${120 - (microphoneLevel * 120)}px`,
+									left: 0,
+									right: 0,
+									height: '2px',
+									backgroundColor: '#047857',
+									boxShadow: '0 0 4px rgba(4, 120, 87, 0.8)'
+								}}></div>
+							</div>
+							<span style={{ 
+								fontSize: '10px', 
+								color: '#6b7280',
+								fontFamily: 'monospace'
+							}}>
+								{Math.round(microphoneLevel * 100)}%
+							</span>
+							{/* Debug indicator */}
+							<div style={{
+								width: '8px',
+								height: '8px',
+								borderRadius: '50%',
+								backgroundColor: microphoneLevel > 0.01 ? '#10b981' : '#ef4444',
+								animation: microphoneLevel > 0.01 ? 'pulse 1s infinite' : 'none'
+							}}></div>
+						</div>
+					</div>
+				</div>
+			)}
+
+			{/* Microphone Selection Modal */}
+			{showMicModal && (
+				<div style={{
+					position: 'fixed',
+					top: 0,
+					left: 0,
+					right: 0,
+					bottom: 0,
+					backgroundColor: 'rgba(0, 0, 0, 0.5)',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					zIndex: 1000
+				}}>
+					<div style={{
+						backgroundColor: 'white',
+						padding: '24px',
+						borderRadius: '12px',
+						maxWidth: '400px',
+						width: '90%',
+						boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+					}}>
+						<div style={{
+							display: 'flex',
+							justifyContent: 'space-between',
+							alignItems: 'center',
+							marginBottom: '16px'
+						}}>
+							<h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+								Select Microphone
+							</h3>
+							<button
+								onClick={() => setShowMicModal(false)}
+								style={{
+									background: 'none',
+									border: 'none',
+									fontSize: '20px',
+									cursor: 'pointer',
+									color: '#6b7280',
+									padding: '4px'
+								}}
+							>
+								✕
+							</button>
+						</div>
+						
+						<p style={{ 
+							margin: '0 0 16px 0', 
+							color: '#6b7280', 
+							fontSize: '14px' 
+						}}>
+							Choose your preferred microphone for recording:
+						</p>
+						
+						<div style={{ marginBottom: '20px' }}>
+							<label style={{ 
+								display: 'block', 
+								marginBottom: '8px', 
+								fontWeight: '500',
+								color: '#374151'
+							}}>
+								Microphone:
+							</label>
+							<select 
+								value={selectedMic} 
+								onChange={(e) => setSelectedMic(e.target.value)}
+								style={{ 
+									width: '100%',
+									padding: '12px',
+									border: '1px solid #d1d5db',
+									borderRadius: '6px',
+									fontSize: '14px'
+								}}
+							>
+								{availableMics.map(mic => {
+									// Clean up the label for display
+									let displayLabel = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`
+									
+									// Remove common prefixes/suffixes that make labels confusing
+									displayLabel = displayLabel
+										.replace(/^default\s*-\s*/i, '')
+										.replace(/^microphone\s*-\s*/i, '')
+										.replace(/^audio\s*input\s*-\s*/i, '')
+										.replace(/\(.*?\)/g, '') // Remove text in parentheses
+										.replace(/\s+/g, ' ') // Normalize whitespace
+										.trim()
+									
+									return (
+										<option key={mic.deviceId} value={mic.deviceId}>
+											{displayLabel}
+										</option>
+									)
+								})}
+							</select>
+						</div>
+						
+						<button
+							onClick={startRecordingWithSelectedMic}
+							disabled={!selectedMic}
+							style={{
+								width: '100%',
+								padding: '12px 24px',
+								backgroundColor: selectedMic ? '#8b5cf6' : '#9ca3af',
+								color: 'white',
+								border: 'none',
+								borderRadius: '8px',
+								fontSize: '16px',
+								fontWeight: '600',
+								cursor: selectedMic ? 'pointer' : 'not-allowed',
+								transition: 'background-color 0.2s ease'
+							}}
+							onMouseEnter={(e) => {
+								if (selectedMic) {
+									e.currentTarget.style.backgroundColor = '#7c3aed'
+								}
+							}}
+							onMouseLeave={(e) => {
+								if (selectedMic) {
+									e.currentTarget.style.backgroundColor = '#8b5cf6'
+								}
+							}}
+						>
+							🎙️ Start Recording
+						</button>
+					</div>
+				</div>
+			)}
 
 			{/* Sync Status Indicators */}
 			{syncStatus !== 'idle' && (
@@ -470,19 +995,6 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 					</div>
 				</div>
 			)}
-
-			{/* Info Text */}
-			<div style={{ 
-				marginTop: '16px', 
-				padding: '12px 16px', 
-				backgroundColor: '#f0f9ff', 
-				border: '1px solid #0ea5e9',
-				borderRadius: '8px',
-				fontSize: '14px',
-				color: '#0c4a6e'
-			}}>
-				💡 <strong>Smart Recording:</strong> Automatically captures both system audio (Google Meet, Teams, Zoom) and microphone input for complete meeting coverage. <strong>Meetings are automatically processed with AI after recording ends!</strong>
-			</div>
 			
 			{error && (
 				<div style={{ 
@@ -496,14 +1008,6 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 					⚠️ {error}
 				</div>
 			)}
-
-			{/* CSS for recording indicator animation */}
-			<style>{`
-				@keyframes pulse {
-					0%, 100% { opacity: 1; }
-					50% { opacity: 0.5; }
-				}
-			`}</style>
 		</div>
 	)
 }

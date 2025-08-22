@@ -1,210 +1,128 @@
-const { app, BrowserWindow, session, Menu, dialog, protocol } = require('electron')
+const { app, BrowserWindow, Tray, nativeImage, ipcMain } = require('electron')
 const path = require('path')
-const { spawn } = require('child_process')
-const fs = require('fs')
-const os = require('os')
-
-// Register a secure custom protocol so packaged app can use getUserMedia
-protocol.registerSchemesAsPrivileged([
-	{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
-])
-
-// Configuration
-const BACKEND_PORT = 8001
-const FRONTEND_PORT = 5173
-const isDev = !app.isPackaged
 
 let mainWindow
-let backendProcess
+let tray
+let recorderWindow
+let isRecording = false
+let recordingDataTimer = null
 
-// Skip local backend - using VPS backend instead
-function startBackend() {
-	if (isDev) {
-		console.log('🚀 Starting backend in development mode...')
-		// In development, assume backend is started separately
-		return
-	}
-	
-	console.log('🚀 Using VPS backend at 95.111.244.159:8000')
-	console.log('📦 Skipping local backend startup')
-}
-
-// Create the main application window
 function createWindow() {
-	// Create the browser window with responsive design
 	mainWindow = new BrowserWindow({
-		width: 1400,
-		height: 900,
-		minWidth: 800,
-		minHeight: 600,
+		width: 1200,
+		height: 800,
 		webPreferences: {
-			preload: path.join(__dirname, 'preload.js'),
-			contextIsolation: true,
 			nodeIntegration: false,
-			webSecurity: true,
-			enableRemoteModule: false
+			contextIsolation: true,
+			preload: path.join(__dirname, 'preload.js')
 		},
-		icon: path.join(__dirname, 'icon.png'), // Add an icon if available
-		title: 'On-Prem AI Note Taker',
-		show: false, // Don't show until ready
-		backgroundColor: '#ffffff'
+		icon: path.join(__dirname, 'icon.png')
 	})
 
-	// Show window when ready to prevent visual flash
-	mainWindow.once('ready-to-show', () => {
-		mainWindow.show()
-		mainWindow.focus()
+	mainWindow.loadFile('frontend/index.html')
+}
+
+function createRecorderWindow() {
+	recorderWindow = new BrowserWindow({
+		width: 280,
+		height: 60,
+		frame: false,
+		resizable: false,
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		transparent: true,
+		webPreferences: {
+			nodeIntegration: false,
+			contextIsolation: true,
+			preload: path.join(__dirname, 'preload.js')
+		}
 	})
 
-	// Create application menu
-	const template = [
-		{
-			label: 'File',
-			submenu: [
-				{ role: 'quit' }
-			]
-		},
-		{
-			label: 'Edit',
-			submenu: [
-				{ role: 'undo' },
-				{ role: 'redo' },
-				{ type: 'separator' },
-				{ role: 'cut' },
-				{ role: 'copy' },
-				{ role: 'paste' }
-			]
-		},
-		{
-			label: 'View',
-			submenu: [
-				{ role: 'reload' },
-				{ role: 'forceReload' },
-				{ role: 'toggleDevTools' },
-				{ type: 'separator' },
-				{ role: 'resetZoom' },
-				{ role: 'zoomIn' },
-				{ role: 'zoomOut' },
-				{ type: 'separator' },
-				{ role: 'togglefullscreen' }
-			]
-		},
-		{
-			label: 'Help',
-			submenu: [
-				{
-					label: 'About',
-					click: () => {
-						dialog.showMessageBox(mainWindow, {
-							type: 'info',
-							title: 'About',
-							message: 'On-Prem AI Note Taker',
-							detail: 'A secure, local-first AI-powered note-taking application.\n\nVersion: 1.0.0',
-							buttons: ['OK']
-						})
-					}
-				}
-			]
-		}
-	]
+	recorderWindow.loadFile('electron/recorder-window.html')
 	
-	const menu = Menu.buildFromTemplate(template)
-	Menu.setApplicationMenu(menu)
+	// Make the window draggable
+	recorderWindow.setMovable(true)
 	
-	// Load the app
-	if (isDev) {
-		// In development, load from Vite dev server
-		console.log(`🌐 Loading frontend from Vite dev server: http://localhost:${FRONTEND_PORT}`)
-		mainWindow.loadURL(`http://localhost:${FRONTEND_PORT}`)
-		mainWindow.webContents.openDevTools()
-	} else {
-		// In production, serve from app:// protocol to satisfy secure context for mic
-		const indexPath = path.join(process.resourcesPath, 'dist', 'index.html')
-		console.log(`📁 Registering app:// protocol to serve: ${indexPath}`)
-		
-		if (!fs.existsSync(indexPath)) {
-			console.error(`❌ Frontend file not found at: ${indexPath}`)
-			dialog.showErrorBox('Frontend Error', `Frontend files not found at:\n${indexPath}`)
-			return
-		}
-		
-		try {
-			protocol.registerFileProtocol('app', (request, callback) => {
-				try {
-					const url = new URL(request.url)
-					let pathname = decodeURIComponent(url.pathname)
-					if (process.platform === 'win32' && pathname.startsWith('/')) {
-						pathname = pathname.slice(1)
-					}
-					const filePath = path.normalize(path.join(process.resourcesPath, 'dist', pathname))
-					callback({ path: filePath })
-				} catch (e) {
-					console.error('Protocol handler error:', e)
-					callback({ error: -2 })
-				}
-			})
-		} catch (e) {
-			console.error('Failed to register app protocol:', e)
-		}
+	// Hide initially
+	recorderWindow.hide()
+}
 
-		mainWindow.loadURL('app://-/index.html')
+function createTray() {
+	const iconPath = path.join(__dirname, 'icon.png')
+	let icon
+	
+	try {
+		icon = nativeImage.createFromPath(iconPath)
+	} catch (error) {
+		// Create a simple icon if file not found
+		icon = nativeImage.createFromPath(path.join(__dirname, 'default-icon.svg'))
 	}
 	
-	// Handle loading errors
-	mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
-		console.error(`❌ Frontend failed to load: ${errorDescription} (${errorCode})`)
-		console.error(`URL: ${validatedURL}`)
-		
-		if (!isDev) {
-			// In production, show error dialog
-			dialog.showErrorBox('Loading Error', 
-				`Failed to load the application:\n\n` +
-				`Error: ${errorDescription}\n` +
-				`Code: ${errorCode}\n\n` +
-				`Please try restarting the app or rebuilding it.`
-			)
+	tray = new Tray(icon)
+	tray.setToolTip('On-Prem AI Note Taker')
+	
+	const contextMenu = require('electron').Menu.buildFromTemplate([
+		{
+			label: 'Open App',
+			click: () => {
+				if (mainWindow) {
+					mainWindow.show()
+					mainWindow.focus()
+				}
+			}
+		},
+		{
+			label: 'Start Recording',
+			click: () => {
+				if (mainWindow) {
+					mainWindow.webContents.send('tray-action', 'start-recording')
+				}
+			}
+		},
+		{
+			type: 'separator'
+		},
+		{
+			label: 'Quit',
+			click: () => {
+				app.isQuiting = true
+				app.quit()
+			}
 		}
-	})
+	])
 	
-	// Handle successful load
-	mainWindow.webContents.on('did-finish-load', () => {
-		console.log('✅ Frontend loaded successfully')
-	})
+	tray.setContextMenu(contextMenu)
 	
-	mainWindow.on('closed', () => {
-		mainWindow = null
+	tray.on('click', () => {
+		if (mainWindow) {
+			mainWindow.show()
+			mainWindow.focus()
+		}
 	})
 }
 
-// App event handlers
-app.whenReady().then(() => {
-	startBackend()
-
-	// Expose VPS backend API base to renderer (used by preload.js)
-	process.env.APP_PORT = String(BACKEND_PORT)
-	process.env.API_BASE_URL = `http://95.111.244.159:8000/api`
-	
-	// Auto-allow microphone and desktop capture permissions for our app
-	try {
-		const sess = session.defaultSession
-		sess.setPermissionRequestHandler((webContents, permission, callback) => {
-			if (permission === 'media' || permission === 'desktop-capture') {
-				return callback(true)
-			}
-			return callback(false)
-		})
-	} catch (e) {
-		console.error('Failed to set permission handler:', e)
+function updateTrayRecordingState(recording) {
+	isRecording = recording
+	if (tray) {
+		const menu = tray.getContextMenu()
+		const startRecordingItem = menu.getMenuItemById('start-recording')
+		if (startRecordingItem) {
+			startRecordingItem.label = recording ? 'Recording...' : 'Start Recording'
+		}
+		tray.setToolTip(recording ? 'Recording in progress...' : 'On-Prem AI Note Taker')
 	}
-	
-	// Give backend time to start
-	setTimeout(() => {
-		createWindow()
-	}, isDev ? 0 : 3000)
+}
 
+app.whenReady().then(() => {
+	createWindow()
+	createRecorderWindow()
+	createTray()
+	
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow()
+			createRecorderWindow()
+			createTray()
 		}
 	})
 })
@@ -215,11 +133,87 @@ app.on('window-all-closed', () => {
 	}
 })
 
-app.on('before-quit', () => {
-	// Clean up backend process
-	if (backendProcess) {
-		backendProcess.kill()
+mainWindow.on('close', (event) => {
+	if (!app.isQuiting) {
+		event.preventDefault()
+		mainWindow.hide()
+		return false
 	}
 })
+
+// IPC handlers for recording state
+ipcMain.on('recording-state-changed', (event, recording) => {
+	updateTrayRecordingState(recording)
+	
+	// Show/hide recorder window
+	if (recorderWindow) {
+		if (recording) {
+			recorderWindow.show()
+			// Start sending recording data updates
+			startRecordingDataUpdates()
+		} else {
+			recorderWindow.hide()
+			// Stop sending recording data updates
+			stopRecordingDataUpdates()
+		}
+	}
+})
+
+// IPC handlers for recording data updates
+ipcMain.on('recording-data-update', (event, data) => {
+	if (recorderWindow && data.recording) {
+		recorderWindow.webContents.send('recording-data-update', data)
+	}
+})
+
+// IPC handlers for tray actions
+ipcMain.on('tray-action', (event, action) => {
+	if (action === 'start-recording' && mainWindow) {
+		mainWindow.webContents.send('tray-action', 'start-recording')
+	}
+})
+
+// IPC handler for stop recording from recorder window
+ipcMain.on('stop-recording', (event) => {
+	if (mainWindow) {
+		mainWindow.webContents.send('stop-recording')
+	}
+})
+
+// IPC handler for recording data response from main window
+ipcMain.on('recording-data-response', (event, data) => {
+	if (recorderWindow && data.recording) {
+		recorderWindow.webContents.send('recording-data-update', data)
+	}
+})
+
+// Function to send recording data to standalone window
+function sendRecordingDataToStandalone(data) {
+	if (recorderWindow && data.recording) {
+		recorderWindow.webContents.send('recording-data-update', data)
+	}
+}
+
+// Start sending recording data updates
+function startRecordingDataUpdates() {
+	if (recordingDataTimer) {
+		clearInterval(recordingDataTimer)
+	}
+	
+	recordingDataTimer = setInterval(() => {
+		if (mainWindow && recorderWindow) {
+			// Request recording data from main window
+			mainWindow.webContents.send('request-recording-data')
+		}
+	}, 100) // Update 10 times per second
+}
+
+// Stop sending recording data updates
+function stopRecordingDataUpdates() {
+	if (recordingDataTimer) {
+		clearInterval(recordingDataTimer)
+		recordingDataTimer = null
+	}
+}
 
 
