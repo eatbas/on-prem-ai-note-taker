@@ -8,18 +8,26 @@ import { getVpsHealth } from './api'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
-function AppShell() {
+function AppShell({ 
+	text, setText, 
+	tag, setTag, 
+	online, vpsUp, setVpsUp,
+	availableTags, setAvailableTags,
+	refreshSignal, setRefreshSignal 
+}: {
+	text: string
+	setText: (text: string) => void
+	tag: string
+	setTag: (tag: string) => void
+	online: boolean
+	vpsUp: boolean | null
+	setVpsUp: (vpsUp: boolean | null) => void
+	availableTags: [string, number][]
+	setAvailableTags: (tags: [string, number][]) => void
+	refreshSignal: number
+	setRefreshSignal: (signal: number) => void
+}) {
 	const navigate = useNavigate()
-	const [refreshSignal, setRefreshSignal] = useState(0)
-	const [text, setText] = useState('')
-	const [tag, setTag] = useState('')
-	const [online, setOnline] = useState(true)
-	const [vpsUp, setVpsUp] = useState<boolean | null>(null)
-
-	useEffect(() => {
-		const stop = watchOnline(setOnline)
-		return stop
-	}, [])
 
 	useEffect(() => {
 		let stopped = false
@@ -34,7 +42,7 @@ function AppShell() {
 		poll()
 		const id = setInterval(poll, 15000)
 		return () => { stopped = true; clearInterval(id) }
-	}, [])
+	}, [setVpsUp])
 
 	return (
 		<div style={{ 
@@ -45,6 +53,136 @@ function AppShell() {
 			minHeight: '100vh',
 			backgroundColor: '#f8fafc'
 		}}>
+			{/* Sticky Search and Controls Bar - At the very top */}
+			<div style={{ 
+				position: 'sticky',
+				top: 0,
+				zIndex: 1000,
+				backgroundColor: 'white',
+				borderBottom: '1px solid #e2e8f0',
+				padding: '16px',
+				marginBottom: '24px',
+				boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+				borderRadius: '12px',
+				maxWidth: 1200,
+				margin: '0 auto 24px auto'
+			}}>
+				<div style={{ 
+					display: 'flex', 
+					gap: 12, 
+					alignItems: 'center', 
+					maxWidth: '1200px',
+					margin: '0 auto',
+					flexWrap: 'wrap',
+					justifyContent: 'center'
+				}}>
+					<input 
+						placeholder="Search title, summary, transcript" 
+						value={text} 
+						onChange={e => setText(e.target.value)}
+						style={{ 
+							flex: 1, 
+							padding: '8px 12px',
+							border: '1px solid #d1d5db',
+							borderRadius: '6px',
+							fontSize: '14px',
+							maxWidth: '400px',
+							minWidth: '300px'
+						}}
+					/>
+					<select 
+						value={tag} 
+						onChange={e => setTag(e.target.value)} 
+						style={{ 
+							padding: '8px 12px',
+							border: '1px solid #d1d5db',
+							borderRadius: '6px',
+							fontSize: '14px',
+							minWidth: '120px'
+						}}
+					>
+						<option value="">All tags</option>
+						{availableTags.map(([tagName, count]) => (
+							<option key={tagName} value={tagName}>
+								{tagName} ({count})
+							</option>
+						))}
+					</select>
+					
+					{/* Status Indicators */}
+					<div style={{
+						display: 'flex',
+						gap: '8px',
+						alignItems: 'center'
+					}}>
+						<span style={{ 
+							fontSize: '14px', 
+							fontWeight: '500',
+							display: 'flex',
+							alignItems: 'center',
+							gap: '8px'
+						}}>
+							{online ? '🟢' : '🔴'} Online
+						</span>
+						<span 
+							title="VPS connectivity" 
+							style={{ 
+								fontSize: '14px',
+								fontWeight: '500',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px'
+							}}
+						>
+							{vpsUp === null ? '⏳' : vpsUp ? '🟢' : '🔴'} VPS
+						</span>
+					</div>
+
+					{/* Action Buttons */}
+					<div style={{
+						display: 'flex',
+						gap: '8px',
+						alignItems: 'center'
+					}}>
+						<button 
+							onClick={() => window.location.reload()}
+							style={{
+								padding: '8px 16px',
+								border: '1px solid #d1d5db',
+								backgroundColor: 'white',
+								borderRadius: '6px',
+								fontSize: '14px',
+								cursor: 'pointer',
+								transition: 'background-color 0.2s ease',
+								whiteSpace: 'nowrap'
+							}}
+						>
+							🔄 Refresh
+						</button>
+						<button 
+							onClick={async () => {
+								if (window.confirm('Are you sure you want to reset all local data? This cannot be undone.')) {
+									// Reset local data logic here
+									window.location.reload()
+								}
+							}}
+							style={{
+								padding: '8px 16px',
+								border: '1px solid #d1d5db',
+								backgroundColor: 'white',
+								borderRadius: '6px',
+								fontSize: '14px',
+								cursor: 'pointer',
+								transition: 'background-color 0.2s ease',
+								whiteSpace: 'nowrap'
+							}}
+						>
+							Reset Local Data
+						</button>
+					</div>
+				</div>
+			</div>
+			
 			<div style={{
 				maxWidth: 1200,
 				margin: '0 auto',
@@ -109,13 +247,27 @@ function AppShell() {
 					setTag={setTag}
 					online={online}
 					vpsUp={vpsUp}
+					onTagsChange={setAvailableTags}
 				/>
 			</div>
 		</div>
 	)
 }
 
-function MeetingRoute() {
+function MeetingRoute({ 
+	text, setText, 
+	tag, setTag, 
+	online, vpsUp, 
+	availableTags 
+}: {
+	text: string
+	setText: (text: string) => void
+	tag: string
+	setTag: (tag: string) => void
+	online: boolean
+	vpsUp: boolean | null
+	availableTags: [string, number][]
+}) {
 	const params = useParams()
 	const navigate = useNavigate()
 	const id = params.meetingId as string
@@ -128,6 +280,136 @@ function MeetingRoute() {
 			minHeight: '100vh',
 			backgroundColor: '#f8fafc'
 		}}>
+			{/* Sticky Search and Controls Bar - At the very top */}
+			<div style={{ 
+				position: 'sticky',
+				top: 0,
+				zIndex: 1000,
+				backgroundColor: 'white',
+				borderBottom: '1px solid #e2e8f0',
+				padding: '16px',
+				marginBottom: '24px',
+				boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
+				borderRadius: '12px',
+				maxWidth: 1200,
+				margin: '0 auto 24px auto'
+			}}>
+				<div style={{ 
+					display: 'flex', 
+					gap: 12, 
+					alignItems: 'center', 
+					maxWidth: '1200px',
+					margin: '0 auto',
+					flexWrap: 'wrap',
+					justifyContent: 'center'
+				}}>
+					<input 
+						placeholder="Search title, summary, transcript" 
+						value={text} 
+						onChange={e => setText(e.target.value)}
+						style={{ 
+							flex: 1, 
+							padding: '8px 12px',
+							border: '1px solid #d1d5db',
+							borderRadius: '6px',
+							fontSize: '14px',
+							maxWidth: '400px',
+							minWidth: '300px'
+						}}
+					/>
+					<select 
+						value={tag} 
+						onChange={e => setTag(e.target.value)} 
+						style={{ 
+							padding: '8px 12px',
+							border: '1px solid #d1d5db',
+							borderRadius: '6px',
+							fontSize: '14px',
+							minWidth: '120px'
+						}}
+					>
+						<option value="">All tags</option>
+						{availableTags.map(([tagName, count]) => (
+							<option key={tagName} value={tagName}>
+								{tagName} ({count})
+							</option>
+						))}
+					</select>
+					
+					{/* Status Indicators */}
+					<div style={{
+						display: 'flex',
+						gap: '8px',
+						alignItems: 'center'
+					}}>
+						<span style={{ 
+							fontSize: '14px', 
+							fontWeight: '500',
+							display: 'flex',
+							alignItems: 'center',
+							gap: '8px'
+						}}>
+							{online ? '🟢' : '🔴'} Online
+						</span>
+						<span 
+							title="VPS connectivity" 
+							style={{ 
+								fontSize: '14px',
+								fontWeight: '500',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px'
+							}}
+						>
+							{vpsUp === null ? '⏳' : vpsUp ? '🟢' : '🔴'} VPS
+						</span>
+					</div>
+
+					{/* Action Buttons */}
+					<div style={{
+						display: 'flex',
+						gap: '8px',
+						alignItems: 'center'
+					}}>
+						<button 
+							onClick={() => window.location.reload()}
+							style={{
+								padding: '8px 16px',
+								border: '1px solid #d1d5db',
+								backgroundColor: 'white',
+								borderRadius: '6px',
+								fontSize: '14px',
+								cursor: 'pointer',
+								transition: 'background-color 0.2s ease',
+								whiteSpace: 'nowrap'
+							}}
+						>
+							🔄 Refresh
+						</button>
+						<button 
+							onClick={async () => {
+								if (window.confirm('Are you sure you want to reset all local data? This cannot be undone.')) {
+									// Reset local data logic here
+									window.location.reload()
+								}
+							}}
+							style={{
+								padding: '8px 16px',
+								border: '1px solid #d1d5db',
+								backgroundColor: 'white',
+								borderRadius: '6px',
+								fontSize: '14px',
+								cursor: 'pointer',
+								transition: 'background-color 0.2s ease',
+								whiteSpace: 'nowrap'
+							}}
+						>
+							Reset Local Data
+						</button>
+					</div>
+				</div>
+			</div>
+			
 			<div style={{
 				maxWidth: 1200,
 				margin: '0 auto',
@@ -170,11 +452,47 @@ function MeetingRoute() {
 
 export default function App() {
 	const Router = isElectron ? HashRouter : BrowserRouter
+	const [refreshSignal, setRefreshSignal] = useState(0)
+	const [text, setText] = useState('')
+	const [tag, setTag] = useState('')
+	const [online, setOnline] = useState(true)
+	const [vpsUp, setVpsUp] = useState<boolean | null>(null)
+	const [availableTags, setAvailableTags] = useState<[string, number][]>([])
+
+	useEffect(() => {
+		const stop = watchOnline(setOnline)
+		return stop
+	}, [])
+
 	return (
 		<Router>
 			<Routes>
-				<Route path="/" element={<AppShell /> } />
-				<Route path="/meeting/:meetingId" element={<MeetingRoute /> } />
+				<Route path="/" element={
+					<AppShell 
+						text={text}
+						setText={setText}
+						tag={tag}
+						setTag={setTag}
+						online={online}
+						vpsUp={vpsUp}
+						setVpsUp={setVpsUp}
+						availableTags={availableTags}
+						setAvailableTags={setAvailableTags}
+						refreshSignal={refreshSignal}
+						setRefreshSignal={setRefreshSignal}
+					/>
+				} />
+				<Route path="/meeting/:meetingId" element={
+					<MeetingRoute 
+						text={text}
+						setText={setText}
+						tag={tag}
+						setTag={setTag}
+						online={online}
+						vpsUp={vpsUp}
+						availableTags={availableTags}
+					/>
+				} />
 			</Routes>
 		</Router>
 	)

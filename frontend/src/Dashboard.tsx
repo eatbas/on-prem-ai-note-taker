@@ -11,7 +11,8 @@ export default function Dashboard({
 	tag,
 	setTag,
 	online,
-	vpsUp
+	vpsUp,
+	onTagsChange
 }: { 
 	onOpen: (meetingId: string) => void; 
 	refreshSignal?: number;
@@ -21,6 +22,7 @@ export default function Dashboard({
 	setTag: (tag: string) => void;
 	online: boolean;
 	vpsUp: boolean | null;
+	onTagsChange?: (tags: [string, number][]) => void;
 }) {
 	const [meetings, setMeetings] = useState<any[]>([])
 	const [loading, setLoading] = useState(false)
@@ -119,6 +121,13 @@ export default function Dashboard({
 		return Object.entries(all).sort((a, b) => b[1] - a[1])
 	}, [meetings])
 
+	// Notify parent component when tags change
+	useEffect(() => {
+		if (onTagsChange) {
+			onTagsChange(tags)
+		}
+	}, [tags, onTagsChange])
+
 	// Pagination logic
 	const totalPages = Math.ceil(meetings.length / meetingsPerPage)
 	const startIndex = (currentPage - 1) * meetingsPerPage
@@ -194,132 +203,6 @@ export default function Dashboard({
 
 	return (
 		<div>
-			{/* Sticky Search and Controls Bar - At the very top */}
-			<div style={{ 
-				position: 'sticky',
-				top: 0,
-				zIndex: 1000,
-				backgroundColor: 'white',
-				borderBottom: '1px solid #e2e8f0',
-				padding: '16px',
-				marginBottom: '24px',
-				boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
-			}}>
-				<div style={{ 
-					display: 'flex', 
-					gap: 12, 
-					alignItems: 'center', 
-					maxWidth: '1200px',
-					margin: '0 auto',
-					flexWrap: 'wrap',
-					justifyContent: 'center'
-				}}>
-					<input 
-						placeholder="Search title, summary, transcript" 
-						value={text} 
-						onChange={e => setText(e.target.value)}
-						style={{ 
-							flex: 1, 
-							padding: '8px 12px',
-							border: '1px solid #d1d5db',
-							borderRadius: '6px',
-							fontSize: '14px',
-							maxWidth: '400px',
-							minWidth: '300px'
-						}}
-					/>
-					<select 
-						value={tag} 
-						onChange={e => setTag(e.target.value)} 
-						style={{ 
-							padding: '8px 12px',
-							border: '1px solid #d1d5db',
-							borderRadius: '6px',
-							fontSize: '14px',
-							minWidth: '120px'
-						}}
-					>
-						<option value="">All tags</option>
-						{tags.map(([tagName, count]) => (
-							<option key={tagName} value={tagName}>
-								{tagName} ({count})
-							</option>
-						))}
-					</select>
-					
-					{/* Status Indicators */}
-					<div style={{
-						display: 'flex',
-						gap: '8px',
-						alignItems: 'center'
-					}}>
-						<span style={{ 
-							fontSize: '14px', 
-							fontWeight: '500',
-							display: 'flex',
-							alignItems: 'center',
-							gap: '8px'
-						}}>
-							{online ? '🟢' : '🔴'} Online
-						</span>
-						<span 
-							title="VPS connectivity" 
-							style={{ 
-								fontSize: '14px',
-								fontWeight: '500',
-								display: 'flex',
-								alignItems: 'center',
-								gap: '8px'
-							}}
-						>
-							{vpsUp === null ? '⏳' : vpsUp ? '🟢' : '🔴'} VPS
-						</span>
-					</div>
-
-					{/* Action Buttons */}
-					<div style={{
-						display: 'flex',
-						gap: '8px',
-						alignItems: 'center'
-					}}>
-						<button 
-							onClick={() => window.location.reload()}
-							style={{
-								padding: '8px 16px',
-								border: '1px solid #d1d5db',
-								backgroundColor: 'white',
-								borderRadius: '6px',
-								fontSize: '14px',
-								cursor: 'pointer',
-								transition: 'background-color 0.2s ease',
-								whiteSpace: 'nowrap'
-							}}
-						>
-							🔄 Refresh
-						</button>
-						<button 
-							onClick={async () => {
-								if (window.confirm('Are you sure you want to reset all local data? This cannot be undone.')) {
-									await db.delete()
-									window.location.reload()
-								}
-							}}
-							style={{
-								padding: '8px 16px',
-								border: '1px solid #d1d5db',
-								backgroundColor: 'white',
-								borderRadius: '6px',
-								fontSize: '14px',
-								cursor: 'pointer',
-								transition: 'background-color 0.2s ease',
-								whiteSpace: 'nowrap'
-							}}
-						>
-							Reset Local Data
-						</button>
-					</div>
-				</div>
-			</div>
 
 			{error && (
 				<div style={{ 
