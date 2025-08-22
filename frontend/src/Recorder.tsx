@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { addChunk, createMeeting } from './offline'
+import { addChunk, createMeeting, syncMeeting } from './offline'
 import { db } from './db'
 
 export default function Recorder({ onCreated, onStopped }: { onCreated: (meetingId: string) => void; onStopped?: (meetingId: string) => void }) {
@@ -7,6 +7,10 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 	const [recording, setRecording] = useState(false)
 	const [meetingId, setMeetingId] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
+	const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle')
+	const [retryCount, setRetryCount] = useState(0)
+	const [uploadProgress, setUploadProgress] = useState(0)
+	const [totalChunks, setTotalChunks] = useState(0)
 	const chunkIndexRef = useRef(0)
 	const [recordingTime, setRecordingTime] = useState(0)
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
@@ -138,6 +142,9 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 			rec.ondataavailable = async (e: BlobEvent) => {
 				if (e.data && e.data.size > 0) {
 					await addChunk(createdId, e.data, chunkIndexRef.current++)
+					// Update upload progress
+					setTotalChunks(chunkIndexRef.current)
+					setUploadProgress(chunkIndexRef.current)
 				}
 			}
 
@@ -178,6 +185,43 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 				// @ts-ignore - duration is optional
 				db.meetings.update(meetingId, { title, updatedAt: Date.now(), duration: recordingTime })
 			}
+			
+			// Automatically sync the meeting after recording ends
+			setTimeout(async () => {
+				try {
+					console.log('Auto-syncing meeting after recording ended...')
+					setSyncStatus('syncing')
+					await syncMeeting(meetingId)
+					console.log('Meeting auto-synced successfully!')
+					setSyncStatus('success')
+					setRetryCount(0) // Reset retry count on success
+					// Reset success status after 3 seconds
+					setTimeout(() => setSyncStatus('idle'), 3000)
+				} catch (error) {
+					console.error('Auto-sync failed:', error)
+					setSyncStatus('failed')
+					
+					// Auto-retry with exponential backoff (max 3 retries)
+					if (retryCount < 3) {
+						const delay = Math.min(1000 * Math.pow(2, retryCount), 10000) // 1s, 2s, 4s, 8s, 10s max
+						console.log(`Auto-retry in ${delay/1000} seconds... (attempt ${retryCount + 1}/3)`)
+						setTimeout(() => {
+							setRetryCount(prev => prev + 1)
+							setSyncStatus('syncing')
+							// Recursive retry
+							retrySync(meetingId, retryCount + 1)
+						}, delay)
+					} else {
+						console.log('Max retries reached, giving up auto-sync')
+						// Reset retry count and failed status after 5 seconds
+						setTimeout(() => {
+							setSyncStatus('idle')
+							setRetryCount(0)
+						}, 5000)
+					}
+				}
+			}, 1000) // Small delay to ensure all data is saved
+			
 			if (onStopped) onStopped(meetingId)
 		}
 		setRecordingTime(0)
@@ -190,28 +234,93 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 		return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 	}
 
+	// Helper function for retrying sync with exponential backoff
+	async function retrySync(meetingId: string, attempt: number) {
+		try {
+			await syncMeeting(meetingId)
+			console.log(`Meeting auto-synced successfully on retry attempt ${attempt}!`)
+			setSyncStatus('success')
+			setRetryCount(0) // Reset retry count on success
+			// Reset success status after 3 seconds
+			setTimeout(() => setSyncStatus('idle'), 3000)
+		} catch (error) {
+			console.error(`Auto-sync retry attempt ${attempt} failed:`, error)
+			setSyncStatus('failed')
+			
+			// Continue retry chain if we haven't reached max attempts
+			if (attempt < 3) {
+				const delay = Math.min(1000 * Math.pow(2, attempt), 10000)
+				console.log(`Auto-retry in ${delay/1000} seconds... (attempt ${attempt + 1}/3)`)
+				setTimeout(() => {
+					setRetryCount(prev => prev + 1)
+					setSyncStatus('syncing')
+					retrySync(meetingId, attempt + 1)
+				}, delay)
+			} else {
+				console.log('Max retries reached, giving up auto-sync')
+				// Reset retry count and failed status after 5 seconds
+				setTimeout(() => {
+					setSyncStatus('idle')
+					setRetryCount(0)
+				}, 5000)
+			}
+		}
+	}
+
 	return (
-		<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-			{/* Microphone Selection (only show if multiple mics available) */}
-			{availableMics.length > 1 && (
-				<div style={{ marginBottom: 16, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-					<label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold' }}>
-						🎤 Microphone:
-					</label>
-					<select 
-						value={selectedMic} 
-						onChange={(e) => setSelectedMic(e.target.value)}
-						disabled={recording}
-						style={{ padding: '8px 12px', borderRadius: '4px', border: '1px solid #ccc' }}
-					>
-						{availableMics.map(mic => (
-							<option key={mic.deviceId} value={mic.deviceId}>
-								{mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`}
-							</option>
-						))}
-					</select>
+		<div style={{ 
+			display: 'flex', 
+			flexDirection: 'column', 
+			alignItems: 'center',
+			justifyContent: 'center',
+			textAlign: 'center',
+			minHeight: '200px'
+		}}>
+			{/* Microphone Visual - Always show */}
+			<div style={{ 
+				marginBottom: 24, 
+				display: 'flex', 
+				flexDirection: 'column', 
+				alignItems: 'center' 
+			}}>
+				<div style={{ 
+					fontSize: '48px', 
+					marginBottom: 12,
+					opacity: recording ? 1 : 0.7,
+					transform: recording ? 'scale(1.1)' : 'scale(1)',
+					transition: 'all 0.3s ease',
+					filter: recording ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none'
+				}}>
+					🎤
 				</div>
-			)}
+				{/* Microphone Selection */}
+				{availableMics.length > 1 && (
+					<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+						<label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', fontSize: '14px' }}>
+							Select Microphone:
+						</label>
+						<select 
+							value={selectedMic} 
+							onChange={(e) => setSelectedMic(e.target.value)}
+							disabled={recording}
+							style={{ 
+								padding: '8px 12px', 
+								borderRadius: '6px', 
+								border: '1px solid #d1d5db',
+								backgroundColor: 'white',
+								fontSize: '14px',
+								minWidth: '200px'
+							}}
+						>
+							{availableMics.map(mic => (
+								<option key={mic.deviceId} value={mic.deviceId}>
+									{mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`}
+								</option>
+							))}
+						</select>
+					</div>
+				)}
+			</div>
 
 			{/* Recording Status */}
 			{recording && (
@@ -240,19 +349,29 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 			)}
 
 			{/* Recording Controls */}
-			<div style={{ display: 'flex', gap: 8, marginBottom: 8, justifyContent: 'center' }}>
+			<div style={{ 
+				display: 'flex', 
+				gap: 16, 
+				marginBottom: 24, 
+				justifyContent: 'center',
+				alignItems: 'center' 
+			}}>
 				<button 
 					onClick={start} 
 					disabled={recording}
 					style={{
-						padding: '12px 24px',
-						backgroundColor: recording ? '#6b7280' : '#3b82f6',
+						padding: '16px 32px',
+						backgroundColor: recording ? '#9ca3af' : '#3b82f6',
 						color: 'white',
 						border: 'none',
-						borderRadius: '8px',
-						fontSize: '16px',
+						borderRadius: '12px',
+						fontSize: '18px',
 						fontWeight: 'bold',
-						cursor: recording ? 'not-allowed' : 'pointer'
+						cursor: recording ? 'not-allowed' : 'pointer',
+						transition: 'all 0.2s ease',
+						boxShadow: recording ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+						transform: recording ? 'scale(0.95)' : 'scale(1)',
+						opacity: recording ? 0.6 : 1
 					}}
 				>
 					🎙️ Start Recording
@@ -261,19 +380,96 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 					onClick={stop} 
 					disabled={!recording}
 					style={{
-						padding: '12px 24px',
-						backgroundColor: !recording ? '#6b7280' : '#ef4444',
+						padding: '16px 32px',
+						backgroundColor: !recording ? '#9ca3af' : '#ef4444',
 						color: 'white',
 						border: 'none',
-						borderRadius: '8px',
-						fontSize: '16px',
+						borderRadius: '12px',
+						fontSize: '18px',
 						fontWeight: 'bold',
-						cursor: !recording ? 'not-allowed' : 'pointer'
+						cursor: !recording ? 'not-allowed' : 'pointer',
+						transition: 'all 0.2s ease',
+						boxShadow: !recording ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+						transform: !recording ? 'scale(0.95)' : 'scale(1)',
+						opacity: !recording ? 0.6 : 1
 					}}
 				>
 					⏹️ Stop Recording
 				</button>
 			</div>
+
+			{/* Sync Status Indicators */}
+			{syncStatus !== 'idle' && (
+				<div style={{ 
+					marginBottom: 16, 
+					padding: '12px 16px', 
+					borderRadius: '8px',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					gap: '12px',
+					backgroundColor: syncStatus === 'syncing' ? '#fef3c7' : 
+									syncStatus === 'success' ? '#dcfce7' : '#fee2e2',
+					border: syncStatus === 'syncing' ? '1px solid #f59e0b' : 
+							syncStatus === 'success' ? '1px solid #22c55e' : '1px solid #ef4444'
+				}}>
+					<div style={{ 
+						width: '12px', 
+						height: '12px', 
+						borderRadius: '50%',
+						backgroundColor: syncStatus === 'syncing' ? '#f59e0b' : 
+										syncStatus === 'success' ? '#22c55e' : '#ef4444',
+						animation: syncStatus === 'syncing' ? 'pulse 1.5s infinite' : 'none'
+					}}></div>
+					<span style={{ 
+						fontWeight: 'bold',
+						color: syncStatus === 'syncing' ? '#92400e' : 
+							   syncStatus === 'success' ? '#166534' : '#991b1b'
+					}}>
+						{syncStatus === 'syncing' && `🔄 Processing meeting with AI...${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}`}
+						{syncStatus === 'success' && '✅ Meeting processed successfully!'}
+						{syncStatus === 'failed' && `❌ Auto-processing failed${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}. You can manually retry.`}
+					</span>
+				</div>
+			)}
+
+			{/* Upload Progress Bar */}
+			{recording && totalChunks > 0 && (
+				<div style={{ 
+					marginBottom: 16, 
+					padding: '12px 16px', 
+					backgroundColor: '#f8fafc', 
+					border: '1px solid #e2e8f0',
+					borderRadius: '8px',
+					width: '100%',
+					maxWidth: '400px'
+				}}>
+					<div style={{ 
+						display: 'flex', 
+						justifyContent: 'space-between', 
+						marginBottom: '8px',
+						fontSize: '14px',
+						color: '#64748b'
+					}}>
+						<span>📁 Saving audio chunks...</span>
+						<span>{uploadProgress} / {totalChunks}</span>
+					</div>
+					<div style={{ 
+						width: '100%', 
+						height: '8px', 
+						backgroundColor: '#e2e8f0', 
+						borderRadius: '4px',
+						overflow: 'hidden'
+					}}>
+						<div style={{ 
+							width: `${(uploadProgress / totalChunks) * 100}%`, 
+							height: '100%', 
+							backgroundColor: '#3b82f6',
+							transition: 'width 0.3s ease'
+						}}></div>
+					</div>
+				</div>
+			)}
 
 			{/* Info Text */}
 			<div style={{ 
@@ -285,7 +481,7 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 				fontSize: '14px',
 				color: '#0c4a6e'
 			}}>
-				💡 <strong>Smart Recording:</strong> Automatically captures both system audio (Google Meet, Teams, Zoom) and microphone input for complete meeting coverage.
+				💡 <strong>Smart Recording:</strong> Automatically captures both system audio (Google Meet, Teams, Zoom) and microphone input for complete meeting coverage. <strong>Meetings are automatically processed with AI after recording ends!</strong>
 			</div>
 			
 			{error && (
@@ -311,5 +507,3 @@ export default function Recorder({ onCreated, onStopped }: { onCreated: (meeting
 		</div>
 	)
 }
-
-

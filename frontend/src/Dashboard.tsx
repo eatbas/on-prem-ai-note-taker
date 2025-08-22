@@ -37,24 +37,50 @@ export default function Dashboard({ onOpen, refreshSignal }: { onOpen: (meetingI
 		setError(null)
 		try {
 			if (online) {
-				// Fetch from backend and merge with local unsent meetings so newly created appear immediately
-				const [backendMeetings, localMeetings] = await Promise.all([
-					getMeetings(),
-					listMeetings({ text, tag })
-				])
-				const byId = new Map<string, any>()
-				for (const m of localMeetings) byId.set(m.id, m)
-				for (const m of backendMeetings as any[]) byId.set(m.id, m)
-				setMeetings(Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0)))
+				// Always load local meetings first so user sees something immediately
+				const localMeetings = await listMeetings({ text, tag })
+				setMeetings(localMeetings)
+				
+				// Try to fetch from backend and merge
+				try {
+					const backendMeetings = await getMeetings()
+					const byId = new Map<string, any>()
+					// Start with local meetings to preserve any unsent ones
+					for (const m of localMeetings) byId.set(m.id, m)
+					// Overlay with backend data
+					for (const m of backendMeetings as any[]) {
+						const existing = byId.get(m.id)
+						// Merge backend data with local data, preferring backend for processed content
+						byId.set(m.id, { 
+							...existing, 
+							...m, 
+							// Keep local status if it's more recent or unsent
+							status: existing?.status === 'local' ? existing.status : m.status || 'sent',
+							// Keep local tags and title if they exist
+							tags: existing?.tags || [],
+							title: existing?.title || m.title
+						})
+					}
+					setMeetings(Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0)))
+				} catch (backendErr) {
+					// Backend failed, but we still have local data
+					console.warn('Backend fetch failed, using local data:', backendErr)
+					setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
+				}
 			} else {
 				// Use local data when offline
 				setMeetings(await listMeetings({ text, tag }))
 			}
 		} catch (err) {
-			console.error('Failed to fetch meetings:', err)
-			setError(err instanceof Error ? err.message : 'Failed to fetch meetings')
-			// Fallback to local data
-			setMeetings(await listMeetings({ text, tag }))
+			console.error('Failed to load meetings:', err)
+			setError(`Failed to load meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
+			// Try to load any local data as last resort
+			try {
+				setMeetings(await listMeetings({ text, tag }))
+			} catch (localErr) {
+				console.error('Even local data failed:', localErr)
+				setMeetings([])
+			}
 		} finally {
 			setLoading(false)
 		}
@@ -79,8 +105,14 @@ export default function Dashboard({ onOpen, refreshSignal }: { onOpen: (meetingI
 	}, [meetings])
 
 	async function retry(meetingId: string) {
-		await syncMeeting(meetingId)
-		await refresh()
+		try {
+			setError(null)
+			await syncMeeting(meetingId)
+			await refresh()
+		} catch (err) {
+			console.error('Retry failed:', err)
+			setError(`Failed to send meeting: ${err instanceof Error ? err.message : 'Unknown error'}`)
+		}
 	}
 
 	async function clearAll() {
@@ -154,16 +186,31 @@ export default function Dashboard({ onOpen, refreshSignal }: { onOpen: (meetingI
 								📅 {new Date(m.created_at || m.createdAt).toLocaleString()}
 								{m.duration && ` • ⏱️ ${Math.round(m.duration / 60)} min`}
 							</div>
-							{m.summary && (
+							{m.summary ? (
 								<div style={{ 
 									fontSize: 14, 
 									opacity: 0.9, 
-									backgroundColor: '#f0f0f0',
+									backgroundColor: '#f0f9ff',
 									padding: 8,
 									borderRadius: 4,
-									marginTop: 8
+									marginTop: 8,
+									border: '1px solid #0ea5e9'
 								}}>
 									<strong>Summary:</strong> {m.summary.slice(0, 200)}...
+								</div>
+							) : (
+								<div style={{ 
+									fontSize: 14, 
+									opacity: 0.7, 
+									backgroundColor: '#fef3c7',
+									padding: 8,
+									borderRadius: 4,
+									marginTop: 8,
+									border: '1px solid #f59e0b'
+								}}>
+									{m.status === 'local' ? '📝 Ready to send to AI for processing' : 
+									 m.status === 'queued' ? '⏳ Queued for AI processing' : 
+									 '🤖 Send to generate AI summary and transcript'}
 								</div>
 							)}
 						</div>

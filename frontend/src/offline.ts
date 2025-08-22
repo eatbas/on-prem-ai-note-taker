@@ -68,14 +68,49 @@ export async function assembleFileFromChunks(meetingId: string): Promise<File> {
 
 export async function syncMeeting(meetingId: string): Promise<void> {
 	const meeting = await db.meetings.get(meetingId)
-	if (!meeting) return
+	if (!meeting) {
+		throw new Error('Meeting not found')
+	}
+	
 	const file = await assembleFileFromChunks(meetingId)
+	if (file.size === 0) {
+		throw new Error('No audio data found for this meeting')
+	}
+	
+	console.log(`Syncing meeting ${meetingId}, file size: ${(file.size / 1024 / 1024).toFixed(2)} MB`)
+	
 	try {
 		const res = await transcribeAndSummarize(file)
-		await db.notes.put({ meetingId, transcript: res.transcript.text, createdAt: Date.now(), summary: res.summary })
-		await db.meetings.update(meetingId, { status: 'sent', updatedAt: Date.now() })
+		await db.notes.put({ 
+			meetingId, 
+			transcript: res.transcript.text, 
+			createdAt: Date.now(), 
+			summary: res.summary 
+		})
+		await db.meetings.update(meetingId, { 
+			status: 'sent', 
+			updatedAt: Date.now() 
+		})
+		console.log(`Successfully synced meeting ${meetingId}`)
 	} catch (e) {
-		await db.meetings.update(meetingId, { status: 'queued', updatedAt: Date.now() })
+		await db.meetings.update(meetingId, { 
+			status: 'queued', 
+			updatedAt: Date.now() 
+		})
+		console.error(`Failed to sync meeting ${meetingId}:`, e)
+		
+		// Provide more specific error messages
+		if (e instanceof Error) {
+			if (e.message.includes('Failed to fetch') || e.message.includes('fetch')) {
+				throw new Error('Cannot connect to AI backend server. Make sure the backend is running and accessible.')
+			} else if (e.message.includes('401') || e.message.includes('Unauthorized')) {
+				throw new Error('Authentication failed. Check your credentials.')
+			} else if (e.message.includes('413') || e.message.includes('too large')) {
+				throw new Error('Audio file too large. Try recording shorter sessions.')
+			} else if (e.message.includes('500')) {
+				throw new Error('Server error. The AI backend may be having issues.')
+			}
+		}
 		throw e
 	}
 }
