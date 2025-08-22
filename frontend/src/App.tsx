@@ -53,7 +53,8 @@ function AppShell() {
 					</p>
 				</header>
 				
-				<Recorder onCreated={(id) => navigate(`/meeting/${id}`)} />
+				{/* Stay on dashboard when recording starts; meeting can be opened from the list */}
+				<Recorder onCreated={() => { /* no navigation */ }} />
 				
 				<div style={{ 
 					margin: '32px 0',
@@ -69,6 +70,7 @@ function AppShell() {
 
 function MeetingRoute() {
 	const params = useParams()
+	const navigate = useNavigate()
 	const id = params.meetingId as string
 	return (
 		<div style={{ 
@@ -93,19 +95,25 @@ function MeetingRoute() {
 					paddingBottom: '16px',
 					borderBottom: '1px solid #e2e8f0'
 				}}>
-					<a href="/" style={{
-						display: 'inline-flex',
-						alignItems: 'center',
-						padding: '8px 16px',
-						backgroundColor: '#f1f5f9',
-						color: '#475569',
-						textDecoration: 'none',
-						borderRadius: '8px',
-						fontWeight: '500',
-						transition: 'all 0.2s ease'
-					}}>
+					<button 
+						onClick={() => navigate('/')}
+						style={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							padding: '8px 16px',
+							backgroundColor: '#f1f5f9',
+							color: '#475569',
+							textDecoration: 'none',
+							borderRadius: '8px',
+							fontWeight: '500',
+							transition: 'all 0.2s ease',
+							border: 'none',
+							cursor: 'pointer',
+							fontSize: '14px'
+						}}
+					>
 						← Back to Dashboard
-					</a>
+					</button>
 				</nav>
 				<MeetingView meetingId={id} />
 			</div>

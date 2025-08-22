@@ -22,7 +22,7 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 		async function poll() {
 			try {
 				const res = await getVpsHealth()
-				if (!stopped) setVpsUp(!!res.ollama?.up)
+				if (!stopped) setVpsUp(res.status === 'ok')
 			} catch {
 				if (!stopped) setVpsUp(false)
 			}

@@ -7,6 +7,8 @@ export type Meeting = {
 	updatedAt: number
 	tags: string[]
 	status: 'local' | 'queued' | 'sent'
+	// Optional metadata for display
+	duration?: number
 }
 
 export type Chunk = {
