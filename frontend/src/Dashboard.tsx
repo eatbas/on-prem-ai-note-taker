@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listMeetings, syncMeeting, watchOnline } from './offline'
-import { getMeetings, getVpsHealth } from './api'
+import { getMeetings, getVpsHealth, updateMeeting } from './api'
 import { db } from './db'
 
 export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => void }) {
@@ -75,7 +75,18 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 	}
 
 	return (
-		<div>
+		<div style={{ display: 'grid', gridTemplateColumns: '220px 1fr', gap: 16 }}>
+			{/* Sidebar */}
+			<aside style={{ borderRight: '1px solid #e2e8f0', paddingRight: 12 }}>
+				<div style={{ fontWeight: 700, marginBottom: 12 }}>Navigation</div>
+				<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+					<a href="#/" style={{ textDecoration: 'none' }}>🏠 Home</a>
+					<a href="#/" style={{ textDecoration: 'none' }}>🗂️ Meetings</a>
+					<a href="#/" style={{ textDecoration: 'none' }}>🔍 Search</a>
+				</div>
+			</aside>
+
+			<div>
 			<div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
 				<input 
 					placeholder="Search title, summary, transcript" 
@@ -134,7 +145,7 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 					}}>
 						<div style={{ flex: 1 }}>
 							<div style={{ fontWeight: 600, fontSize: 18, marginBottom: 4 }}>
-								{m.title || 'Untitled Meeting'}
+								<InlineEditableTitle id={m.id} title={m.title || 'Untitled Meeting'} onSaved={refresh} />
 							</div>
 							<div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
 								📅 {new Date(m.created_at || m.createdAt).toLocaleString()}
@@ -166,8 +177,36 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 					</li>
 				))}
 			</ul>
+			</div>
 		</div>
 	)
+}
+
+function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string; onSaved: () => void }) {
+    const [editing, setEditing] = useState(false)
+    const [value, setValue] = useState(title)
+    useEffect(() => setValue(title), [title])
+    async function save() {
+        const trimmed = value.trim()
+        if (trimmed && trimmed !== title) {
+            try { await updateMeeting(id, trimmed) } catch {}
+        }
+        setEditing(false)
+        onSaved()
+    }
+    if (editing) {
+        return (
+            <input 
+                value={value}
+                onChange={e => setValue(e.target.value)}
+                onBlur={save}
+                onKeyDown={e => { if (e.key === 'Enter') save() }}
+                autoFocus
+                style={{ fontSize: 18, fontWeight: 600, width: '100%', padding: 4 }}
+            />
+        )
+    }
+    return <span onClick={() => setEditing(true)} style={{ cursor: 'text' }}>{title}</span>
 }
 
 

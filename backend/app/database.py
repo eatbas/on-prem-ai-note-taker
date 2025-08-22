@@ -106,8 +106,16 @@ def get_db():
 
 
 def get_or_create_user(db: Session) -> User:
-    """Get or create user based on system username"""
-    username = os.getlogin() if hasattr(os, 'getlogin') else platform.node()
+    """Get or create user based on system username.
+    Be resilient in environments where os.getlogin() is unavailable (e.g., daemons/containers)."""
+    username = None
+    try:
+        if hasattr(os, 'getlogin'):
+            username = os.getlogin()
+    except Exception:
+        username = None
+    if not username:
+        username = os.environ.get('USER') or os.environ.get('USERNAME') or platform.node() or 'default'
     
     user = db.query(User).filter(User.username == username).first()
     if not user:

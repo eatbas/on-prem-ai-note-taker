@@ -61,9 +61,6 @@ VPS_PORT=22
 # ===== Public URL (if you have a domain) =====
 # PUBLIC_BASE_URL=https://yourdomain.com
 
-# ===== Optional: Exchange Proxy =====
-# EXCHANGE_PROXY_URL=
-
 # ===== Security Notes =====
 # 1. Frontend runs on your local computer at http://localhost:5173
 # 2. Backend runs on this VPS at http://{server_ip}:8000

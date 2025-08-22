@@ -126,7 +126,10 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 			}
 
 			const rec = new MediaRecorder(combinedStream, { mimeType: 'audio/webm' })
-			const meeting = await createMeeting('New meeting')
+			// Default meeting title with start date/time for uniqueness
+			const now = new Date()
+			const human = now.toLocaleString()
+			const meeting = await createMeeting(`Meeting ${human}`)
 			setMeetingId(meeting.id)
 			onCreated(meeting.id)
 			chunkIndexRef.current = 0
