@@ -1,6 +1,17 @@
 const { app, BrowserWindow, Tray, nativeImage, ipcMain } = require('electron')
 const path = require('path')
 
+// Global error handlers
+process.on('uncaughtException', (error) => {
+	console.error('Uncaught Exception:', error)
+	app.quit()
+})
+
+process.on('unhandledRejection', (reason, promise) => {
+	console.error('Unhandled Rejection at:', promise, 'reason:', reason)
+	app.quit()
+})
+
 let mainWindow
 let tray
 let recorderWindow
@@ -16,7 +27,7 @@ function createWindow() {
 			contextIsolation: true,
 			preload: path.join(__dirname, 'preload.js')
 		},
-		icon: path.join(__dirname, 'icon.png')
+		icon: path.join(__dirname, 'default-icon.svg')
 	})
 
 	mainWindow.loadFile('frontend/index.html')
@@ -48,14 +59,15 @@ function createRecorderWindow() {
 }
 
 function createTray() {
-	const iconPath = path.join(__dirname, 'icon.png')
 	let icon
 	
 	try {
-		icon = nativeImage.createFromPath(iconPath)
-	} catch (error) {
-		// Create a simple icon if file not found
+		// Try to load the default icon first
 		icon = nativeImage.createFromPath(path.join(__dirname, 'default-icon.svg'))
+	} catch (error) {
+		console.error('Failed to load tray icon:', error)
+		// Create a simple default icon if all else fails
+		icon = nativeImage.createFromBuffer(Buffer.from('<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" fill="#007acc"/></svg>'))
 	}
 	
 	tray = new Tray(icon)
@@ -63,7 +75,7 @@ function createTray() {
 	
 	const contextMenu = require('electron').Menu.buildFromTemplate([
 		{
-			label: 'Open App',
+			label: '🚀 Open App',
 			click: () => {
 				if (mainWindow) {
 					mainWindow.show()
@@ -72,7 +84,8 @@ function createTray() {
 			}
 		},
 		{
-			label: 'Start Recording',
+			id: 'start-recording',
+			label: '🎙️ Start Recording',
 			click: () => {
 				if (mainWindow) {
 					mainWindow.webContents.send('tray-action', 'start-recording')
@@ -83,7 +96,7 @@ function createTray() {
 			type: 'separator'
 		},
 		{
-			label: 'Quit',
+			label: '❌ Quit',
 			click: () => {
 				app.isQuiting = true
 				app.quit()
@@ -107,37 +120,43 @@ function updateTrayRecordingState(recording) {
 		const menu = tray.getContextMenu()
 		const startRecordingItem = menu.getMenuItemById('start-recording')
 		if (startRecordingItem) {
-			startRecordingItem.label = recording ? 'Recording...' : 'Start Recording'
+			startRecordingItem.label = recording ? '⏹️ Stop Recording' : '🎙️ Start Recording'
 		}
-		tray.setToolTip(recording ? 'Recording in progress...' : 'On-Prem AI Note Taker')
+		tray.setToolTip(recording ? '🎙️ Recording in progress...' : '🚀 On-Prem AI Note Taker')
 	}
 }
 
 app.whenReady().then(() => {
-	createWindow()
-	createRecorderWindow()
-	createTray()
-	
-	app.on('activate', () => {
-		if (BrowserWindow.getAllWindows().length === 0) {
-			createWindow()
-			createRecorderWindow()
-			createTray()
-		}
-	})
+	try {
+		createWindow()
+		createRecorderWindow()
+		createTray()
+		
+		// Set up mainWindow event listeners after it's created
+		mainWindow.on('close', (event) => {
+			if (!app.isQuiting) {
+				event.preventDefault()
+				mainWindow.hide()
+				return false
+			}
+		})
+		
+		app.on('activate', () => {
+			if (BrowserWindow.getAllWindows().length === 0) {
+				createWindow()
+				createRecorderWindow()
+				createTray()
+			}
+		})
+	} catch (error) {
+		console.error('Error during app initialization:', error)
+		app.quit()
+	}
 })
 
 app.on('window-all-closed', () => {
 	if (process.platform !== 'darwin') {
 		app.quit()
-	}
-})
-
-mainWindow.on('close', (event) => {
-	if (!app.isQuiting) {
-		event.preventDefault()
-		mainWindow.hide()
-		return false
 	}
 })
 
