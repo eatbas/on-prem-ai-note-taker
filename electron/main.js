@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Tray, nativeImage, ipcMain } = require('electron')
 const path = require('path')
+const fs = require('fs')
 
 // Global error handlers
 process.on('uncaughtException', (error) => {
@@ -25,12 +26,53 @@ function createWindow() {
 		webPreferences: {
 			nodeIntegration: false,
 			contextIsolation: true,
-			preload: path.join(__dirname, 'preload.js')
+			preload: path.join(__dirname, 'preload.js'),
+			webSecurity: false // Allow loading local files
 		},
 		icon: path.join(__dirname, 'default-icon.svg')
 	})
 
-	mainWindow.loadFile('frontend/index.html')
+	// Try to load from dev server first (for development)
+	const devServerUrl = 'http://localhost:5173'
+	const frontendPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html')
+	
+	console.log('Checking for dev server at:', devServerUrl)
+	console.log('Fallback path:', frontendPath)
+	
+	// Check if dev server is running
+	fetch(devServerUrl)
+		.then(response => {
+			if (response.ok) {
+				console.log('Dev server found, loading from:', devServerUrl)
+				mainWindow.loadURL(devServerUrl)
+			} else {
+				throw new Error('Dev server not responding')
+			}
+		})
+		.catch(error => {
+			console.log('Dev server not available, trying built files:', error.message)
+			
+			// Check if the built frontend exists
+			if (!fs.existsSync(frontendPath)) {
+				console.error('Frontend not built! Please run "npm run build" in the frontend folder first.')
+				// Create a simple error page
+				mainWindow.loadURL('data:text/html,<html><body><h1>Frontend Not Built</h1><p>Please run "npm run build" in the frontend folder first.</p></body></html>')
+				return
+			}
+			
+			console.log('Loading from built files:', frontendPath)
+			mainWindow.loadFile(frontendPath)
+		})
+	
+	// Add error handling for page load
+	mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+		console.error('Failed to load frontend:', errorCode, errorDescription, validatedURL)
+	})
+	
+	// Add success logging
+	mainWindow.webContents.on('did-finish-load', () => {
+		console.log('Frontend loaded successfully')
+	})
 }
 
 function createRecorderWindow() {
@@ -45,11 +87,12 @@ function createRecorderWindow() {
 		webPreferences: {
 			nodeIntegration: false,
 			contextIsolation: true,
-			preload: path.join(__dirname, 'preload.js')
+			preload: path.join(__dirname, 'preload.js'),
+			webSecurity: false // Allow loading local files
 		}
 	})
 
-	recorderWindow.loadFile('electron/recorder-window.html')
+	recorderWindow.loadFile(path.join(__dirname, 'recorder-window.html'))
 	
 	// Make the window draggable
 	recorderWindow.setMovable(true)
@@ -59,78 +102,123 @@ function createRecorderWindow() {
 }
 
 function createTray() {
-	let icon
-	
 	try {
-		// Try to load the default icon first
-		icon = nativeImage.createFromPath(path.join(__dirname, 'default-icon.svg'))
+		let icon
+		
+		try {
+			// Try to load the default icon first
+			icon = nativeImage.createFromPath(path.join(__dirname, 'default-icon.svg'))
+		} catch (error) {
+			console.error('Failed to load tray icon:', error)
+			// Create a simple default icon if all else fails
+			icon = nativeImage.createFromBuffer(Buffer.from('<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" fill="#007acc"/></svg>'))
+		}
+		
+		tray = new Tray(icon)
+		tray.setToolTip('On-Prem AI Note Taker')
+		
+		const contextMenu = require('electron').Menu.buildFromTemplate([
+			{
+				label: '🚀 Open App',
+				click: () => {
+					if (mainWindow) {
+						mainWindow.show()
+						mainWindow.focus()
+					}
+				}
+			},
+			{
+				id: 'start-recording',
+				label: '🎙️ Start Recording',
+				click: () => {
+					if (mainWindow) {
+						mainWindow.webContents.send('tray-action', 'start-recording')
+					}
+				}
+			},
+			{
+				type: 'separator'
+			},
+			{
+				label: '❌ Quit',
+				click: () => {
+					app.isQuiting = true
+					app.quit()
+				}
+			}
+		])
+		
+		tray.setContextMenu(contextMenu)
+		
+		tray.on('click', () => {
+			if (mainWindow) {
+				mainWindow.show()
+				mainWindow.focus()
+			}
+		})
+		
+		console.log('Tray created successfully')
 	} catch (error) {
-		console.error('Failed to load tray icon:', error)
-		// Create a simple default icon if all else fails
-		icon = nativeImage.createFromBuffer(Buffer.from('<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" fill="#007acc"/></svg>'))
+		console.error('Failed to create tray:', error)
+		// Don't fail the app if tray creation fails
+		tray = null
 	}
-	
-	tray = new Tray(icon)
-	tray.setToolTip('On-Prem AI Note Taker')
-	
-	const contextMenu = require('electron').Menu.buildFromTemplate([
-		{
-			label: '🚀 Open App',
-			click: () => {
-				if (mainWindow) {
-					mainWindow.show()
-					mainWindow.focus()
-				}
-			}
-		},
-		{
-			id: 'start-recording',
-			label: '🎙️ Start Recording',
-			click: () => {
-				if (mainWindow) {
-					mainWindow.webContents.send('tray-action', 'start-recording')
-				}
-			}
-		},
-		{
-			type: 'separator'
-		},
-		{
-			label: '❌ Quit',
-			click: () => {
-				app.isQuiting = true
-				app.quit()
-			}
-		}
-	])
-	
-	tray.setContextMenu(contextMenu)
-	
-	tray.on('click', () => {
-		if (mainWindow) {
-			mainWindow.show()
-			mainWindow.focus()
-		}
-	})
 }
 
 function updateTrayRecordingState(recording) {
 	isRecording = recording
 	if (tray) {
-		const menu = tray.getContextMenu()
-		const startRecordingItem = menu.getMenuItemById('start-recording')
-		if (startRecordingItem) {
-			startRecordingItem.label = recording ? '⏹️ Stop Recording' : '🎙️ Start Recording'
+		try {
+			// Rebuild the context menu with updated labels
+			const contextMenu = require('electron').Menu.buildFromTemplate([
+				{
+					label: '🚀 Open App',
+					click: () => {
+						if (mainWindow) {
+							mainWindow.show()
+							mainWindow.focus()
+						}
+					}
+				},
+				{
+					id: 'start-recording',
+					label: recording ? '⏹️ Stop Recording' : '🎙️ Start Recording',
+					click: () => {
+						if (mainWindow) {
+							mainWindow.webContents.send('tray-action', 'start-recording')
+						}
+					}
+				},
+				{
+					type: 'separator'
+				},
+				{
+					label: '❌ Quit',
+					click: () => {
+						app.isQuiting = true
+						app.quit()
+					}
+				}
+			])
+			
+			tray.setContextMenu(contextMenu)
+			tray.setToolTip(recording ? '🎙️ Recording in progress...' : '🚀 On-Prem AI Note Taker')
+		} catch (error) {
+			console.error('Error updating tray menu:', error)
 		}
-		tray.setToolTip(recording ? '🎙️ Recording in progress...' : '🚀 On-Prem AI Note Taker')
 	}
 }
 
 app.whenReady().then(() => {
 	try {
+		console.log('App is ready, creating windows...')
+		console.log('Current directory:', __dirname)
+		
 		createWindow()
 		createRecorderWindow()
 		createTray()
+		
+		console.log('All windows created successfully')
 		
 		// Set up mainWindow event listeners after it's created
 		mainWindow.on('close', (event) => {
@@ -162,19 +250,23 @@ app.on('window-all-closed', () => {
 
 // IPC handlers for recording state
 ipcMain.on('recording-state-changed', (event, recording) => {
-	updateTrayRecordingState(recording)
-	
-	// Show/hide recorder window
-	if (recorderWindow) {
-		if (recording) {
-			recorderWindow.show()
-			// Start sending recording data updates
-			startRecordingDataUpdates()
-		} else {
-			recorderWindow.hide()
-			// Stop sending recording data updates
-			stopRecordingDataUpdates()
+	try {
+		updateTrayRecordingState(recording)
+		
+		// Show/hide recorder window
+		if (recorderWindow) {
+			if (recording) {
+				recorderWindow.show()
+				// Start sending recording data updates
+				startRecordingDataUpdates()
+			} else {
+				recorderWindow.hide()
+				// Stop sending recording data updates
+				stopRecordingDataUpdates()
+			}
 		}
+	} catch (error) {
+		console.error('Error updating tray recording state:', error)
 	}
 })
 

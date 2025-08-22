@@ -3,8 +3,10 @@ uvicorn[standard]==0.30.6
 pydantic==2.9.2
 python-multipart==0.0.9
 requests==2.32.3
+# PyAV is required by faster-whisper - using version with pre-built wheels
+av==10.0.0
 faster-whisper==1.0.3
 sqlalchemy==2.0.23
 aiosqlite==0.19.0
-
+wheel
 
