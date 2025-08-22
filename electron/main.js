@@ -1,8 +1,13 @@
-const { app, BrowserWindow, session, Menu, dialog } = require('electron')
+const { app, BrowserWindow, session, Menu, dialog, protocol } = require('electron')
 const path = require('path')
 const { spawn } = require('child_process')
 const fs = require('fs')
 const os = require('os')
+
+// Register a secure custom protocol so packaged app can use getUserMedia
+protocol.registerSchemesAsPrivileged([
+	{ scheme: 'app', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true } }
+])
 
 // Configuration
 const BACKEND_PORT = 8001
@@ -29,7 +34,7 @@ function startBackend() {
 	}
 	
 	// Check if Python is available
-	const { execSync } = require('child_process')
+	const { execSync, execFileSync } = require('child_process')
 	try {
 		execSync(`${pythonPath} --version`, { stdio: 'pipe' })
 	} catch (error) {
@@ -79,9 +84,9 @@ function startBackend() {
 				stdio: 'pipe'
 			})
 			
-			// Install dependencies with verbose output and user flag
+			// Install dependencies with verbose output and user flag (quote requirements path)
 			console.log('📦 Installing required packages...')
-			execSync(`${pythonPath} -m pip install --user -r ${path.join(backendPath, 'requirements.txt')}`, {
+			execFileSync(pythonPath, ['-m', 'pip', 'install', '--user', '-r', path.join(backendPath, 'requirements.txt')], {
 				cwd: backendPath,
 				env: env,
 				stdio: 'pipe'
@@ -229,24 +234,36 @@ function createWindow() {
 		mainWindow.loadURL(`http://localhost:${FRONTEND_PORT}`)
 		mainWindow.webContents.openDevTools()
 	} else {
-		// In production, load from bundled dist files
+		// In production, serve from app:// protocol to satisfy secure context for mic
 		const indexPath = path.join(process.resourcesPath, 'dist', 'index.html')
-		console.log(`📁 Loading frontend from: ${indexPath}`)
+		console.log(`📁 Registering app:// protocol to serve: ${indexPath}`)
 		
-		// Check if the file exists
-		if (fs.existsSync(indexPath)) {
-			mainWindow.loadFile(indexPath)
-		} else {
+		if (!fs.existsSync(indexPath)) {
 			console.error(`❌ Frontend file not found at: ${indexPath}`)
-			// Show error dialog
-			dialog.showErrorBox('Frontend Error', 
-				`Frontend files not found at:\n${indexPath}\n\n` +
-				`This usually means the app wasn't built correctly.\n` +
-				`Please rebuild the app using:\n` +
-				`./scripts/build-desktop-app.sh`
-			)
+			dialog.showErrorBox('Frontend Error', `Frontend files not found at:\n${indexPath}`)
 			return
 		}
+		
+		try {
+			protocol.registerFileProtocol('app', (request, callback) => {
+				try {
+					const url = new URL(request.url)
+					let pathname = decodeURIComponent(url.pathname)
+					if (process.platform === 'win32' && pathname.startsWith('/')) {
+						pathname = pathname.slice(1)
+					}
+					const filePath = path.normalize(path.join(process.resourcesPath, 'dist', pathname))
+					callback({ path: filePath })
+				} catch (e) {
+					console.error('Protocol handler error:', e)
+					callback({ error: -2 })
+				}
+			})
+		} catch (e) {
+			console.error('Failed to register app protocol:', e)
+		}
+
+		mainWindow.loadURL('app://-/index.html')
 	}
 	
 	// Handle loading errors
@@ -278,6 +295,23 @@ function createWindow() {
 // App event handlers
 app.whenReady().then(() => {
 	startBackend()
+
+	// Expose backend API base to renderer (used by preload.js)
+	process.env.APP_PORT = String(BACKEND_PORT)
+	process.env.API_BASE_URL = `http://127.0.0.1:${String(BACKEND_PORT)}/api`
+	
+	// Auto-allow microphone (media) permission for our app
+	try {
+		const sess = session.defaultSession
+		sess.setPermissionRequestHandler((webContents, permission, callback) => {
+			if (permission === 'media') {
+				return callback(true)
+			}
+			return callback(false)
+		})
+	} catch (e) {
+		console.error('Failed to set permission handler:', e)
+	}
 	
 	// Give backend time to start
 	setTimeout(() => {

@@ -48,8 +48,7 @@
 		},
 		"win": {
 			"target": ["nsis"],
-			"artifactName": "OnPremNoteTaker-Setup-${version}.exe",
-			"icon": "icon.ico"
+			"artifactName": "OnPremNoteTaker-Setup-${version}.exe"
 		},
 		"nsis": {
 			"oneClick": false,

@@ -106,4 +106,10 @@ export async function updateMeeting(meetingId: string, title: string) {
 	return resp.json()
 }
 
+export async function getVpsHealth() {
+    const resp = await fetch(`${apiBase}/vps/health`, { method: 'GET', headers: { ...getAuthHeader() } })
+    if (!resp.ok) throw new Error(`VPS health failed: ${resp.status}`)
+    return resp.json() as Promise<{ ollama: { up: boolean; version?: string | null }; base_url: string }>
+}
+
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listMeetings, syncMeeting, watchOnline } from './offline'
-import { getMeetings } from './api'
+import { getMeetings, getVpsHealth } from './api'
 import { db } from './db'
 
 export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => void }) {
@@ -10,10 +10,26 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 	const [meetings, setMeetings] = useState<any[]>([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
+    const [vpsUp, setVpsUp] = useState<boolean | null>(null)
 
 	useEffect(() => {
 		const stop = watchOnline(setOnline)
 		return stop
+	}, [])
+
+	useEffect(() => {
+		let stopped = false
+		async function poll() {
+			try {
+				const res = await getVpsHealth()
+				if (!stopped) setVpsUp(!!res.ollama?.up)
+			} catch {
+				if (!stopped) setVpsUp(false)
+			}
+		}
+		poll()
+		const id = setInterval(poll, 15000)
+		return () => { stopped = true; clearInterval(id) }
 	}, [])
 
 	async function refresh() {
@@ -74,6 +90,9 @@ export default function Dashboard({ onOpen }: { onOpen: (meetingId: string) => v
 					))}
 				</select>
 				<span style={{ marginLeft: 'auto' }}>{online ? '🟢 Online' : '🔴 Offline'}</span>
+				<span title="VPS connectivity" style={{ marginLeft: 8 }}>
+					{vpsUp === null ? '⏳ Checking VPS' : vpsUp ? '🟢 VPS' : '🔴 VPS'}
+				</span>
 				<button onClick={() => refresh()}>🔄 Refresh</button>
 				<button onClick={clearAll}>Reset Local Data</button>
 			</div>

@@ -49,4 +49,22 @@ class OllamaClient:
 		)
 		return self.generate(prompt, model=model)
 
+	def check_health(self) -> Dict[str, Any]:
+		"""Check if Ollama is reachable and return basic info.
+
+		Returns a dict like {"up": bool, "version": Optional[str]}.
+		"""
+		try:
+			# Try version endpoint first
+			resp = requests.get(f"{self.base_url}/api/version", timeout=5)
+			if resp.ok:
+				data = resp.json()
+				return {"up": True, "version": data.get("version")}
+			# Fallback to tags
+			resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
+			resp.raise_for_status()
+			return {"up": True, "version": None}
+		except Exception:
+			return {"up": False, "version": None}
+
 

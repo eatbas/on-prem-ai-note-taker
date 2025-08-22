@@ -23,8 +23,13 @@ export default function Recorder({ onCreated }: { onCreated: (meetingId: string)
 				throw new Error('Media devices not supported in this browser')
 			}
 
-			// Check if we're running on HTTPS or localhost
-			if (location.protocol !== 'https:' && location.hostname !== 'localhost' && !location.hostname.startsWith('192.168.')) {
+			// Check if we're running on a secure context: HTTPS, localhost, local LAN, or Electron custom scheme
+			const isElectronApp = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
+			const isCustomAppScheme = location.protocol === 'app:'
+			const isHttps = location.protocol === 'https:'
+			const isLocalhost = location.hostname === 'localhost'
+			const isLan = location.hostname.startsWith('192.168.')
+			if (!(isHttps || isLocalhost || isLan || isCustomAppScheme || isElectronApp)) {
 				throw new Error('Microphone access requires HTTPS or localhost. Current protocol: ' + location.protocol)
 			}
 

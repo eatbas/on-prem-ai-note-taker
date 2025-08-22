@@ -123,6 +123,13 @@ def health() -> Dict[str, Any]:
 	}
 
 
+@app.get("/api/vps/health")
+def vps_health() -> Dict[str, Any]:
+    """Return connectivity status for remote Ollama VPS."""
+    ollama = _ollama_client.check_health()
+    return {"ollama": ollama, "base_url": settings.ollama_base_url}
+
+
 @app.post("/api/transcribe", response_model=TranscriptionResponse)
 async def transcribe(
 	file: UploadFile = File(...),
