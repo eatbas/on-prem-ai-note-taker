@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # ===== On-Prem AI Note Taker - VPS Service Restart Script =====
-# This script restarts all services with updated codebase
+# This script restarts all services with updated codebase including Redis
 # Run this after updating your code: ./restart-services.sh
 
 set -e  # Exit on any error
@@ -142,8 +142,33 @@ wait_for_health() {
     local max_attempts=30
     local attempt=1
     
+    # Wait for Redis to be healthy first
+    echo "🔍 Checking Redis health..."
     while [ $attempt -le $max_attempts ]; do
-        echo "Checking health... (attempt $attempt/$max_attempts)"
+        if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
+            echo "✅ Redis is healthy"
+            break
+        fi
+        
+        if [ $attempt -eq $max_attempts ]; then
+            echo "❌ Redis health check failed after $max_attempts attempts"
+            echo "Checking Redis logs..."
+            docker compose logs redis
+            exit 1
+        fi
+        
+        echo "⏳ Redis not ready yet, waiting 5 seconds... (attempt $attempt/$max_attempts)"
+        sleep 5
+        attempt=$((attempt + 1))
+    done
+    
+    # Reset attempt counter for backend check
+    attempt=1
+    
+    # Wait for backend to be healthy
+    echo "🔍 Checking Backend health..."
+    while [ $attempt -le $max_attempts ]; do
+        echo "Checking backend health... (attempt $attempt/$max_attempts)"
         
         # Check if backend is responding
         if curl -s -f "http://localhost:8000/api/health" > /dev/null 2>&1; then
@@ -162,6 +187,27 @@ wait_for_health() {
         sleep 5
         attempt=$((attempt + 1))
     done
+    
+    # Wait for Ollama to be healthy
+    echo "🔍 Checking Ollama health..."
+    attempt=1
+    while [ $attempt -le $max_attempts ]; do
+        if docker compose exec -T ollama ollama list > /dev/null 2>&1; then
+            echo "✅ Ollama is healthy"
+            break
+        fi
+        
+        if [ $attempt -eq $max_attempts ]; then
+            echo "❌ Ollama health check failed after $max_attempts attempts"
+            echo "Checking Ollama logs..."
+            docker compose logs ollama
+            exit 1
+        fi
+        
+        echo "⏳ Ollama not ready yet, waiting 5 seconds... (attempt $attempt/$max_attempts)"
+        sleep 5
+        attempt=$((attempt + 1))
+    done
 }
 
 # Function to show final status
@@ -176,24 +222,26 @@ show_final_status() {
     echo "🌐 Service URLs:"
     echo "   Backend API: http://$(curl -s ifconfig.me):8000"
     echo "   Ollama: http://$(curl -s ifconfig.me):11434"
+    echo "   Redis: redis://$(curl -s ifconfig.me):6385"
     echo ""
     echo "📝 Next Steps:"
     echo "   1. Update your local frontend .env.local with the new backend URL"
     echo "   2. Test the connection from your local machine"
     echo "   3. Check the logs if you encounter any issues: docker compose logs"
+    echo "   4. Redis is available on port 6385 for external connections if needed"
 }
 
 # Main execution
 main() {
-    echo "🔄 VPS Service Restart Script"
-    echo "============================="
+    echo "🔄 VPS Service Restart Script (with Redis)"
+    echo "=========================================="
     echo "This script will:"
     echo "  1. Check Docker and Docker Compose availability"
     echo "  2. Update codebase from Git repository (auto-stash uncommitted changes)"
     echo "  3. Stop all running Docker services gracefully"
     echo "  4. Clean up unused Docker resources (containers, networks)"
-    echo "  5. Rebuild and start services with the latest code"
-    echo "  6. Wait for backend health check to confirm services are ready"
+    echo "  5. Rebuild and start services with the latest code (including Redis)"
+    echo "  6. Wait for all services (Redis, Backend, Ollama) to be healthy"
     echo "  7. Display final service status and connection URLs"
     echo ""
     
