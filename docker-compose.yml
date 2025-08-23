@@ -7,6 +7,14 @@ services:
       - "11434:11434"
     volumes:
       - ollama_models:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 16G
+        reservations:
+          cpus: '1.0'
+          memory: 4G
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 30s
@@ -26,15 +34,18 @@ services:
       APP_PORT: 8000
       ALLOWED_ORIGINS: "*"
       WHISPER_MODEL: ${WHISPER_MODEL:-base}
-      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-auto}
+      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
       WHISPER_DOWNLOAD_ROOT: /models
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-60}
       BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-}
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
       REDIS_URL: redis://redis:6379
-      QUEUE_MAX_WORKERS: ${QUEUE_MAX_WORKERS:-3}
+      QUEUE_MAX_WORKERS: ${QUEUE_MAX_WORKERS:-2}
       USE_QUEUE_SYSTEM: ${USE_QUEUE_SYSTEM:-true}
+      MAX_CONCURRENCY: ${MAX_CONCURRENCY:-1}
+      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
     ports:
       - "8000:8000"
     healthcheck:
@@ -68,6 +79,14 @@ services:
       - "6385:6379"
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          cpus: '0.5'
+          memory: 1G
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 30s
