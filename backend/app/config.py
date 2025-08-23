@@ -39,8 +39,12 @@ class Settings:
 
 	# Redis Queue System
 	redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
-	queue_max_workers: int = int(os.getenv("QUEUE_MAX_WORKERS", "3"))
+	queue_max_workers: int = int(os.getenv("QUEUE_MAX_WORKERS", "2"))
 	use_queue_system: bool = os.getenv("USE_QUEUE_SYSTEM", "true").lower() == "true"
+	
+	# Performance optimizations
+	max_text_length: int = int(os.getenv("MAX_TEXT_LENGTH", "4000"))
+	enable_model_caching: bool = os.getenv("ENABLE_MODEL_CACHING", "true").lower() == "true"
 
 
 settings = Settings()

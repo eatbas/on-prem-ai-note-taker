@@ -151,11 +151,19 @@ async def shutdown_event():
 def get_whisper_model() -> WhisperModel:
 	global _whisper_model
 	if _whisper_model is None:
-		_whisper_model = WhisperModel(
-			settings.whisper_model_name,
-			compute_type=settings.whisper_compute_type,
-			download_root=settings.whisper_download_root,
-		)
+		logger.info(f"Loading Whisper model: {settings.whisper_model_name} with compute_type: {settings.whisper_compute_type}")
+		try:
+			_whisper_model = WhisperModel(
+				settings.whisper_model_name,
+				device="cpu",  # Force CPU to prevent GPU memory issues
+				compute_type=settings.whisper_compute_type,
+				download_root=settings.whisper_download_root,
+				local_files_only=False
+			)
+			logger.info(f"Whisper model {settings.whisper_model_name} loaded successfully and cached")
+		except Exception as e:
+			logger.error(f"Failed to load Whisper model: {str(e)}")
+			raise
 	return _whisper_model
 
 
@@ -213,18 +221,33 @@ async def transcribe(
 		duration_out: Optional[float] = None
 
 		try:
+			# Optimized transcription with better VAD settings
 			segments, info = model.transcribe(
 				tmp_path,
 				language=language,
 				vad_filter=vad_filter,
+				vad_parameters=dict(
+					min_silence_duration_ms=500,
+					speech_pad_ms=100
+				),
+				beam_size=1,  # Faster decoding
+				best_of=1,   # Single pass
+				temperature=0.0  # Deterministic output
 			)
 			language_out = info.language if hasattr(info, "language") else None
 			duration_out = info.duration if hasattr(info, "duration") else None
+			
+			# Process segments efficiently
 			for s in segments:
-				segments_out.append(
-					TranscriptionSegment(start=float(s.start), end=float(s.end), text=s.text.strip())
-				)
-				text_parts.append(s.text.strip())
+				text_cleaned = s.text.strip()
+				if text_cleaned:  # Skip empty segments
+					segments_out.append(
+						TranscriptionSegment(start=float(s.start), end=float(s.end), text=text_cleaned)
+					)
+					text_parts.append(text_cleaned)
+			
+			logger.info(f"Transcription completed: {len(segments_out)} segments, language: {language_out}, duration: {duration_out:.2f}s")
+			
 		finally:
 			try:
 				os.remove(tmp_path)
