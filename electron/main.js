@@ -77,13 +77,14 @@ function createWindow() {
 
 function createRecorderWindow() {
 	recorderWindow = new BrowserWindow({
-		width: 280,
-		height: 60,
+		width: 300,
+		height: 80,
 		frame: false,
 		resizable: false,
 		alwaysOnTop: true,
 		skipTaskbar: true,
 		transparent: true,
+		movable: true,
 		webPreferences: {
 			nodeIntegration: false,
 			contextIsolation: true,
@@ -94,11 +95,35 @@ function createRecorderWindow() {
 
 	recorderWindow.loadFile(path.join(__dirname, 'recorder-window.html'))
 	
-	// Make the window draggable
-	recorderWindow.setMovable(true)
-	
 	// Hide initially
 	recorderWindow.hide()
+	
+	// Position the window in the top-right corner initially
+	// Get screen size to ensure proper positioning
+	const { screen } = require('electron')
+	const primaryDisplay = screen.getPrimaryDisplay()
+	const { width, height } = primaryDisplay.workAreaSize
+	
+	// Position in top-right with some padding
+	const windowX = width - 320 // 300px width + 20px padding
+	const windowY = 20 // 20px from top
+	
+	recorderWindow.setPosition(windowX, windowY)
+	
+	// Make the window draggable by clicking anywhere on it
+	recorderWindow.setMovable(true)
+	
+	// Ensure window stays on screen
+	recorderWindow.on('moved', () => {
+		const [x, y] = recorderWindow.getPosition()
+		const [w, h] = recorderWindow.getSize()
+		
+		// Check if window is going off screen
+		if (x < 0) recorderWindow.setPosition(0, y)
+		if (y < 0) recorderWindow.setPosition(x, 0)
+		if (x + w > width) recorderWindow.setPosition(width - w, y)
+		if (y + h > height) recorderWindow.setPosition(x, height - h)
+	})
 }
 
 function createTray() {
@@ -185,7 +210,13 @@ function updateTrayRecordingState(recording) {
 					label: recording ? '⏹️ Stop Recording' : '🎙️ Start Recording',
 					click: () => {
 						if (mainWindow) {
-							mainWindow.webContents.send('tray-action', 'start-recording')
+							if (recording) {
+								// Send stop recording command
+								mainWindow.webContents.send('tray-action', 'stop-recording')
+							} else {
+								// Send start recording command
+								mainWindow.webContents.send('tray-action', 'start-recording')
+							}
 						}
 					}
 				},
@@ -251,6 +282,7 @@ app.on('window-all-closed', () => {
 // IPC handlers for recording state
 ipcMain.on('recording-state-changed', (event, recording) => {
 	try {
+		console.log('Recording state changed:', recording)
 		updateTrayRecordingState(recording)
 		
 		// Show/hide recorder window
@@ -281,13 +313,16 @@ ipcMain.on('recording-data-update', (event, data) => {
 ipcMain.on('tray-action', (event, action) => {
 	if (action === 'start-recording' && mainWindow) {
 		mainWindow.webContents.send('tray-action', 'start-recording')
+	} else if (action === 'stop-recording' && mainWindow) {
+		mainWindow.webContents.send('tray-action', 'stop-recording')
 	}
 })
 
 // IPC handler for stop recording from recorder window
 ipcMain.on('stop-recording', (event) => {
+	console.log('Stop recording requested from recorder window')
 	if (mainWindow) {
-		mainWindow.webContents.send('stop-recording')
+		mainWindow.webContents.send('tray-action', 'stop-recording')
 	}
 })
 
@@ -312,7 +347,7 @@ function startRecordingDataUpdates() {
 	}
 	
 	recordingDataTimer = setInterval(() => {
-		if (mainWindow && recorderWindow) {
+		if (mainWindow && recorderWindow && isRecording) {
 			// Request recording data from main window
 			mainWindow.webContents.send('request-recording-data')
 		}

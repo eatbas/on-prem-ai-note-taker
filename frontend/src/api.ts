@@ -60,6 +60,16 @@ export async function summarize(text: string) {
 	return resp.json()
 }
 
+export async function chat(prompt: string, model?: string) {
+	const resp = await fetch(`${apiBase}/chat`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+		body: JSON.stringify({ prompt, model }),
+	})
+	if (!resp.ok) throw new Error(`Chat failed: ${resp.status}`)
+	return resp.json()
+}
+
 export async function transcribeAndSummarize(file: File, opts?: { language?: string; vadFilter?: boolean }) {
 	const form = new FormData()
 	form.append('file', file)
@@ -81,6 +91,15 @@ export async function getMeetings() {
 		headers: { ...getAuthHeader() },
 	})
 	if (!resp.ok) throw new Error(`Get meetings failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function getVpsMeetings() {
+	const resp = await fetch(`${apiBase}/meetings`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get VPS meetings failed: ${resp.status}`)
 	return resp.json()
 }
 

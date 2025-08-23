@@ -10,11 +10,12 @@
             background: transparent;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             overflow: hidden;
+            -webkit-app-region: drag; /* Make entire window draggable */
         }
         
         .recording-window {
-            width: 280px;
-            height: 60px;
+            width: 300px;
+            height: 80px;
             background-color: #1f2937;
             border-radius: 8px;
             padding: 12px 16px;
@@ -25,7 +26,6 @@
             gap: 12px;
             cursor: move;
             user-select: none;
-            position: relative;
         }
         
         .drag-handle {
@@ -60,10 +60,12 @@
             justify-content: center;
             transition: all 0.2s ease;
             flex-shrink: 0;
+            -webkit-app-region: no-drag; /* Prevent dragging on button */
         }
         
         .stop-button:hover {
             background-color: #dc2626;
+            transform: scale(1.1);
         }
         
         .stop-icon {
@@ -130,11 +132,17 @@
         
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            50% { opacity: 0.8; }
         }
         
-        .recording-window {
+        .recording-window.recording {
             animation: pulse 2s infinite;
+            border-color: #ef4444;
+        }
+        
+        .recording-window:not(.recording) {
+            animation: none;
+            border-color: #6b7280;
         }
     </style>
 </head>
@@ -148,7 +156,7 @@
         </div>
 
         <!-- Stop Button -->
-        <button class="stop-button" onclick="stopRecording()">
+        <button class="stop-button" onclick="stopRecording()" id="stop-button">
             <div class="stop-icon"></div>
         </button>
 
@@ -172,6 +180,8 @@
     <script>
         let recordingTime = 0;
         let recordingInterval;
+        let isRecording = false;
+        let barAnimationInterval;
         
         // Generate voice bars
         function generateBars() {
@@ -187,6 +197,8 @@
         
         // Animate voice bars
         function animateBars() {
+            if (!isRecording) return;
+            
             const bars = document.querySelectorAll('.bar');
             bars.forEach((bar, index) => {
                 const height = Math.max(3, 8 + Math.sin(Date.now() * 0.01 + index) * 8);
@@ -196,6 +208,8 @@
         
         // Update timer
         function updateTimer() {
+            if (!isRecording) return;
+            
             recordingTime++;
             const mins = Math.floor(recordingTime / 60);
             const secs = recordingTime % 60;
@@ -209,62 +223,99 @@
         
         // Start recording
         function startRecording() {
+            isRecording = true;
             recordingTime = 0;
+            
+            // Update UI state
+            document.getElementById('recording-window').classList.add('recording');
+            document.getElementById('stop-button').style.display = 'flex';
+            
+            // Start timer
             recordingInterval = setInterval(updateTimer, 1000);
             
             // Start bar animation
-            setInterval(animateBars, 100);
+            barAnimationInterval = setInterval(animateBars, 100);
+            
+            console.log('Recording started in standalone window');
         }
         
         // Stop recording
         function stopRecording() {
+            console.log('Stop recording clicked in standalone window');
+            
+            isRecording = false;
+            
+            // Update UI state
+            document.getElementById('recording-window').classList.remove('recording');
+            
+            // Stop timer
             if (recordingInterval) {
                 clearInterval(recordingInterval);
+                recordingInterval = null;
             }
+            
+            // Stop bar animation
+            if (barAnimationInterval) {
+                clearInterval(barAnimationInterval);
+                barAnimationInterval = null;
+            }
+            
+            // Reset display
             recordingTime = 0;
             document.getElementById('timer').textContent = '00:00';
             document.getElementById('progress-bar').style.width = '0%';
             
-            // Send stop command to main process if available
+            // Send stop command to main process
             if (window.electronAPI && window.electronAPI.stopRecording) {
                 window.electronAPI.stopRecording();
             }
         }
         
-        // Make window draggable
-        function makeDraggable() {
-            const window = document.getElementById('recording-window');
-            let isDragging = false;
-            let startX, startY;
+        // Update audio level visualization
+        function updateAudioLevels(systemLevel, micLevel) {
+            if (!isRecording) return;
             
-            window.addEventListener('mousedown', (e) => {
-                if (e.target.closest('.stop-button')) return; // Don't drag on buttons
-                
-                isDragging = true;
-                startX = e.clientX - window.offsetLeft;
-                startY = e.clientY - window.offsetTop;
-            });
+            // Update voice bars based on audio levels
+            const bars = document.querySelectorAll('.bar');
+            const combinedLevel = Math.max(systemLevel || 0, micLevel || 0);
             
-            document.addEventListener('mousemove', (e) => {
-                if (!isDragging) return;
-                
-                window.style.left = (e.clientX - startX) + 'px';
-                window.style.top = (e.clientY - startY) + 'px';
-                window.style.right = 'auto';
+            bars.forEach((bar, index) => {
+                const baseHeight = 3;
+                const maxHeight = 20;
+                const height = baseHeight + (combinedLevel * maxHeight * (1 - index / bars.length));
+                bar.style.height = Math.max(baseHeight, height) + 'px';
             });
-            
-            document.addEventListener('mouseup', () => {
-                isDragging = false;
-            });
+        }
+        
+        // Listen for recording data updates from main process
+        function setupRecordingListeners() {
+            if (window.electronAPI && window.electronAPI.onRecordingDataUpdate) {
+                window.electronAPI.onRecordingDataUpdate((data) => {
+                    console.log('Received recording data update:', data);
+                    
+                    if (data.recording && !isRecording) {
+                        startRecording();
+                    } else if (!data.recording && isRecording) {
+                        stopRecording();
+                    }
+                    
+                    // Update audio levels if available
+                    if (data.systemAudioLevel !== undefined) {
+                        updateAudioLevels(data.systemAudioLevel, data.microphoneLevel);
+                    }
+                });
+            }
         }
         
         // Initialize
         document.addEventListener('DOMContentLoaded', () => {
             generateBars();
-            makeDraggable();
+            setupRecordingListeners();
             
-            // Start recording automatically for demo
-            startRecording();
+            // Initially hide the stop button until recording starts
+            document.getElementById('stop-button').style.display = 'none';
+            
+            console.log('Recorder window initialized');
         });
     </script>
 </body>

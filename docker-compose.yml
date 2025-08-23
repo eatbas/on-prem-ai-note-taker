@@ -20,6 +20,7 @@ services:
     restart: unless-stopped
     depends_on:
       - ollama
+      - redis
     environment:
       APP_HOST: 0.0.0.0
       APP_PORT: 8000
@@ -31,6 +32,9 @@ services:
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-}
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
+      REDIS_URL: redis://redis:6379
+      QUEUE_MAX_WORKERS: ${QUEUE_MAX_WORKERS:-3}
+      USE_QUEUE_SYSTEM: ${USE_QUEUE_SYSTEM:-true}
     ports:
       - "8000:8000"
     healthcheck:
@@ -57,7 +61,21 @@ services:
   #     timeout: 10s
   #     retries: 5
 
+            redis:
+            image: redis:7-alpine
+            restart: unless-stopped
+            ports:
+              - "6385:6379"
+            volumes:
+              - redis_data:/data
+            healthcheck:
+              test: ["CMD", "redis-cli", "ping"]
+              interval: 30s
+              timeout: 10s
+              retries: 5
+
 volumes:
   ollama_models:
   whisper_models:
+  redis_data:
 

@@ -50,20 +50,33 @@ class OllamaClient:
 		return self.generate(prompt, model=model)
 
 	def check_health(self) -> Dict[str, Any]:
-		"""Check if Ollama is reachable and return basic info.
+		"""Check if Ollama is reachable via simple HTTP connectivity test.
+		
+		IMPORTANT: This does NOT call any Ollama API endpoints to avoid
+		creating unnecessary llama processes. It only checks basic connectivity.
 
 		Returns a dict like {"up": bool, "version": Optional[str]}.
 		"""
 		try:
-			# Try version endpoint first
-			resp = requests.get(f"{self.base_url}/api/version", timeout=5)
-			if resp.ok:
-				data = resp.json()
-				return {"up": True, "version": data.get("version")}
-			# Fallback to tags
-			resp = requests.get(f"{self.base_url}/api/tags", timeout=5)
-			resp.raise_for_status()
-			return {"up": True, "version": None}
+			# Only check basic HTTP connectivity to the base URL
+			# Don't call /api/version or /api/tags as they spawn llama processes
+			import socket
+			from urllib.parse import urlparse
+			
+			parsed = urlparse(self.base_url)
+			host = parsed.hostname or 'localhost'
+			port = parsed.port or 11434
+			
+			# Simple TCP socket check - much faster and doesn't spawn processes
+			sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+			sock.settimeout(3)  # 3 second timeout
+			result = sock.connect_ex((host, port))
+			sock.close()
+			
+			if result == 0:
+				return {"up": True, "version": "unknown"}
+			else:
+				return {"up": False, "version": None}
 		except Exception:
 			return {"up": False, "version": None}
 

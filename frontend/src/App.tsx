@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react'
 import Recorder from './Recorder'
 import Dashboard from './Dashboard'
 import MeetingView from './MeetingView'
+import AdminDashboard from './AdminDashboard'
 import { watchOnline } from './offline'
 import { getVpsHealth } from './api'
 
@@ -218,6 +219,40 @@ function AppShell({
 					}}>
 						Secure, local-first AI-powered meeting notes
 					</p>
+					
+					{/* Admin Dashboard Link */}
+					<div style={{
+						marginTop: '16px',
+						display: 'flex',
+						justifyContent: 'center',
+						gap: '12px'
+					}}>
+						<button
+							onClick={() => navigate('/admin')}
+							style={{
+								padding: '8px 16px',
+								backgroundColor: '#dc2626',
+								color: 'white',
+								border: 'none',
+								borderRadius: '8px',
+								fontSize: '14px',
+								fontWeight: '600',
+								cursor: 'pointer',
+								transition: 'all 0.2s ease',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px'
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.backgroundColor = '#b91c1c'
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.backgroundColor = '#dc2626'
+							}}
+						>
+							🛠️ Admin Dashboard
+						</button>
+					</div>
 				</header>
 				
 				{/* Stay on dashboard when recording starts; meeting can be opened from the list */}
@@ -493,6 +528,7 @@ export default function App() {
 						availableTags={availableTags}
 					/>
 				} />
+				<Route path="/admin" element={<AdminDashboard />} />
 			</Routes>
 		</Router>
 	)

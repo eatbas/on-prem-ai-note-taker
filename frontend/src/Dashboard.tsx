@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { listMeetings, syncMeeting, watchOnline } from './offline'
 import { getMeetings, getVpsHealth, updateMeeting } from './api'
 import { db } from './db'
+import AskLlama from './AskLlama'
 
 export default function Dashboard({ 
 	onOpen, 
@@ -29,6 +30,10 @@ export default function Dashboard({
 	const [error, setError] = useState<string | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
+	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama'>('local')
+	const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
+	const [vpsLoading, setVpsLoading] = useState(false)
+	const [vpsError, setVpsError] = useState<string | null>(null)
 
 	async function refresh() {
 		setLoading(true)
@@ -84,6 +89,22 @@ export default function Dashboard({
 		}
 	}
 
+	async function refreshVpsMeetings() {
+		if (!online || !vpsUp) return
+		
+		setVpsLoading(true)
+		setVpsError(null)
+		try {
+			const vpsMeetingsData = await getMeetings()
+			setVpsMeetings(vpsMeetingsData)
+		} catch (err) {
+			console.error('Failed to load VPS meetings:', err)
+			setVpsError(`Failed to load VPS meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
+		} finally {
+			setVpsLoading(false)
+		}
+	}
+
 	useEffect(() => {
 		refresh()
 	}, [text, tag, online])
@@ -97,6 +118,13 @@ export default function Dashboard({
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [refreshSignal])
+
+	// Refresh VPS meetings when VPS tab is selected or VPS status changes
+	useEffect(() => {
+		if (activeTab === 'vps' && vpsUp && online) {
+			refreshVpsMeetings()
+		}
+	}, [activeTab, vpsUp, online])
 
 	async function retry(meetingId: string) {
 		try {
@@ -216,280 +244,598 @@ export default function Dashboard({
 				</div>
 			)}
 			
-			{loading && (
-				<div style={{ textAlign: 'center', padding: 20 }}>
-					Loading meetings...
-				</div>
-			)}
-			
-			{!loading && meetings.length === 0 && (
-				<div style={{ textAlign: 'center', padding: 40, opacity: 0.6 }}>
-					No meetings found. Start recording to create your first meeting!
-				</div>
-			)}
-
-			<ul style={{ listStyle: 'none', padding: 0 }}>
-				{currentMeetings.map(m => (
-					<li key={m.id} 
-						onClick={() => onOpen(m.id)}
-						style={{ 
-							display: 'flex', 
-							gap: 12, 
-							padding: 16, 
-							borderBottom: '1px solid #eee',
-							backgroundColor: '#fafafa',
-							marginBottom: 8,
-							borderRadius: 4,
+			{/* Tabs */}
+			<div style={{
+				display: 'flex',
+				borderBottom: '2px solid #e2e8f0',
+				marginBottom: '24px',
+				backgroundColor: 'white',
+				borderRadius: '8px 8px 0 0',
+				overflow: 'hidden'
+			}}>
+				{[
+					{ id: 'local', label: '📁 Local Meetings', icon: '🏠' },
+					{ id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
+					{ id: 'llama', label: '🤖 Ask Llama', icon: '💬' }
+				].map((tab) => (
+					<button
+						key={tab.id}
+						onClick={() => setActiveTab(tab.id as 'local' | 'vps' | 'llama')}
+						style={{
+							flex: 1,
+							padding: '16px 24px',
+							backgroundColor: activeTab === tab.id ? '#3b82f6' : '#f8fafc',
+							color: activeTab === tab.id ? 'white' : '#64748b',
+							border: 'none',
+							fontSize: '16px',
+							fontWeight: '600',
 							cursor: 'pointer',
 							transition: 'all 0.2s ease',
-							border: '1px solid transparent',
-							position: 'relative'
+							display: 'flex',
+							alignItems: 'center',
+							justifyContent: 'center',
+							gap: '8px',
+							borderRight: tab.id !== 'llama' ? '1px solid #e2e8f0' : 'none'
 						}}
 						onMouseEnter={(e) => {
-							e.currentTarget.style.backgroundColor = '#f0f0f0'
-							e.currentTarget.style.transform = 'translateY(-1px)'
-							e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
-							e.currentTarget.style.borderColor = '#d1d5db'
+							if (activeTab !== tab.id) {
+								e.currentTarget.style.backgroundColor = '#e2e8f0'
+							}
 						}}
 						onMouseLeave={(e) => {
-							e.currentTarget.style.backgroundColor = '#fafafa'
-							e.currentTarget.style.transform = 'translateY(0)'
-							e.currentTarget.style.boxShadow = 'none'
-							e.currentTarget.style.borderColor = 'transparent'
+							if (activeTab !== tab.id) {
+								e.currentTarget.style.backgroundColor = '#f8fafc'
+							}
 						}}
 					>
-						<div style={{ flex: 1 }}>
-							<div style={{ 
-								display: 'flex', 
-								alignItems: 'center', 
-								gap: '8px',
-								marginBottom: 4 
-							}}>
-								<div style={{ fontWeight: 600, fontSize: 18 }}>
-									<InlineEditableTitle id={m.id} title={m.title || 'Untitled Meeting'} onSaved={refresh} />
+						<span style={{ fontSize: '18px' }}>{tab.icon}</span>
+						{tab.label}
+					</button>
+				))}
+			</div>
+
+			{/* Tab Content */}
+			{activeTab === 'llama' && (
+				<AskLlama online={online} vpsUp={vpsUp} />
+			)}
+
+			{activeTab === 'local' && (
+				<>
+					{loading && (
+						<div style={{ textAlign: 'center', padding: 20 }}>
+							Loading local meetings...
+						</div>
+					)}
+					
+					{!loading && meetings.length === 0 && (
+						<div style={{ textAlign: 'center', padding: 40, opacity: 0.6 }}>
+							No local meetings found. Start recording to create your first meeting!
+						</div>
+					)}
+
+					{/* Local meetings list */}
+					<ul style={{ listStyle: 'none', padding: 0 }}>
+						{currentMeetings.map(m => (
+							<li key={m.id} 
+								onClick={() => onOpen(m.id)}
+								style={{ 
+									display: 'flex', 
+									gap: 12, 
+									padding: 16, 
+									borderBottom: '1px solid #eee',
+									backgroundColor: '#fafafa',
+									marginBottom: 8,
+									borderRadius: 4,
+									cursor: 'pointer',
+									transition: 'all 0.2s ease',
+									border: '1px solid transparent',
+									position: 'relative'
+								}}
+								onMouseEnter={(e) => {
+									e.currentTarget.style.backgroundColor = '#f0f0f0'
+									e.currentTarget.style.transform = 'translateY(-1px)'
+									e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
+									e.currentTarget.style.borderColor = '#d1d5db'
+								}}
+								onMouseLeave={(e) => {
+									e.currentTarget.style.backgroundColor = '#fafafa'
+									e.currentTarget.style.transform = 'translateY(0)'
+									e.currentTarget.style.boxShadow = 'none'
+									e.currentTarget.style.borderColor = 'transparent'
+								}}
+							>
+								<div style={{ flex: 1 }}>
+									<div style={{ 
+										display: 'flex', 
+										alignItems: 'center', 
+										gap: '8px',
+										marginBottom: 4 
+									}}>
+										<div style={{ fontWeight: 600, fontSize: 18 }}>
+											<InlineEditableTitle id={m.id} title={m.title || 'Untitled Meeting'} onSaved={refresh} />
+										</div>
+										<span style={{ 
+											fontSize: '12px', 
+											color: '#6b7280',
+											opacity: 0.7,
+											fontStyle: 'italic'
+										}}>
+											👆 Click to open
+										</span>
+									</div>
+									<div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
+										📅 {new Date(m.created_at || m.createdAt).toLocaleString()}
+										{m.duration && (
+											<span style={{ 
+												backgroundColor: '#f3f4f6', 
+												padding: '2px 6px', 
+												borderRadius: '10px',
+												marginLeft: '8px',
+												fontWeight: '500',
+												color: '#374151'
+											}}>
+												⏱️ {Math.round(m.duration / 60)} min
+											</span>
+										)}
+										{!m.duration && m.status === 'sent' && (
+											<span style={{ 
+												backgroundColor: '#fef3c7', 
+												padding: '2px 6px', 
+												borderRadius: '10px',
+												marginLeft: '8px',
+												fontSize: '12px',
+												color: '#92400e'
+											}}>
+												⏱️ Duration not recorded
+											</span>
+										)}
+										{/* Debug: Show actual status value */}
+										<span style={{ 
+											backgroundColor: '#fee', 
+											padding: '2px 6px', 
+											borderRadius: '10px',
+											marginLeft: '8px',
+											fontSize: '12px',
+											color: '#dc2626'
+										}}>
+											🔍 Status: {m.status || 'undefined'}
+										</span>
+									</div>
+									{m.summary && (
+										<div style={{ 
+											fontSize: 14, 
+											opacity: 0.9, 
+											backgroundColor: '#f0f9ff',
+											padding: 8,
+											borderRadius: 4,
+											marginTop: 8,
+											border: '1px solid #0ea5e9'
+										}}>
+											<strong>Summary:</strong> {m.summary.slice(0, 200)}...
+										</div>
+									)}
 								</div>
+								<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+									<button 
+										onClick={(e) => {
+											e.stopPropagation()
+											onOpen(m.id)
+										}} 
+										style={{ 
+											padding: '8px 16px',
+											backgroundColor: '#3b82f6',
+											color: 'white',
+											border: 'none',
+											borderRadius: '4px',
+											cursor: 'pointer',
+											fontWeight: '500'
+										}}
+									>
+										📄 Open
+									</button>
+									{m.status !== 'sent' && (
+										<button 
+											onClick={(e) => {
+												e.stopPropagation()
+												retry(m.id)
+											}} 
+											disabled={!online} 
+											style={{ 
+												padding: '8px 16px',
+												backgroundColor: '#10b981',
+												color: 'white',
+												border: 'none',
+												borderRadius: '4px',
+												cursor: online ? 'pointer' : 'not-allowed',
+												fontWeight: '500',
+												opacity: online ? 1 : 0.6
+											}}
+										>
+											📤 Send
+										</button>
+									)}
+								</div>
+							</li>
+						))}
+					</ul>
+
+					{/* Pagination Controls - Moved to bottom */}
+					{!loading && meetings.length > 0 && (
+						<div style={{ 
+							display: 'flex', 
+							justifyContent: 'space-between', 
+							alignItems: 'center', 
+							marginTop: 20,
+							padding: '12px 16px',
+							backgroundColor: '#f8fafc',
+							borderRadius: '8px',
+							border: '1px solid #e2e8f0'
+						}}>
+							<div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+								<span style={{ fontSize: '14px', color: '#64748b' }}>
+									📊 Showing {startIndex + 1}-{Math.min(endIndex, meetings.length)} of {meetings.length} meetings
+								</span>
 								<span style={{ 
 									fontSize: '12px', 
 									color: '#6b7280',
-									opacity: 0.7,
-									fontStyle: 'italic'
+									backgroundColor: '#e5e7eb',
+									padding: '2px 6px',
+									borderRadius: '10px'
 								}}>
-									👆 Click to open
+									📄 {totalPages} page{totalPages > 1 ? 's' : ''}
 								</span>
 							</div>
-							<div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
-								📅 {new Date(m.created_at || m.createdAt).toLocaleString()}
-								{m.duration && (
+							{totalPages > 1 && (
+								<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+									<button 
+										onClick={() => setCurrentPage(1)} 
+										disabled={currentPage === 1}
+										style={{
+											padding: '4px 8px',
+											border: '1px solid #d1d5db',
+											backgroundColor: currentPage === 1 ? '#f3f4f6' : 'white',
+											borderRadius: '4px',
+											cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+											fontSize: '12px'
+										}}
+									>
+										⏮️ First
+									</button>
+									<button 
+										onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
+										disabled={currentPage === 1}
+										style={{
+											padding: '4px 8px',
+											border: '1px solid #d1d5db',
+											backgroundColor: currentPage === 1 ? '#f3f4f6' : 'white',
+											borderRadius: '4px',
+											cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+											fontSize: '12px'
+										}}
+									>
+										⬅️ Previous
+									</button>
 									<span style={{ 
-										backgroundColor: '#f3f4f6', 
-										padding: '2px 6px', 
-										borderRadius: '10px',
-										marginLeft: '8px',
+										fontSize: '14px', 
 										fontWeight: '500',
-										color: '#374151'
+										color: '#374151',
+										minWidth: '80px',
+										textAlign: 'center'
 									}}>
-										⏱️ {Math.round(m.duration / 60)} min
+										Page {currentPage} of {totalPages}
 									</span>
-								)}
-								{!m.duration && m.status === 'sent' && (
-									<span style={{ 
-										backgroundColor: '#fef3c7', 
-										padding: '2px 6px', 
-										borderRadius: '10px',
-										marginLeft: '8px',
-										fontSize: '12px',
-										color: '#92400e'
-									}}>
-										⏱️ Duration not recorded
-									</span>
-								)}
-								{/* Debug: Show actual status value */}
-								<span style={{ 
-									backgroundColor: '#fee', 
-									padding: '2px 6px', 
-									borderRadius: '10px',
-									marginLeft: '8px',
-									fontSize: '12px',
-									color: '#dc2626'
-								}}>
-									🔍 Status: {m.status || 'undefined'}
-								</span>
-							</div>
-							{m.summary && (
-								<div style={{ 
-									fontSize: 14, 
-									opacity: 0.9, 
-									backgroundColor: '#f0f9ff',
-									padding: 8,
-									borderRadius: 4,
-									marginTop: 8,
-									border: '1px solid #0ea5e9'
-								}}>
-									<strong>Summary:</strong> {m.summary.slice(0, 200)}...
+									{totalPages > 5 && (
+										<div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+											<span style={{ fontSize: '12px', color: '#6b7280' }}>Go to:</span>
+											<input
+												type="number"
+												min="1"
+												max={totalPages}
+												value={currentPage}
+												onChange={(e) => {
+													const page = parseInt(e.target.value)
+													if (page >= 1 && page <= totalPages) {
+														setCurrentPage(page)
+													}
+												}}
+												style={{
+													width: '50px',
+													padding: '2px 4px',
+													border: '1px solid #d1d5db',
+													borderRadius: '3px',
+													fontSize: '12px',
+													textAlign: 'center'
+												}}
+											/>
+										</div>
+									)}
+									<button 
+										onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
+										disabled={currentPage === totalPages}
+										style={{
+											padding: '4px 8px',
+											border: '1px solid #d1d5db',
+											backgroundColor: currentPage === totalPages ? '#f3f4f6' : 'white',
+											borderRadius: '4px',
+											cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+											fontSize: '12px'
+										}}
+									>
+										Next ➡️
+									</button>
+									<button 
+										onClick={() => setCurrentPage(totalPages)} 
+										disabled={currentPage === totalPages}
+										style={{
+											padding: '4px 8px',
+											border: '1px solid #d1d5db',
+											backgroundColor: currentPage === totalPages ? '#f3f4f6' : 'white',
+											borderRadius: '4px',
+											cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+											fontSize: '12px'
+										}}
+									>
+										Last ⏭️
+									</button>
 								</div>
 							)}
 						</div>
-						<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-							<button 
-								onClick={(e) => {
-									e.stopPropagation()
-									onOpen(m.id)
-								}} 
-								style={{ 
-									padding: '8px 16px',
-									backgroundColor: '#3b82f6',
-									color: 'white',
-									border: 'none',
-									borderRadius: '4px',
-									cursor: 'pointer',
-									fontWeight: '500'
-								}}
-							>
-								📄 Open
-							</button>
-							{m.status !== 'sent' && (
-								<button 
-									onClick={(e) => {
-										e.stopPropagation()
-										retry(m.id)
-									}} 
-									disabled={!online} 
-									style={{ 
-										padding: '8px 16px',
-										backgroundColor: '#10b981',
-										color: 'white',
-										border: 'none',
-										borderRadius: '4px',
-										cursor: online ? 'pointer' : 'not-allowed',
-										fontWeight: '500',
-										opacity: online ? 1 : 0.6
-									}}
-								>
-									📤 Send
-								</button>
-							)}
-						</div>
-					</li>
-				))}
-			</ul>
+					)}
+				</>
+			)}
 
-			{/* Pagination Controls - Moved to bottom */}
-			{!loading && meetings.length > 0 && (
-				<div style={{ 
-					display: 'flex', 
-					justifyContent: 'space-between', 
-					alignItems: 'center', 
-					marginTop: 20,
-					padding: '12px 16px',
-					backgroundColor: '#f8fafc',
-					borderRadius: '8px',
-					border: '1px solid #e2e8f0'
-				}}>
-					<div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-						<span style={{ fontSize: '14px', color: '#64748b' }}>
-							📊 Showing {startIndex + 1}-{Math.min(endIndex, meetings.length)} of {meetings.length} meetings
-						</span>
-						<span style={{ 
-							fontSize: '12px', 
-							color: '#6b7280',
-							backgroundColor: '#e5e7eb',
-							padding: '2px 6px',
-							borderRadius: '10px'
+			{activeTab === 'vps' && (
+				<div style={{ padding: '24px 0' }}>
+					<div style={{ 
+						textAlign: 'center', 
+						marginBottom: '32px',
+						padding: '24px',
+						backgroundColor: '#f8fafc',
+						borderRadius: '12px',
+						border: '2px solid #e2e8f0'
+					}}>
+						<h2 style={{
+							margin: '0 0 16px 0',
+							fontSize: '1.8rem',
+							fontWeight: '600',
+							color: '#1e293b'
 						}}>
-							📄 {totalPages} page{totalPages > 1 ? 's' : ''}
-						</span>
-					</div>
-					{totalPages > 1 && (
-						<div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-							<button 
-								onClick={() => setCurrentPage(1)} 
-								disabled={currentPage === 1}
-								style={{
-									padding: '4px 8px',
-									border: '1px solid #d1d5db',
-									backgroundColor: currentPage === 1 ? '#f3f4f6' : 'white',
-									borderRadius: '4px',
-									cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-									fontSize: '12px'
-								}}
-							>
-								⏮️ First
-							</button>
-							<button 
-								onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))} 
-								disabled={currentPage === 1}
-								style={{
-									padding: '4px 8px',
-									border: '1px solid #d1d5db',
-									backgroundColor: currentPage === 1 ? '#f3f4f6' : 'white',
-									borderRadius: '4px',
-									cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-									fontSize: '12px'
-								}}
-							>
-								⬅️ Previous
-							</button>
+							☁️ VPS Meetings
+						</h2>
+						<p style={{
+							margin: '0',
+							fontSize: '1.1rem',
+							color: '#64748b',
+							lineHeight: '1.6'
+						}}>
+							Meetings stored on the VPS server. These are synced from your local recordings.
+						</p>
+						
+						{/* VPS Status */}
+						<div style={{
+							display: 'flex',
+							justifyContent: 'center',
+							gap: '16px',
+							marginTop: '16px'
+						}}>
 							<span style={{ 
 								fontSize: '14px', 
 								fontWeight: '500',
-								color: '#374151',
-								minWidth: '80px',
-								textAlign: 'center'
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								padding: '8px 16px',
+								backgroundColor: vpsUp ? '#dcfce7' : vpsUp === null ? '#fef3c7' : '#fee2e2',
+								color: vpsUp ? '#166534' : vpsUp === null ? '#92400e' : '#dc2626',
+								borderRadius: '8px',
+								border: `1px solid ${vpsUp ? '#bbf7d0' : vpsUp === null ? '#fde68a' : '#fecaca'}`
 							}}>
-								Page {currentPage} of {totalPages}
+								{vpsUp === null ? '⏳' : vpsUp ? '🟢' : '🔴'} VPS {vpsUp === null ? 'Checking...' : vpsUp ? 'Connected' : 'Disconnected'}
 							</span>
-							{totalPages > 5 && (
-								<div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-									<span style={{ fontSize: '12px', color: '#6b7280' }}>Go to:</span>
-									<input
-										type="number"
-										min="1"
-										max={totalPages}
-										value={currentPage}
-										onChange={(e) => {
-											const page = parseInt(e.target.value)
-											if (page >= 1 && page <= totalPages) {
-												setCurrentPage(page)
-											}
-										}}
-										style={{
-											width: '50px',
-											padding: '2px 4px',
-											border: '1px solid #d1d5db',
-											borderRadius: '3px',
-											fontSize: '12px',
-											textAlign: 'center'
-										}}
-									/>
-								</div>
-							)}
-							<button 
-								onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))} 
-								disabled={currentPage === totalPages}
+						</div>
+					</div>
+
+					{/* VPS Error */}
+					{vpsError && (
+						<div style={{ 
+							padding: 12, 
+							backgroundColor: '#fee', 
+							border: '1px solid #fcc',
+							borderRadius: 4,
+							marginBottom: 16 
+						}}>
+							⚠️ {vpsError}
+						</div>
+					)}
+
+					{/* VPS Loading */}
+					{vpsLoading && (
+						<div style={{ textAlign: 'center', padding: 20 }}>
+							Loading VPS meetings...
+						</div>
+					)}
+
+					{/* VPS meetings list */}
+					{!vpsLoading && vpsMeetings.length > 0 && (
+						<ul style={{ listStyle: 'none', padding: 0 }}>
+							{vpsMeetings.map(m => (
+								<li key={m.id} 
+									onClick={() => onOpen(m.id)}
+									style={{ 
+										display: 'flex', 
+										gap: 12, 
+										padding: 16, 
+										borderBottom: '1px solid #eee',
+										backgroundColor: '#f0f9ff',
+										marginBottom: 8,
+										borderRadius: 4,
+										cursor: 'pointer',
+										transition: 'all 0.2s ease',
+										border: '1px solid #0ea5e9',
+										position: 'relative'
+									}}
+									onMouseEnter={(e) => {
+										e.currentTarget.style.backgroundColor = '#e0f2fe'
+										e.currentTarget.style.transform = 'translateY(-1px)'
+										e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
+									}}
+									onMouseLeave={(e) => {
+										e.currentTarget.style.backgroundColor = '#f0f9ff'
+										e.currentTarget.style.transform = 'translateY(0)'
+										e.currentTarget.style.boxShadow = 'none'
+									}}
+								>
+									<div style={{ flex: 1 }}>
+										<div style={{ 
+											display: 'flex', 
+											alignItems: 'center', 
+											gap: '8px',
+											marginBottom: 4 
+										}}>
+											<div style={{ fontWeight: 600, fontSize: 18, color: '#0c4a6e' }}>
+												{m.title || 'Untitled Meeting'}
+											</div>
+											<span style={{ 
+												fontSize: '12px', 
+												color: '#0c4a6e',
+												opacity: 0.7,
+												fontStyle: 'italic'
+											}}>
+												☁️ VPS Meeting
+											</span>
+										</div>
+										<div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8, color: '#0c4a6e' }}>
+											📅 {new Date(m.created_at || m.createdAt).toLocaleString()}
+											{m.duration && (
+												<span style={{ 
+													backgroundColor: '#0ea5e9', 
+													padding: '2px 6px', 
+													borderRadius: '10px',
+													marginLeft: '8px',
+													fontWeight: '500',
+													color: 'white'
+												}}>
+													⏱️ {Math.round(m.duration / 60)} min
+												</span>
+											)}
+										</div>
+										{m.summary && (
+											<div style={{ 
+												fontSize: 14, 
+												opacity: 0.9, 
+												backgroundColor: 'white',
+												padding: 8,
+												borderRadius: 4,
+												marginTop: 8,
+												border: '1px solid #0ea5e9',
+												color: '#0c4a6e'
+											}}>
+												<strong>Summary:</strong> {m.summary.slice(0, 200)}...
+											</div>
+										)}
+									</div>
+									<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+										<button 
+											onClick={(e) => {
+												e.stopPropagation()
+												onOpen(m.id)
+											}} 
+											style={{ 
+												padding: '8px 16px',
+												backgroundColor: '#0ea5e9',
+												color: 'white',
+												border: 'none',
+												borderRadius: '4px',
+												cursor: 'pointer',
+												fontWeight: '500'
+											}}
+										>
+											📄 Open
+										</button>
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
+
+					{/* VPS meetings empty state */}
+					{!vpsLoading && vpsMeetings.length === 0 && vpsUp && (
+						<div style={{ textAlign: 'center', padding: 40, opacity: 0.6 }}>
+							No VPS meetings found. Local meetings will be synced to the VPS when you record them.
+						</div>
+					)}
+
+					{/* VPS connection down */}
+					{!vpsUp && (
+						<div style={{
+							padding: '20px',
+							backgroundColor: '#fef3c7',
+							border: '1px solid #fde68a',
+							borderRadius: '8px',
+							textAlign: 'center',
+							color: '#92400e'
+						}}>
+							<p style={{ margin: '0 0 12px 0', fontWeight: '500' }}>
+								🔴 VPS connection is down
+							</p>
+							<p style={{ margin: '0', fontSize: '14px' }}>
+								Please check your VPS connection or contact your administrator to view VPS meetings.
+							</p>
+						</div>
+					)}
+
+					{/* VPS connected but offline */}
+					{vpsUp && !online && (
+						<div style={{
+							padding: '20px',
+							backgroundColor: '#fef3c7',
+							border: '1px solid #fde68a',
+							borderRadius: '8px',
+							textAlign: 'center',
+							color: '#92400e'
+						}}>
+							<p style={{ margin: '0 0 12px 0', fontWeight: '500' }}>
+								🔴 You are currently offline
+							</p>
+							<p style={{ margin: '0', fontSize: '14px' }}>
+								Please check your internet connection to view VPS meetings.
+							</p>
+						</div>
+					)}
+
+					{/* Refresh button for VPS meetings */}
+					{vpsUp && online && (
+						<div style={{
+							display: 'flex',
+							justifyContent: 'center',
+							marginTop: '24px'
+						}}>
+							<button
+								onClick={refreshVpsMeetings}
+								disabled={vpsLoading}
 								style={{
-									padding: '4px 8px',
-									border: '1px solid #d1d5db',
-									backgroundColor: currentPage === totalPages ? '#f3f4f6' : 'white',
-									borderRadius: '4px',
-									cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-									fontSize: '12px'
+									padding: '12px 24px',
+									backgroundColor: vpsLoading ? '#9ca3af' : '#0ea5e9',
+									color: 'white',
+									border: 'none',
+									borderRadius: '8px',
+									fontSize: '14px',
+									fontWeight: '600',
+									cursor: vpsLoading ? 'not-allowed' : 'pointer',
+									transition: 'all 0.2s ease'
+								}}
+								onMouseEnter={(e) => {
+									if (!vpsLoading) {
+										e.currentTarget.style.backgroundColor = '#0284c7'
+									}
+								}}
+								onMouseLeave={(e) => {
+									if (!vpsLoading) {
+										e.currentTarget.style.backgroundColor = '#0ea5e9'
+									}
 								}}
 							>
-								Next ➡️
-							</button>
-							<button 
-								onClick={() => setCurrentPage(totalPages)} 
-								disabled={currentPage === totalPages}
-								style={{
-									padding: '4px 8px',
-									border: '1px solid #d1d5db',
-									backgroundColor: currentPage === totalPages ? '#f3f4f6' : 'white',
-									borderRadius: '4px',
-									cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-									fontSize: '12px'
-								}}
-							>
-								Last ⏭️
+								{vpsLoading ? '🔄 Refreshing...' : '🔄 Refresh VPS Meetings'}
 							</button>
 						</div>
 					)}

@@ -37,6 +37,11 @@ class Settings:
 	basic_auth_username: str = os.getenv("BASIC_AUTH_USERNAME", "")
 	basic_auth_password: str = os.getenv("BASIC_AUTH_PASSWORD", "")
 
+	# Redis Queue System
+	redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+	queue_max_workers: int = int(os.getenv("QUEUE_MAX_WORKERS", "3"))
+	use_queue_system: bool = os.getenv("USE_QUEUE_SYSTEM", "true").lower() == "true"
+
 
 settings = Settings()
 

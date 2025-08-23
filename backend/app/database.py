@@ -51,6 +51,9 @@ class Meeting(Base):
     duration = Column(Float, nullable=True)  # Duration in seconds
     file_path = Column(String, nullable=True)  # Path to audio file
     
+    # Tags support (JSON stored as string)
+    tags = Column(Text, nullable=True)  # JSON array of strings
+    
     # Relationships
     user = relationship("User", back_populates="meetings")
     transcriptions = relationship("Transcription", back_populates="meeting", cascade="all, delete-orphan")

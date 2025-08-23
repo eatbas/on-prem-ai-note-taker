@@ -49,6 +49,8 @@ export default function Recorder({
 			window.electronAPI.onTrayAction((action) => {
 				if (action === 'start-recording' && !recording) {
 					start()
+				} else if (action === 'stop-recording' && recording) {
+					stop()
 				}
 			})
 			
@@ -71,6 +73,20 @@ export default function Recorder({
 		if (window.electronAPI && recording) {
 			// Send recording state to main process for standalone window
 			window.electronAPI.sendRecordingState(recording)
+			
+			// Send detailed recording data updates
+			const updateInterval = setInterval(() => {
+				if (window.electronAPI && recording) {
+					window.electronAPI.sendRecordingDataUpdate({
+						recording: true,
+						recordingTime,
+						systemAudioLevel,
+						microphoneLevel
+					})
+				}
+			}, 100) // Update 10 times per second
+			
+			return () => clearInterval(updateInterval)
 		}
 	}, [recording, recordingTime, systemAudioLevel, microphoneLevel])
 
@@ -94,6 +110,22 @@ export default function Recorder({
 			}
 		}
 	}, [recording])
+
+	// Listen for recording data requests from main process
+	useEffect(() => {
+		if (window.electronAPI) {
+			window.electronAPI.onRequestRecordingData(() => {
+				if (recording) {
+					window.electronAPI.sendRecordingDataResponse({
+						recording: true,
+						recordingTime,
+						systemAudioLevel,
+						microphoneLevel
+					})
+				}
+			})
+		}
+	}, [recording, recordingTime, systemAudioLevel, microphoneLevel])
 
 	useEffect(() => {
 		// Load available microphones
@@ -302,6 +334,17 @@ export default function Recorder({
 			setRecording(true)
 			setShowMicModal(false)
 
+			// Notify Electron process that recording has started
+			if (window.electronAPI) {
+				window.electronAPI.sendRecordingState(true)
+				window.electronAPI.sendRecordingDataUpdate({
+					recording: true,
+					recordingTime: 0,
+					systemAudioLevel: 0,
+					microphoneLevel: 0
+				})
+			}
+
 			// Start audio level monitoring with ALL system audio streams
 			startAudioLevelMonitoring(systemAudioStreams, micStream)
 
@@ -331,6 +374,17 @@ export default function Recorder({
 		
 		// Stop audio level monitoring
 		stopAudioLevelMonitoring()
+		
+		// Notify Electron process that recording has stopped
+		if (window.electronAPI) {
+			window.electronAPI.sendRecordingState(false)
+			window.electronAPI.sendRecordingDataUpdate({
+				recording: false,
+				recordingTime: 0,
+				systemAudioLevel: 0,
+				microphoneLevel: 0
+			})
+		}
 		
 		setRecording(false)
 		// Ask for meeting name and persist duration locally
