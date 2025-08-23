@@ -61,13 +61,26 @@ export async function summarize(text: string) {
 }
 
 export async function chat(prompt: string, model?: string) {
-	const resp = await fetch(`${apiBase}/chat`, {
-		method: 'POST',
-		headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-		body: JSON.stringify({ prompt, model }),
-	})
-	if (!resp.ok) throw new Error(`Chat failed: ${resp.status}`)
-	return resp.json()
+	const controller = new AbortController()
+	const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+	
+	try {
+		const resp = await fetch(`${apiBase}/chat`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+			body: JSON.stringify({ prompt, model }),
+			signal: controller.signal
+		})
+		
+		if (!resp.ok) {
+			const errorText = await resp.text()
+			throw new Error(`Chat failed: ${resp.status} - ${errorText}`)
+		}
+		
+		return resp.json()
+	} finally {
+		clearTimeout(timeoutId)
+	}
 }
 
 export async function transcribeAndSummarize(file: File, opts?: { language?: string; vadFilter?: boolean }) {

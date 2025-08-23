@@ -127,69 +127,65 @@ export default function Recorder({
 		}
 	}, [recording, recordingTime, systemAudioLevel, microphoneLevel])
 
-	useEffect(() => {
-		// Load available microphones
-		async function loadMicrophones() {
-			try {
-				const devices = await navigator.mediaDevices.enumerateDevices()
-				const audioInputs = devices.filter(device => device.kind === 'audioinput')
+	// Function to refresh microphone list
+	const refreshMicrophones = async () => {
+		try {
+			// Request microphone permission first to get proper device labels
+			await navigator.mediaDevices.getUserMedia({ audio: true })
+			
+			// Try a different approach - get devices after requesting audio
+			const devices = await navigator.mediaDevices.enumerateDevices()
+			const audioInputs = devices.filter(device => device.kind === 'audioinput')
+			
+			console.log('All audio input devices found:', audioInputs.map(device => ({
+				label: device.label,
+				deviceId: device.deviceId.slice(0, 20) + '...',
+				kind: device.kind
+			})))
+			
+			// More aggressive filtering to remove duplicates and show only real devices
+			const cleanDevices = audioInputs.filter(device => {
+				const label = device.label.toLowerCase()
 				
-				// Filter out virtual/duplicate devices and only keep real microphones
-				const realMics = audioInputs.filter(device => {
-					const label = device.label.toLowerCase()
-					
-					// Filter out common virtual/duplicate devices
-					const virtualKeywords = [
-						'virtual', 'loopback', 'stereo mix', 'what u hear', 'wave out mix',
-						'stereo', 'mix', 'monitor', 'output', 'speakers', 'headphones',
-						'default', 'system', 'audio', 'sound', 'media', 'communications'
-					]
-					
-					// Check if device label contains virtual keywords
-					const isVirtual = virtualKeywords.some(keyword => label.includes(keyword))
-					
-					// Check if device has a meaningful label (not just "default" or empty)
-					const hasMeaningfulLabel = device.label && device.label.trim() !== '' && 
-						!label.includes('default') && !label.includes('system')
-					
-					// Check if device ID is not just a placeholder
-					const hasValidId = device.deviceId && device.deviceId.length > 10
-					
-					return !isVirtual && hasMeaningfulLabel && hasValidId
-				})
-				
-				// If no real mics found, fall back to all audio inputs but filter obvious virtual ones
-				const availableMics = realMics.length > 0 ? realMics : audioInputs.filter(device => {
-					const label = device.label.toLowerCase()
-					return !label.includes('virtual') && !label.includes('loopback') && 
-						   !label.includes('stereo mix') && !label.includes('what u hear')
-				})
-				
-				setAvailableMics(availableMics)
-				
-				// Set default microphone if available
-				if (availableMics.length > 0 && !selectedMic) {
-					setSelectedMic(availableMics[0].deviceId)
+				// Remove devices with problematic prefixes
+				if (label.includes('default -') || label.includes('communications -')) {
+					return false
 				}
 				
-				console.log('Available microphones:', availableMics.map(mic => ({
-					label: mic.label,
-					deviceId: mic.deviceId.slice(0, 20) + '...',
-					kind: mic.kind
-				})))
+				// Keep only Intel microphone and clean AirPods
+				const isIntelMic = label.includes('intel') || label.includes('array')
+				const isCleanAirPods = label.includes('airpods') && !label.includes('default') && !label.includes('communications')
 				
-			} catch (err) {
-				console.error('Failed to load microphones:', err)
+				return isIntelMic || isCleanAirPods
+			})
+			
+			setAvailableMics(cleanDevices)
+			
+			// Set default microphone if available
+			if (cleanDevices.length > 0 && !selectedMic) {
+				setSelectedMic(cleanDevices[0].deviceId)
 			}
+			
+			console.log('Clean microphones:', cleanDevices.map(mic => ({
+				label: mic.label,
+				deviceId: mic.deviceId.slice(0, 20) + '...',
+				kind: mic.kind
+			})))
+			
+		} catch (err) {
+			console.error('Failed to refresh microphones:', err)
 		}
-		
-		loadMicrophones()
+	}
+
+	useEffect(() => {
+		// Load available microphones
+		refreshMicrophones()
 		
 		// Listen for device changes
-		navigator.mediaDevices.addEventListener('devicechange', loadMicrophones)
+		navigator.mediaDevices.addEventListener('devicechange', refreshMicrophones)
 		
 		return () => {
-			navigator.mediaDevices.removeEventListener('devicechange', loadMicrophones)
+			navigator.mediaDevices.removeEventListener('devicechange', refreshMicrophones)
 		}
 	}, [selectedMic])
 
@@ -624,21 +620,10 @@ export default function Recorder({
 								}}
 							>
 								{availableMics.map(mic => {
-									// Clean up the label for display
-									let displayLabel = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`
-									
-									// Remove common prefixes/suffixes that make labels confusing
-									displayLabel = displayLabel
-										.replace(/^default\s*-\s*/i, '')
-										.replace(/^microphone\s*-\s*/i, '')
-										.replace(/^audio\s*input\s*-\s*/i, '')
-										.replace(/\(.*?\)/g, '') // Remove text in parentheses
-										.replace(/\s+/g, ' ') // Normalize whitespace
-										.trim()
-									
+									// Show the real device name exactly as it comes from the system
 									return (
 										<option key={mic.deviceId} value={mic.deviceId}>
-											{displayLabel}
+											{mic.label}
 										</option>
 									)
 								})}
@@ -718,134 +703,20 @@ export default function Recorder({
 					border: '1px solid #22c55e',
 					borderRadius: '8px',
 					display: 'flex',
-					flexDirection: 'column',
+					alignItems: 'center',
+					justifyContent: 'center',
 					gap: '12px'
 				}}>
 					<div style={{ 
-						display: 'flex',
-						alignItems: 'center',
-						justifyContent: 'center',
-						gap: '12px'
-					}}>
-						<div style={{ 
-							width: '12px', 
-							height: '12px', 
-							backgroundColor: '#ef4444', 
-							borderRadius: '50%',
-							animation: 'pulse 1.5s infinite'
-						}}></div>
-						<span style={{ fontWeight: 'bold', color: '#166534' }}>
-							Recording... {formatTime(recordingTime)}
-						</span>
-					</div>
-					
-					{/* Audio Level Bars */}
-					<div style={{ 
-						display: 'flex', 
-						gap: '16px', 
-						justifyContent: 'center',
-						alignItems: 'center'
-					}}>
-						{/* System Audio Level */}
-						<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-							<span style={{ fontSize: '12px', color: '#64748b' }}>🖥️ System Audio</span>
-							<div style={{ 
-								width: '60px', 
-								height: '120px', 
-								backgroundColor: '#f1f5f9', 
-								border: '1px solid #e2e8f0',
-								borderRadius: '4px',
-								overflow: 'hidden',
-								display: 'flex',
-								flexDirection: 'column-reverse',
-								alignItems: 'stretch',
-								position: 'relative'
-							}}>
-								<div style={{ 
-									height: `${Math.max(4, systemAudioLevel * 120)}px`, 
-									backgroundColor: '#3b82f6',
-									transition: 'height 0.05s ease',
-									minHeight: '4px',
-									boxShadow: '0 0 8px rgba(59, 130, 246, 0.5)'
-								}}></div>
-								{/* Level indicator line */}
-								<div style={{
-									position: 'absolute',
-									top: `${120 - (systemAudioLevel * 120)}px`,
-									left: 0,
-									right: 0,
-									height: '2px',
-									backgroundColor: '#1e40af',
-									boxShadow: '0 0 4px rgba(30, 64, 175, 0.8)'
-								}}></div>
-							</div>
-							<span style={{ 
-								fontSize: '10px', 
-								color: '#6b7280',
-								fontFamily: 'monospace'
-							}}>
-								{Math.round(systemAudioLevel * 100)}%
-							</span>
-							{/* Debug indicator */}
-							<div style={{
-								width: '8px',
-								height: '8px',
-								borderRadius: '50%',
-								backgroundColor: systemAudioLevel > 0.01 ? '#10b981' : '#ef4444',
-								animation: systemAudioLevel > 0.01 ? 'pulse 1s infinite' : 'none'
-							}}></div>
-						</div>
-						
-						{/* Microphone Level */}
-						<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px' }}>
-							<span style={{ fontSize: '12px', color: '#64748b' }}>🎤 Microphone</span>
-							<div style={{ 
-								width: '60px', 
-								height: '120px', 
-								backgroundColor: '#f1f5f9', 
-								border: '1px solid #e2e8f0',
-								borderRadius: '4px',
-								overflow: 'hidden',
-								display: 'flex',
-								flexDirection: 'column-reverse',
-								alignItems: 'stretch',
-								position: 'relative'
-							}}>
-								<div style={{ 
-									height: `${Math.max(4, microphoneLevel * 120)}px`, 
-									backgroundColor: '#10b981',
-									transition: 'height 0.05s ease',
-									minHeight: '4px',
-									boxShadow: '0 0 8px rgba(16, 185, 129, 0.5)'
-								}}></div>
-								{/* Level indicator line */}
-								<div style={{
-									position: 'absolute',
-									top: `${120 - (microphoneLevel * 120)}px`,
-									left: 0,
-									right: 0,
-									height: '2px',
-									backgroundColor: '#047857',
-									boxShadow: '0 0 4px rgba(4, 120, 87, 0.8)'
-								}}></div>
-							</div>
-							<span style={{ 
-								fontSize: '10px', 
-								color: '#6b7280',
-								fontFamily: 'monospace'
-							}}>
-								{Math.round(microphoneLevel * 100)}%
-							</span>
-							{/* Debug indicator */}
-							<div style={{
-								width: '8px',
-								height: '8px',
-								borderRadius: '50%',
-								backgroundColor: microphoneLevel > 0.01 ? '#10b981' : '#ef4444',
-								animation: microphoneLevel > 0.01 ? 'pulse 1s infinite' : 'none'
-							}}></div>
-						</div>
-					</div>
+						width: '12px', 
+						height: '12px', 
+						backgroundColor: '#ef4444', 
+						borderRadius: '50%',
+						animation: 'pulse 1.5s infinite'
+					}}></div>
+					<span style={{ fontWeight: 'bold', color: '#166534' }}>
+						Recording... {formatTime(recordingTime)}
+					</span>
 				</div>
 			)}
 
@@ -904,14 +775,34 @@ export default function Recorder({
 						</p>
 						
 						<div style={{ marginBottom: '20px' }}>
-							<label style={{ 
-								display: 'block', 
-								marginBottom: '8px', 
-								fontWeight: '500',
-								color: '#374151'
+							<div style={{ 
+								display: 'flex', 
+								justifyContent: 'space-between', 
+								alignItems: 'center',
+								marginBottom: '8px'
 							}}>
-								Microphone:
-							</label>
+								<label style={{ 
+									fontWeight: '500',
+									color: '#374151'
+								}}>
+									Microphone:
+								</label>
+								<button
+									onClick={refreshMicrophones}
+									style={{
+										background: 'none',
+										border: '1px solid #d1d5db',
+										borderRadius: '4px',
+										padding: '4px 8px',
+										fontSize: '12px',
+										cursor: 'pointer',
+										color: '#6b7280'
+									}}
+									title="Refresh microphone list"
+								>
+									🔄 Refresh
+								</button>
+							</div>
 							<select 
 								value={selectedMic} 
 								onChange={(e) => setSelectedMic(e.target.value)}
@@ -924,21 +815,10 @@ export default function Recorder({
 								}}
 							>
 								{availableMics.map(mic => {
-									// Clean up the label for display
-									let displayLabel = mic.label || `Microphone ${mic.deviceId.slice(0, 8)}...`
-									
-									// Remove common prefixes/suffixes that make labels confusing
-									displayLabel = displayLabel
-										.replace(/^default\s*-\s*/i, '')
-										.replace(/^microphone\s*-\s*/i, '')
-										.replace(/^audio\s*input\s*-\s*/i, '')
-										.replace(/\(.*?\)/g, '') // Remove text in parentheses
-										.replace(/\s+/g, ' ') // Normalize whitespace
-										.trim()
-									
+									// Show the real device name exactly as it comes from the system
 									return (
 										<option key={mic.deviceId} value={mic.deviceId}>
-											{displayLabel}
+											{mic.label}
 										</option>
 									)
 								})}

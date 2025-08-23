@@ -257,8 +257,14 @@ class ChatResponse(BaseModel):
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest) -> ChatResponse:
 	"""Ask Llama any question"""
-	response_text = _ollama_client.generate(req.prompt, model=req.model)
-	return ChatResponse(response=response_text)
+	logger.info(f"Chat request received: prompt_length={len(req.prompt)}, model={req.model}")
+	try:
+		response_text = _ollama_client.generate(req.prompt, model=req.model)
+		logger.info(f"Chat response generated: response_length={len(response_text)}")
+		return ChatResponse(response=response_text)
+	except Exception as e:
+		logger.error(f"Chat request failed: {str(e)}")
+		raise HTTPException(status_code=500, detail=f"Chat generation failed: {str(e)}")
 
 
 @app.post("/api/transcribe-and-summarize", response_model=TranscribeAndSummarizeResponse)

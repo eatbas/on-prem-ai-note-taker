@@ -77,8 +77,8 @@ function createWindow() {
 
 function createRecorderWindow() {
 	recorderWindow = new BrowserWindow({
-		width: 300,
-		height: 80,
+		width: 350,
+		height: 100,
 		frame: false,
 		resizable: false,
 		alwaysOnTop: true,
@@ -105,7 +105,7 @@ function createRecorderWindow() {
 	const { width, height } = primaryDisplay.workAreaSize
 	
 	// Position in top-right with some padding
-	const windowX = width - 320 // 300px width + 20px padding
+	const windowX = width - 370 // 350px width + 20px padding
 	const windowY = 20 // 20px from top
 	
 	recorderWindow.setPosition(windowX, windowY)
