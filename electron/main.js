@@ -34,10 +34,11 @@ function createWindow() {
 
 	// Try to load from dev server first (for development)
 	const devServerUrl = 'http://localhost:5173'
-	const frontendPath = path.join(__dirname, '..', 'frontend', 'dist', 'index.html')
+	const frontendPath = path.join(__dirname, 'dist', 'index.html')
 	
-	console.log('Checking for dev server at:', devServerUrl)
-	console.log('Fallback path:', frontendPath)
+	console.log('🔍 Checking for dev server at:', devServerUrl)
+	console.log('📁 Fallback path:', frontendPath)
+	console.log('🌐 App will connect to VPS for AI services')
 	
 	// Check if dev server is running
 	fetch(devServerUrl)
@@ -71,7 +72,9 @@ function createWindow() {
 	
 	// Add success logging
 	mainWindow.webContents.on('did-finish-load', () => {
-		console.log('Frontend loaded successfully')
+		console.log('✅ Frontend loaded successfully')
+		console.log('🔗 VPS connection configured at: http://95.111.244.159:8000/api')
+		console.log('🎯 AI services (transcription, chat, summarization) will use VPS backend')
 	})
 }
 
@@ -242,8 +245,11 @@ function updateTrayRecordingState(recording) {
 
 app.whenReady().then(() => {
 	try {
-		console.log('App is ready, creating windows...')
-		console.log('Current directory:', __dirname)
+		console.log('🚀 App is ready, creating windows...')
+		console.log('📁 Current directory:', __dirname)
+		console.log('🔗 VPS Backend: http://95.111.244.159:8000/api')
+		console.log('👤 Auth User: myca')
+		console.log('🌐 Development Mode: Always connects to VPS for AI services')
 		
 		createWindow()
 		createRecorderWindow()

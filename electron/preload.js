@@ -7,7 +7,11 @@ contextBridge.exposeInMainWorld('BASIC_AUTH', {
 	password: process.env.BASIC_AUTH_PASSWORD || 'wj2YyxrJ4cqcXgCA'
 })
 
+// Always connect to VPS backend for AI services (both dev and production)
 contextBridge.exposeInMainWorld('API_BASE_URL', 'http://95.111.244.159:8000/api')
+
+// Log the API endpoint being used
+console.log('🔗 Connecting to VPS backend at:', 'http://95.111.244.159:8000/api')
 
 // Expose desktop capture API for system audio recording
 contextBridge.exposeInMainWorld('desktopCapture', {

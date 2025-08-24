@@ -1,11 +1,12 @@
 """Database models and setup for On-Prem AI Note Taker"""
 import os
 from datetime import datetime
-from sqlalchemy import create_engine, Column, String, Text, DateTime, Float, Integer, ForeignKey
+from sqlalchemy import create_engine, Column, String, Text, DateTime, Float, Integer, ForeignKey, Enum
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
 from typing import Optional
 import platform
+import enum
 
 Base = declarative_base()
 
@@ -25,6 +26,22 @@ engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
+class JobStatus(enum.Enum):
+    """Job status enumeration"""
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+    CANCELLED = "cancelled"
+
+
+class JobType(enum.Enum):
+    """Job type enumeration"""
+    TRANSCRIPTION = "transcription"
+    SUMMARIZATION = "summarization"
+    TRANSCRIBE_AND_SUMMARIZE = "transcribe_and_summarize"
+
+
 class User(Base):
     """User model - automatically created based on system username"""
     __tablename__ = "users"
@@ -35,6 +52,7 @@ class User(Base):
     
     # Relationships
     meetings = relationship("Meeting", back_populates="user")
+    jobs = relationship("Job", back_populates="user")
 
 
 class Meeting(Base):
@@ -91,6 +109,39 @@ class Summary(Base):
     
     # Relationships
     meeting = relationship("Meeting", back_populates="summaries")
+
+
+class Job(Base):
+    """Job tracking model for async processing"""
+    __tablename__ = "jobs"
+    
+    id = Column(String, primary_key=True)
+    user_id = Column(String, ForeignKey("users.id"))
+    job_type = Column(Enum(JobType), nullable=False)
+    status = Column(Enum(JobStatus), default=JobStatus.PENDING)
+    
+    # Input data (JSON stored as string)
+    input_data = Column(Text, nullable=True)
+    
+    # Progress tracking
+    progress_percent = Column(Float, default=0.0)
+    current_phase = Column(String, nullable=True)  # e.g., "transcribing", "summarizing"
+    phase_progress = Column(Float, default=0.0)  # Progress within current phase
+    
+    # Timing
+    created_at = Column(DateTime, default=datetime.utcnow)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    
+    # Results (JSON stored as string)
+    result_data = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+    
+    # ETA calculation
+    estimated_remaining_seconds = Column(Float, nullable=True)
+    
+    # Relationships
+    user = relationship("User", back_populates="jobs")
 
 
 # Database initialization

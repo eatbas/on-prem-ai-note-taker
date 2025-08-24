@@ -10,11 +10,15 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4.0'
-          memory: 16G
+          cpus: '6.0'  # Optimized for 6 vCPU VPS
+          memory: 16G  # Leave 2GB for system
         reservations:
-          cpus: '1.0'
-          memory: 4G
+          cpus: '2.0'
+          memory: 8G
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_ORIGINS=*
+      - OLLAMA_NUM_PARALLEL=6  # Optimize for VPS CPU count
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 30s
@@ -35,10 +39,15 @@ services:
       ALLOWED_ORIGINS: "*"
       WHISPER_MODEL: ${WHISPER_MODEL:-base}
       WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
+      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
+      WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-6}
+      WHISPER_MEMORY_LIMIT_GB: ${WHISPER_MEMORY_LIMIT_GB:-16}
       WHISPER_DOWNLOAD_ROOT: /models
       OLLAMA_BASE_URL: http://ollama:11434
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-60}
+      OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-6}
+      OLLAMA_MEMORY_LIMIT_GB: ${OLLAMA_MEMORY_LIMIT_GB:-16}
       BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-}
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-}
       REDIS_URL: redis://redis:6379
@@ -46,8 +55,21 @@ services:
       USE_QUEUE_SYSTEM: ${USE_QUEUE_SYSTEM:-true}
       MAX_CONCURRENCY: ${MAX_CONCURRENCY:-1}
       MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
+      ALLOWED_LANGUAGES: ${ALLOWED_LANGUAGES:-tr,en,auto}
+      FORCE_LANGUAGE_VALIDATION: ${FORCE_LANGUAGE_VALIDATION:-true}
+      ENABLE_PROGRESS_TRACKING: ${ENABLE_PROGRESS_TRACKING:-true}
+      PROGRESS_UPDATE_INTERVAL_MS: ${PROGRESS_UPDATE_INTERVAL_MS:-500}
+      ENABLE_SSE: ${ENABLE_SSE:-true}
     ports:
       - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'  # Backend processing
+          memory: 8G
+        reservations:
+          cpus: '1.0'
+          memory: 2G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
       interval: 30s
@@ -82,8 +104,8 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '2.0'
-          memory: 4G
+          cpus: '1.0'  # Minimal Redis resources
+          memory: 2G
         reservations:
           cpus: '0.5'
           memory: 1G

@@ -144,4 +144,136 @@ export async function getVpsHealth() {
     return resp.json() as Promise<{ status: string; whisper_model: string; ollama_model: string }>
 }
 
+// New Job Management APIs
+export interface JobSubmitRequest {
+	job_type: 'transcription' | 'summarization' | 'transcribe_and_summarize'
+	input_data: Record<string, any>
+}
+
+export interface JobSubmitResponse {
+	job_id: string
+	status: string
+	message: string
+}
+
+export interface JobStatusResponse {
+	id: string
+	type: string
+	status: string
+	progress_percent: number
+	current_phase: string
+	phase_progress: number
+	estimated_remaining_seconds?: number
+	created_at?: string
+	started_at?: string
+	completed_at?: string
+	result_data?: Record<string, any>
+	error_message?: string
+}
+
+export interface JobCancelResponse {
+	job_id: string
+	cancelled: boolean
+	message: string
+}
+
+export async function submitJob(request: JobSubmitRequest): Promise<JobSubmitResponse> {
+	const resp = await fetch(`${apiBase}/jobs/submit`, {
+		method: 'POST',
+		headers: { 
+			'Content-Type': 'application/json', 
+			'X-User-Id': getUserId() || '', 
+			...getAuthHeader() 
+		},
+		body: JSON.stringify(request),
+	})
+	if (!resp.ok) throw new Error(`Submit job failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function getJobStatus(jobId: string): Promise<JobStatusResponse> {
+	const resp = await fetch(`${apiBase}/jobs/${jobId}/status`, {
+		method: 'GET',
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get job status failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function cancelJob(jobId: string): Promise<JobCancelResponse> {
+	const resp = await fetch(`${apiBase}/jobs/${jobId}/cancel`, {
+		method: 'POST',
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Cancel job failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function submitTranscriptionJob(
+	file: File, 
+	opts?: { language?: string; vadFilter?: boolean }
+): Promise<JobSubmitResponse> {
+	// Convert file to hex string for job submission
+	const arrayBuffer = await file.arrayBuffer()
+	const hexString = Array.from(new Uint8Array(arrayBuffer))
+		.map(b => b.toString(16).padStart(2, '0'))
+		.join('')
+	
+	return submitJob({
+		job_type: 'transcription',
+		input_data: {
+			file_content: hexString,
+			file_name: file.name,
+			language: opts?.language,
+			vad_filter: opts?.vadFilter ?? true
+		}
+	})
+}
+
+export async function submitSummarizationJob(text: string, model?: string): Promise<JobSubmitResponse> {
+	return submitJob({
+		job_type: 'summarization',
+		input_data: {
+			text,
+			model
+		}
+	})
+}
+
+export async function submitTranscribeAndSummarizeJob(
+	file: File, 
+	opts?: { language?: string; vadFilter?: boolean }
+): Promise<JobSubmitResponse> {
+	// Convert file to hex string for job submission
+	const arrayBuffer = await file.arrayBuffer()
+	const hexString = Array.from(new Uint8Array(arrayBuffer))
+		.map(b => b.toString(16).padStart(2, '0'))
+		.join('')
+	
+	return submitJob({
+		job_type: 'transcribe_and_summarize',
+		input_data: {
+			file_content: hexString,
+			file_name: file.name,
+			language: opts?.language,
+			vad_filter: opts?.vadFilter ?? true
+		}
+	})
+}
+
+// Server-Sent Events for progress streaming
+export function createJobProgressStream(jobId: string): EventSource {
+	const userId = getUserId()
+	if (!userId) {
+		throw new Error('User ID required for job progress streaming')
+	}
+	
+	// Note: EventSource doesn't support custom headers, so we'll need to handle auth differently
+	// For now, we'll use the URL with user ID as a query parameter
+	const url = `${apiBase}/jobs/${jobId}/stream?user_id=${encodeURIComponent(userId)}`
+	const eventSource = new EventSource(url)
+	
+	return eventSource
+}
+
 
