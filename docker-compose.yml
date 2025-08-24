@@ -49,14 +49,14 @@ services:
       WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-6}
       WHISPER_MEMORY_LIMIT_GB: ${WHISPER_MEMORY_LIMIT_GB:-16}
       WHISPER_DOWNLOAD_ROOT: ./models
-      OLLAMA_BASE_URL: http://localhost:11434  # Fixed: localhost for VPS
+      OLLAMA_BASE_URL: http://ollama:11434  # Fixed: Docker service name for internal communication
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-180}
       OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-12}
       OLLAMA_MEMORY_LIMIT_GB: ${OLLAMA_MEMORY_LIMIT_GB:-18}
       BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-myca}
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-wj2YyxrJ4cqcXgCA}
-      REDIS_URL: redis://localhost:6385  # Fixed: localhost for VPS
+      REDIS_URL: redis://redis:6385  # Fixed: Docker service name for internal communication
       QUEUE_MAX_WORKERS: ${QUEUE_MAX_WORKERS:-2}
       USE_QUEUE_SYSTEM: ${USE_QUEUE_SYSTEM:-true}
       MAX_CONCURRENCY: ${MAX_CONCURRENCY:-2}
