@@ -11,6 +11,8 @@ declare global {
 			// New functions for recording data requests
 			onRequestRecordingData: (callback: () => void) => void
 			sendRecordingDataResponse: (data: any) => void
+			// Control mini recorder window visibility
+			setMiniRecorderVisible: (visible: boolean) => void
 		}
 		desktopCapture: {
 			getSources: (types: string[]) => Promise<Array<{ id: string; name: string }>>

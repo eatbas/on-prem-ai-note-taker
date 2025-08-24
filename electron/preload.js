@@ -60,5 +60,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	// Send recording data response to main process
 	sendRecordingDataResponse: (data) => {
 		ipcRenderer.send('recording-data-response', data)
+	},
+	
+	// Control mini recorder window visibility
+	setMiniRecorderVisible: (visible) => {
+		ipcRenderer.send('set-mini-recorder-visible', visible)
 	}
 })

@@ -36,6 +36,7 @@ export default function Recorder({
 	const [recordingTime, setRecordingTime] = useState(0)
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
 	const [selectedMic, setSelectedMic] = useState<string>('')
+	const [openMiniRecorder, setOpenMiniRecorder] = useState(true)
 	const recordingIntervalRef = useRef<number | null>(null)
 	const audioContextRef = useRef<AudioContext | null>(null)
 	const analyserRef = useRef<AnalyserNode | null>(null)
@@ -333,6 +334,8 @@ export default function Recorder({
 			// Notify Electron process that recording has started
 			if (window.electronAPI) {
 				window.electronAPI.sendRecordingState(true)
+				// Conditionally show mini recorder window based on checkbox
+				window.electronAPI.setMiniRecorderVisible(openMiniRecorder)
 				window.electronAPI.sendRecordingDataUpdate({
 					recording: true,
 					recordingTime: 0,
@@ -823,6 +826,38 @@ export default function Recorder({
 									)
 								})}
 							</select>
+						</div>
+						
+						{/* Mini Recorder Checkbox */}
+						<div style={{ marginBottom: '20px' }}>
+							<label style={{
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								cursor: 'pointer',
+								fontSize: '14px',
+								color: '#374151'
+							}}>
+								<input
+									type="checkbox"
+									checked={openMiniRecorder}
+									onChange={(e) => setOpenMiniRecorder(e.target.checked)}
+									style={{
+										width: '16px',
+										height: '16px',
+										cursor: 'pointer'
+									}}
+								/>
+								<span>📱 Open mini recorder (floating window)</span>
+							</label>
+							<p style={{
+								margin: '4px 0 0 24px',
+								fontSize: '12px',
+								color: '#6b7280',
+								fontStyle: 'italic'
+							}}>
+								Shows a compact recording window with timer and controls
+							</p>
 						</div>
 						
 						<button

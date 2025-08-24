@@ -291,20 +291,37 @@ ipcMain.on('recording-state-changed', (event, recording) => {
 		console.log('Recording state changed:', recording)
 		updateTrayRecordingState(recording)
 		
-		// Show/hide recorder window
-		if (recorderWindow) {
-			if (recording) {
-				recorderWindow.show()
-				// Start sending recording data updates
-				startRecordingDataUpdates()
-			} else {
+		// Note: Mini recorder window visibility is now controlled separately
+		// via the set-mini-recorder-visible IPC handler
+		if (recording) {
+			// Start sending recording data updates
+			startRecordingDataUpdates()
+		} else {
+			// Hide recorder window when recording stops
+			if (recorderWindow) {
 				recorderWindow.hide()
-				// Stop sending recording data updates
-				stopRecordingDataUpdates()
 			}
+			// Stop sending recording data updates
+			stopRecordingDataUpdates()
 		}
 	} catch (error) {
 		console.error('Error updating tray recording state:', error)
+	}
+})
+
+// IPC handler for controlling mini recorder window visibility
+ipcMain.on('set-mini-recorder-visible', (event, visible) => {
+	try {
+		console.log('Setting mini recorder visibility:', visible)
+		if (recorderWindow) {
+			if (visible) {
+				recorderWindow.show()
+			} else {
+				recorderWindow.hide()
+			}
+		}
+	} catch (error) {
+		console.error('Error setting mini recorder visibility:', error)
 	}
 })
 
