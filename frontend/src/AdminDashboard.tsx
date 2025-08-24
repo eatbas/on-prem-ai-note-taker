@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useToast } from './Toast'
 
 interface User {
     id: string
@@ -87,6 +88,7 @@ export default function AdminDashboard() {
     const [error, setError] = useState<string | null>(null)
     const [searchTerm, setSearchTerm] = useState('')
     const [selectedUser, setSelectedUser] = useState('')
+    const { ToastContainer } = useToast()
 
     useEffect(() => {
         if (activeTab === 'stats') {
@@ -184,6 +186,7 @@ export default function AdminDashboard() {
             padding: '24px',
             fontFamily: 'Inter, system-ui, Arial, sans-serif'
         }}>
+            <ToastContainer />
             <header style={{ marginBottom: '32px', textAlign: 'center' }}>
                 <div style={{
                     display: 'flex',

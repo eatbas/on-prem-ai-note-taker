@@ -6,6 +6,7 @@ import MeetingView from './MeetingView'
 import AdminDashboard from './AdminDashboard'
 import { watchOnline } from './offline'
 import { getVpsHealth } from './api'
+import { useToast } from './Toast'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
@@ -29,6 +30,7 @@ function AppShell({
 	setRefreshSignal: (signal: number) => void
 }) {
 	const navigate = useNavigate()
+	const { ToastContainer } = useToast()
 
 	useEffect(() => {
 		let stopped = false
@@ -54,6 +56,7 @@ function AppShell({
 			minHeight: '100vh',
 			backgroundColor: '#f8fafc'
 		}}>
+			<ToastContainer />
 			{/* Sticky Search and Controls Bar - At the very top */}
 			<div style={{ 
 				position: 'sticky',
@@ -306,6 +309,8 @@ function MeetingRoute({
 	const params = useParams()
 	const navigate = useNavigate()
 	const id = params.meetingId as string
+	const { ToastContainer } = useToast()
+	
 	return (
 		<div style={{ 
 			maxWidth: '100%', 
@@ -315,6 +320,7 @@ function MeetingRoute({
 			minHeight: '100vh',
 			backgroundColor: '#f8fafc'
 		}}>
+			<ToastContainer />
 			{/* Sticky Search and Controls Bar - At the very top */}
 			<div style={{ 
 				position: 'sticky',
