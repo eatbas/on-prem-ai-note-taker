@@ -24,7 +24,7 @@ echo 🔗 Development mode will connect to VPS at: %VITE_API_BASE_URL%
 echo 📝 Note: App will use VPS backend for AI services (transcription, chat, etc.)
 
 echo.
-echo 📦 Building frontend for development...
+echo 📦 Setting up frontend for development...
 cd frontend
 
 REM Install dependencies if needed
@@ -33,17 +33,16 @@ if not exist "node_modules" (
     call npm install
 )
 
-REM Create development build
-echo Creating development build...
-call npm run build
-if %errorlevel% neq 0 (
-    echo ❌ Frontend build failed!
-    pause
-    exit /b 1
-)
 cd ..
 
-echo ✅ Frontend built successfully
+echo.
+echo 🚀 Starting Vite dev server in background...
+cd frontend
+start "Vite Dev Server" cmd /c "npm run dev"
+cd ..
+
+echo ⏳ Waiting for Vite dev server to start...
+timeout /t 5 /nobreak >nul
 
 echo.
 echo 🎯 Starting Electron app in development mode...
@@ -55,10 +54,12 @@ set "BASIC_AUTH_USERNAME=myca"
 set "BASIC_AUTH_PASSWORD=wj2YyxrJ4cqcXgCA"
 
 echo 🚀 Starting Electron with VPS connection...
+echo 💡 The app will now load from the live Vite dev server!
 call npm start
 cd ..
 
 echo.
 echo ✅ Development session ended
 echo 💡 Remember: The app always connects to VPS for AI services
+echo 🧹 Don't forget to close the Vite dev server window if it's still running
 pause
