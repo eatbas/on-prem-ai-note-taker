@@ -3,7 +3,6 @@ import { listMeetings, syncMeeting, watchOnline } from './offline'
 import { getMeetings, getVpsHealth, updateMeeting } from './api'
 import { db } from './db'
 import AskLlama from './AskLlama'
-import TranscribeAndSummarize from './TranscribeAndSummarize'
 
 export default function Dashboard({ 
 	onOpen, 
@@ -31,7 +30,7 @@ export default function Dashboard({
 	const [error, setError] = useState<string | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
-	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'transcribe'>('local')
+	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama'>('local')
 	const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
 	const [vpsLoading, setVpsLoading] = useState(false)
 	const [vpsError, setVpsError] = useState<string | null>(null)
@@ -257,12 +256,11 @@ export default function Dashboard({
 				{[
 					{ id: 'local', label: '📁 Local Meetings', icon: '🏠' },
 					{ id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
-					{ id: 'llama', label: '🤖 Ask Llama', icon: '💬' },
-					{ id: 'transcribe', label: '🎵 Transcribe', icon: '🎤' }
+					{ id: 'llama', label: '🤖 Ask Llama', icon: '💬' }
 				].map((tab) => (
 					<button
 						key={tab.id}
-						onClick={() => setActiveTab(tab.id as 'local' | 'vps' | 'llama' | 'transcribe')}
+						onClick={() => setActiveTab(tab.id as 'local' | 'vps' | 'llama')}
 						style={{
 							flex: 1,
 							padding: '16px 24px',
@@ -277,7 +275,7 @@ export default function Dashboard({
 							alignItems: 'center',
 							justifyContent: 'center',
 							gap: '8px',
-							borderRight: tab.id !== 'transcribe' ? '1px solid #e2e8f0' : 'none'
+							borderRight: tab.id !== 'llama' ? '1px solid #e2e8f0' : 'none'
 						}}
 						onMouseEnter={(e) => {
 							if (activeTab !== tab.id) {
@@ -299,10 +297,6 @@ export default function Dashboard({
 			{/* Tab Content */}
 			{activeTab === 'llama' && (
 				<AskLlama online={online} vpsUp={vpsUp} />
-			)}
-
-			{activeTab === 'transcribe' && (
-				<TranscribeAndSummarize online={online} vpsUp={vpsUp} />
 			)}
 
 			{activeTab === 'local' && (

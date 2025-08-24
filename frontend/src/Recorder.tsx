@@ -36,6 +36,7 @@ export default function Recorder({
 	const [recordingTime, setRecordingTime] = useState(0)
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
 	const [selectedMic, setSelectedMic] = useState<string>('')
+	const [language, setLanguage] = useState<'auto' | 'tr' | 'en'>('tr')
 	const [openMiniRecorder, setOpenMiniRecorder] = useState(true)
 	const recordingIntervalRef = useRef<number | null>(null)
 	const audioContextRef = useRef<AudioContext | null>(null)
@@ -311,7 +312,7 @@ export default function Recorder({
 			// Default meeting title with start date/time for uniqueness
 			const now = new Date()
 			const human = now.toLocaleString()
-			const meeting = await createMeeting(`Meeting ${human}`)
+			const meeting = await createMeeting(`Meeting ${human}`, [], language)
 			const createdId = meeting.id
 			setMeetingId(createdId)
 			onCreated(createdId)
@@ -826,6 +827,66 @@ export default function Recorder({
 									)
 								})}
 							</select>
+						</div>
+						
+						{/* Language Selection */}
+						<div style={{ marginBottom: '20px' }}>
+							<label style={{
+								display: 'block',
+								marginBottom: '8px',
+								fontWeight: '500',
+								color: '#374151'
+							}}>
+								🌍 Meeting Language:
+							</label>
+							<div style={{
+								display: 'flex',
+								gap: '8px',
+								justifyContent: 'center'
+							}}>
+								{[
+									{ value: 'tr', label: 'Türkçe' },
+									{ value: 'en', label: 'English' },
+									{ value: 'auto', label: 'Auto' }
+								].map((option) => (
+									<button
+										key={option.value}
+										onClick={() => setLanguage(option.value as 'auto' | 'tr' | 'en')}
+										style={{
+											padding: '8px 16px',
+											backgroundColor: language === option.value ? '#3b82f6' : '#f3f4f6',
+											color: language === option.value ? 'white' : '#374151',
+											border: '1px solid #d1d5db',
+											borderRadius: '6px',
+											fontSize: '14px',
+											fontWeight: '500',
+											cursor: 'pointer',
+											transition: 'all 0.2s ease'
+										}}
+										onMouseEnter={(e) => {
+											if (language !== option.value) {
+												e.currentTarget.style.backgroundColor = '#e5e7eb'
+											}
+										}}
+										onMouseLeave={(e) => {
+											if (language !== option.value) {
+												e.currentTarget.style.backgroundColor = '#f3f4f6'
+											}
+										}}
+									>
+										{option.label}
+									</button>
+								))}
+							</div>
+							<p style={{
+								margin: '4px 0 0 0',
+								fontSize: '12px',
+								color: '#6b7280',
+								fontStyle: 'italic',
+								textAlign: 'center'
+							}}>
+								Select the primary language for this meeting
+							</p>
 						</div>
 						
 						{/* Mini Recorder Checkbox */}
