@@ -10,7 +10,7 @@ import secrets
 import uuid
 from datetime import datetime
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header, Depends, Query
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Header, Depends, Query, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.responses import StreamingResponse
@@ -22,10 +22,14 @@ from faster_whisper import WhisperModel
 
 from .config import settings
 from .ollama_client import OllamaClient
-from .database import get_db, get_or_create_user, Meeting, Transcription, Summary, JobType, JobStatus, Job
+from .database import get_db, get_or_create_user, Meeting, Transcription, Summary, JobType, JobStatus, Job, User
 
 from .queue_manager import queue_manager
 from .job_manager import job_manager, JobPhase
+from .progress import job_store, Phase  # Import new progress module
+from .api import router as jobs_router  # Import the new jobs API router
+from .chunked_service import chunked_service  # Import the new chunked service
+from .prompts import get_chunk_prompt, get_merge_prompt  # Import prompts
 
 
 app = FastAPI(title="On-Prem AI Note Taker", version="0.1.0")
@@ -49,13 +53,16 @@ app.add_middleware(
 	allow_headers=["*"],
 )
 
+# Include the jobs API router
+app.include_router(jobs_router)
+
 # Optional Basic Auth
 security = HTTPBasic()
 
 def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
 	"""Enforce HTTP Basic auth if username/password are set in settings.
 	If not set, auth is disabled and the request is allowed."""
-	if not settings.basic_auth_username and not settings.basic_auth_password:
+	if not settings.basic_auth_username or not settings.basic_auth_password:
 		return None
 	if not credentials:
 		raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
@@ -198,7 +205,7 @@ async def shutdown_event():
 def get_whisper_model() -> WhisperModel:
 	global _whisper_model
 	if _whisper_model is None:
-		logger.info(f"Loading Whisper model: {settings.whisper_model_name} with device: {settings.whisper_device}, compute_type: {settings.whisper_compute_type}")
+		logger.info(f"Loading Whisper model: {settings.whisper_model_name} with device: {settings.whisper_device}, compute_type: {settings.whisper_compute_type}, beam_size: {settings.whisper_beam_size}")
 		try:
 			_whisper_model = WhisperModel(
 				settings.whisper_model_name,
@@ -206,7 +213,8 @@ def get_whisper_model() -> WhisperModel:
 				compute_type=settings.whisper_compute_type,
 				download_root=settings.whisper_download_root,
 				local_files_only=False,
-				cpu_threads=settings.whisper_cpu_threads  # Optimize for VPS CPU count
+				cpu_threads=settings.whisper_cpu_threads,  # Optimize for VPS CPU count
+				beam_size=settings.whisper_beam_size  # Use configured beam size for CPU optimization
 			)
 			logger.info(f"Whisper model {settings.whisper_model_name} loaded successfully with VPS optimizations")
 		except Exception as e:
@@ -701,7 +709,7 @@ class AdminMeetingResponse(BaseModel):
 
 def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
 	"""Enforce admin authentication - uses same basic auth but could be extended"""
-	if not settings.basic_auth_username and not settings.basic_auth_password:
+	if not settings.basic_auth_username or not settings.basic_auth_password:
 		return None
 	if not credentials:
 		raise HTTPException(status_code=401, detail="Admin access required", headers={"WWW-Authenticate": "Basic"})
@@ -1148,6 +1156,49 @@ async def stream_job_progress(
 	)
 
 
+# New Progress Module APIs
+@app.get("/api/progress/{job_id}")
+async def get_progress_status(
+	job_id: str,
+	x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+	_: None = Depends(require_basic_auth),
+) -> Dict[str, Any]:
+	"""Get progress status using the new progress module"""
+	if not x_user_id:
+		raise HTTPException(status_code=400, detail="X-User-Id header required")
+	
+	job_status = job_store.get(job_id)
+	if not job_status:
+		raise HTTPException(status_code=404, detail="Job not found")
+	
+	return job_status.to_dict()
+
+
+@app.post("/api/progress/{job_id}/cancel")
+async def cancel_progress_job(
+	job_id: str,
+	x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+	_: None = Depends(require_basic_auth),
+) -> Dict[str, Any]:
+	"""Cancel a job using the new progress module"""
+	if not x_user_id:
+		raise HTTPException(status_code=400, detail="X-User-Id header required")
+	
+	success = job_store.cancel(job_id)
+	if not success:
+		raise HTTPException(status_code=400, detail="Failed to cancel job")
+	
+	return {"job_id": job_id, "cancelled": True, "message": "Job cancelled successfully"}
+
+
+@app.get("/api/progress/stats")
+async def get_progress_stats(
+	_auth: None = Depends(require_basic_auth),
+) -> Dict[str, Any]:
+	"""Get progress store statistics"""
+	return job_store.get_stats()
+
+
 # Job Handler Functions
 async def handle_transcription_job(job: Job, progress_tracker) -> Dict[str, Any]:
 	"""Handle transcription job with progress tracking"""
@@ -1267,5 +1318,140 @@ async def handle_transcribe_and_summarize_job(job: Job, progress_tracker) -> Dic
 		"transcript": transcription_result,
 		"summary": summary_result["summary"]
 	}
+
+
+# New Meeting Management with Language Selection
+class StartMeetingRequest(BaseModel):
+    title: str
+    language: str = "auto"  # "tr", "en", or "auto"
+    tags: Optional[List[str]] = []
+
+
+class StartMeetingResponse(BaseModel):
+    meeting_id: str
+    job_id: str
+    message: str
+    language: str
+
+
+@app.post("/api/meetings/start", response_model=StartMeetingResponse)
+async def start_meeting(
+    request: StartMeetingRequest,
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    _: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
+) -> StartMeetingResponse:
+    """Start a new meeting with language selection"""
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    
+    # Validate language
+    try:
+        validated_language = validate_language(request.language)
+    except HTTPException as e:
+        raise HTTPException(status_code=400, detail=str(e.detail))
+    
+    # Get or create user
+    user = get_or_create_user(db)
+    
+    # Create meeting record
+    meeting_id = str(uuid.uuid4())
+    meeting = Meeting(
+        id=meeting_id,
+        user_id=user.id,
+        title=request.title,
+        tags=json.dumps(request.tags) if request.tags else None
+    )
+    db.add(meeting)
+    db.commit()
+    
+    # Create job for processing
+    job_id = f"meeting_{meeting_id[:8]}_{datetime.utcnow().strftime('%H%M%S')}"
+    job_store.create(job_id, Phase.QUEUED)
+    
+    logger.info(f"Started meeting {meeting_id} with language {validated_language}")
+    
+    return StartMeetingResponse(
+        meeting_id=meeting_id,
+        job_id=job_id,
+        message=f"Meeting '{request.title}' started successfully",
+        language=validated_language
+    )
+
+
+@app.post("/api/meetings/{meeting_id}/upload-audio")
+async def upload_meeting_audio(
+    meeting_id: str,
+    file: UploadFile = File(...),
+    language: Optional[str] = Form(default="auto"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    _: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Upload audio for an existing meeting and start processing"""
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File must have a filename")
+    
+    # Read and validate file size
+    content = await file.read()
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > settings.max_upload_mb:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File too large: {size_mb:.1f} MB > {settings.max_upload_mb} MB"
+        )
+    
+    # Validate language
+    try:
+        validated_language = validate_language(language)
+    except HTTPException as e:
+        raise HTTPException(status_code=400, detail=str(e.detail))
+    
+    # Verify meeting exists and belongs to user
+    user = get_or_create_user(db)
+    meeting = db.query(Meeting).filter(
+        Meeting.id == meeting_id,
+        Meeting.user_id == user.id
+    ).first()
+    
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Generate job ID
+    job_id = f"audio_{meeting_id[:8]}_{datetime.utcnow().strftime('%H%M%S')}"
+    
+    # Create job in store
+    job_store.create(job_id, Phase.QUEUED)
+    
+    # Save audio to temp file
+    with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename)[1]) as tmp:
+        tmp.write(content)
+        tmp_path = tmp.name
+    
+    # Add background task for chunked processing
+    background_tasks.add_task(
+        chunked_service.process_audio_file,
+        job_id,
+        tmp_path,
+        validated_language,
+        x_user_id
+    )
+    
+    # Update meeting with job reference
+    meeting.tags = json.dumps([*json.loads(meeting.tags or "[]"), f"job:{job_id}"])
+    db.commit()
+    
+    return {
+        "meeting_id": meeting_id,
+        "job_id": job_id,
+        "status": "processing",
+        "message": f"Audio uploaded and processing started for meeting '{meeting.title}'",
+        "language": validated_language
+    }
 
 
