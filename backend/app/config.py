@@ -42,7 +42,7 @@ class Settings:
 
 	# Ollama
 	ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-	ollama_model: str = os.getenv("OLLAMA_MODEL", "llama3.1:8b")
+	ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct")
 	ollama_timeout_seconds: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
 	
 	# Ollama VPS Optimizations

@@ -34,7 +34,7 @@ docker compose up -d --build
 
 # Pull default model
 if docker compose ps ollama >/dev/null 2>&1; then
-  docker compose exec -T ollama ollama pull llama3.1:8b || true
+  docker compose exec -T ollama ollama pull qwen2.5:3b-instruct || true
 fi
 
 echo "Stack is up. Frontend: port 8080, Backend: port 8000"

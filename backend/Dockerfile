@@ -15,10 +15,10 @@ COPY app ./app
 
 ENV APP_HOST=0.0.0.0 \
 	APP_PORT=8000 \
-	WHISPER_MODEL=base \
-	WHISPER_COMPUTE_TYPE=auto \
-	OLLAMA_BASE_URL=http://ollama:11434 \
-	OLLAMA_MODEL=llama3.1:8b
+	WHISPER_MODEL=tiny \
+	WHISPER_COMPUTE_TYPE=int8 \
+	OLLAMA_BASE_URL=http://localhost:11434 \
+	OLLAMA_MODEL=qwen2.5:3b-instruct
 
 EXPOSE 8000
 

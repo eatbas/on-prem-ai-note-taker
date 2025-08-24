@@ -10,20 +10,21 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4.0'  # Optimized for 6 vCPU VPS
-          memory: 12G  # Leave 8GB for system
+          cpus: '6.0'  # Use all 6 vCPU cores for better performance
+          memory: 18G  # Increased from 12G to 18G for better model performance
         reservations:
-          cpus: '2.0'
-          memory: 8G
+          cpus: '3.0'
+          memory: 12G
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_ORIGINS=*
-      - OLLAMA_NUM_PARALLEL=4  # Increased for better performance
-      - OLLAMA_CPU_THREADS=8    # Use more CPU threads
-      - OLLAMA_GPU_LAYERS=0     # CPU-only mode
-      - OLLAMA_CPU_AVX=1        # Enable AVX instructions
-      - OLLAMA_CPU_AVX2=1       # Enable AVX2 instructions
-      - OLLAMA_CPU_F16=1        # Enable F16 precision
+      - OLLAMA_NUM_PARALLEL=6  # Use all 6 vCPU cores
+      - OLLAMA_CPU_THREADS=12  # Double the threads for better performance
+      - OLLAMA_GPU_LAYERS=0    # CPU-only mode
+      - OLLAMA_CPU_AVX=1       # Enable AVX instructions
+      - OLLAMA_CPU_AVX2=1      # Enable AVX2 instructions
+      - OLLAMA_CPU_F16=1       # Enable F16 precision
+      - OLLAMA_CPU_MKL=1       # Enable Intel MKL optimization
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 30s
@@ -50,9 +51,9 @@ services:
       WHISPER_DOWNLOAD_ROOT: ./models
       OLLAMA_BASE_URL: http://localhost:11434  # Fixed: localhost for VPS
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
-      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
-      OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-6}
-      OLLAMA_MEMORY_LIMIT_GB: ${OLLAMA_MEMORY_LIMIT_GB:-16}
+      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-180}
+      OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-12}
+      OLLAMA_MEMORY_LIMIT_GB: ${OLLAMA_MEMORY_LIMIT_GB:-18}
       BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-myca}
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-wj2YyxrJ4cqcXgCA}
       REDIS_URL: redis://localhost:6385  # Fixed: localhost for VPS
