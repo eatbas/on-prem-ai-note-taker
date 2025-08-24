@@ -200,3 +200,57 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 backend/app/.env.local
+
+# =============================================================================
+# AI MODEL CACHE & DOWNLOADS (IMPORTANT!)
+# =============================================================================
+
+# Hugging Face model cache (Whisper models, etc.)
+backend/models/
+backend/.cache/
+backend/.huggingface/
+
+# Model lock files and temporary downloads
+**/.locks/
+**/*.lock
+**/*.tmp
+**/*.download
+
+# AI model artifacts and weights
+**/*.bin
+**/*.safetensors
+**/*.ckpt
+**/*.pth
+**/*.onnx
+**/*.pb
+
+# Model configuration and tokenizer files (if you want to exclude them)
+# Uncomment if you don't want to version control model configs:
+# **/config.json
+# **/tokenizer.json
+# **/vocabulary.txt
+
+# =============================================================================
+# DOCKER & CONTAINER FILES
+# =============================================================================
+
+# Docker build artifacts
+.dockerignore
+docker-compose.override.yml
+
+# =============================================================================
+# LOGS & TEMPORARY FILES
+# =============================================================================
+
+# Application logs
+*.log
+logs/
+backend/logs/
+frontend/logs/
+
+# Temporary files
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
