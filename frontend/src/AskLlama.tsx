@@ -15,11 +15,26 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 	const [model] = useState<string>('AI Assistant') // Generic name instead of hardcoded model
 	const [requestId, setRequestId] = useState(0)
 
+	// Debug logging for status
+	useEffect(() => {
+		console.log('🔍 AskLlama Debug Status:', { online, vpsUp, loading, error })
+	}, [online, vpsUp, loading, error])
+
 	// Remove the availableModels state and useEffect since we only have one model
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
-		if (!prompt.trim() || !online || !vpsUp || loading) return
+		console.log('🚀 Submit attempt:', { prompt: prompt.trim(), online, vpsUp, loading })
+		
+		if (!prompt.trim() || !online || !vpsUp || loading) {
+			console.log('❌ Submit blocked:', { 
+				hasPrompt: !!prompt.trim(), 
+				online, 
+				vpsUp, 
+				loading 
+			})
+			return
+		}
 
 		// Increment request ID and clear previous state
 		const currentRequestId = requestId + 1

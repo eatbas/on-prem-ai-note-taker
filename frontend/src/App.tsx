@@ -500,6 +500,11 @@ export default function App() {
 	const [vpsUp, setVpsUp] = useState<boolean | null>(null)
 	const [availableTags, setAvailableTags] = useState<[string, number][]>([])
 
+	// Debug logging for status
+	useEffect(() => {
+		console.log('🔍 App Debug Status:', { online, vpsUp, isElectron })
+	}, [online, vpsUp])
+
 	useEffect(() => {
 		const stop = watchOnline(setOnline)
 		return stop
