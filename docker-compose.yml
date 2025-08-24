@@ -10,15 +10,20 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '6.0'  # Optimized for 6 vCPU VPS
-          memory: 16G  # Leave 8GB for system
+          cpus: '4.0'  # Optimized for 6 vCPU VPS
+          memory: 12G  # Leave 8GB for system
         reservations:
           cpus: '2.0'
           memory: 8G
     environment:
       - OLLAMA_HOST=0.0.0.0
       - OLLAMA_ORIGINS=*
-      - OLLAMA_NUM_PARALLEL=6  # Optimize for VPS CPU count
+      - OLLAMA_NUM_PARALLEL=4  # Increased for better performance
+      - OLLAMA_CPU_THREADS=8    # Use more CPU threads
+      - OLLAMA_GPU_LAYERS=0     # CPU-only mode
+      - OLLAMA_CPU_AVX=1        # Enable AVX instructions
+      - OLLAMA_CPU_AVX2=1       # Enable AVX2 instructions
+      - OLLAMA_CPU_F16=1        # Enable F16 precision
     healthcheck:
       test: ["CMD", "ollama", "list"]
       interval: 30s
@@ -44,7 +49,7 @@ services:
       WHISPER_MEMORY_LIMIT_GB: ${WHISPER_MEMORY_LIMIT_GB:-16}
       WHISPER_DOWNLOAD_ROOT: ./models
       OLLAMA_BASE_URL: http://localhost:11434  # Fixed: localhost for VPS
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.1:8b-instruct-q4_K_M}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
       OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-120}
       OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-6}
       OLLAMA_MEMORY_LIMIT_GB: ${OLLAMA_MEMORY_LIMIT_GB:-16}

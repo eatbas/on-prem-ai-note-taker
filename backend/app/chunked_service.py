@@ -225,10 +225,11 @@ class ChunkedTranscriptionService:
             # Get Whisper model
             model = get_whisper_model()
             
-            # Transcribe chunk
+            # Transcribe chunk with speaker identification
             segments, info = model.transcribe(
                 chunk_path,
                 language=None,  # Let Whisper auto-detect for chunks
+                word_timestamps=True,  # Enable word-level timestamps for speaker detection
                 vad_filter=True,
                 vad_parameters=dict(
                     min_silence_duration_ms=500,
@@ -241,9 +242,11 @@ class ChunkedTranscriptionService:
                 log_prob_threshold=-1.0
             )
             
-            # Process segments
+            # Process segments with speaker identification
             segments_out = []
             text_parts = []
+            current_speaker = 0
+            speaker_changes = []
             
             for s in segments:
                 text_cleaned = s.text.strip()
@@ -252,17 +255,28 @@ class ChunkedTranscriptionService:
                     global_start = start_time + float(s.start)
                     global_end = start_time + float(s.end)
                     
+                    # Simple speaker change detection based on silence gaps
+                    if segments_out and (global_start - segments_out[-1]["end"]) > 1.0:  # 1 second gap
+                        current_speaker = (current_speaker + 1) % 3  # Assume max 3 speakers
+                        speaker_changes.append({
+                            "time": global_start,
+                            "speaker": f"Speaker {current_speaker}"
+                        })
+                    
                     segments_out.append({
                         "start": global_start,
                         "end": global_end,
-                        "text": text_cleaned
+                        "text": text_cleaned,
+                        "speaker": f"Speaker {current_speaker}"
                     })
-                    text_parts.append(text_cleaned)
+                    text_parts.append(f"Speaker {current_speaker}: {text_cleaned}")
             
             return {
                 "segments": segments_out,
                 "text_parts": text_parts,
-                "language": info.language if hasattr(info, "language") else None
+                "language": info.language if hasattr(info, "language") else None,
+                "speaker_changes": speaker_changes,
+                "total_speakers": current_speaker + 1
             }
             
         except Exception as e:

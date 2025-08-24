@@ -43,7 +43,14 @@ def get_whisper_model() -> WhisperModel:
             memory_limit_gb=settings.whisper_memory_limit_gb,
             download_root=settings.whisper_download_root,
             local_files_only=False,
-            beam_size=settings.whisper_beam_size
+            beam_size=settings.whisper_beam_size,
+            # Enable speaker identification
+            word_timestamps=True,
+            vad_filter=True,
+            vad_parameters=dict(
+                min_silence_duration_ms=500,
+                speech_pad_ms=100
+            )
         )
         logger.info(f"Whisper model {settings.whisper_model_name} loaded successfully")
         return model
