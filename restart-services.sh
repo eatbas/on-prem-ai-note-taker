@@ -66,7 +66,7 @@ apply_optimizations() {
     
     # Apply Ollama optimizations (q5_K_M for 3x speed)
     echo "🤖 Optimizing Ollama settings..."
-    sed -i 's/OLLAMA_MODEL=.*/OLLAMA_MODEL=llama3.1:8b-q5_K_M/' .env
+    sed -i 's/OLLAMA_MODEL=.*/OLLAMA_MODEL=llama3.1:8b-instruct-q4_K_M/' .env
     sed -i 's/OLLAMA_CPU_THREADS=.*/OLLAMA_CPU_THREADS=6/' .env
     sed -i 's/OLLAMA_MEMORY_LIMIT_GB=.*/OLLAMA_MEMORY_LIMIT_GB=16/' .env
     sed -i 's/OLLAMA_TIMEOUT_SECONDS=.*/OLLAMA_TIMEOUT_SECONDS=120/' .env
@@ -200,9 +200,9 @@ download_optimized_models() {
         
         # Download q5_K_M model if not exists
         echo "📥 Checking for Llama 3.1 8B q5_K_M model..."
-        if ! docker compose exec -T ollama ollama list | grep -q "llama3.1:8b-q5_K_M"; then
+        if ! docker compose exec -T ollama ollama list | grep -q "llama3.1:8b-instruct-q4_K_M"; then
             echo "⬇️  Downloading Llama 3.1 8B q5_K_M (this may take 5-10 minutes)..."
-            docker compose exec -T ollama ollama pull llama3.1:8b-q5_K_M
+            docker compose exec -T ollama ollama pull llama3.1:8b-instruct-q4_K_M
             echo "✅ Llama 3.1 8B q5_K_M downloaded successfully"
         else
             echo "✅ Llama 3.1 8B q5_K_M already available"
@@ -210,7 +210,7 @@ download_optimized_models() {
         
         # Pre-load the model for faster first use
         echo "🔥 Pre-loading model for faster startup..."
-        docker compose exec -T ollama ollama run llama3.1:8b-q5_K_M "Hello" > /dev/null 2>&1 &
+        docker compose exec -T ollama ollama run llama3.1:8b-instruct-q4_K_M "Hello" > /dev/null 2>&1 &
         echo "✅ Model pre-loading initiated"
     else
         echo "⚠️  Ollama service not running yet, models will be downloaded on first use"
@@ -331,7 +331,7 @@ run_performance_tests() {
         # Test model response time
         echo "⏱️  Testing Llama response time..."
         start_time=$(date +%s)
-        docker compose exec -T ollama ollama run llama3.1:8b-q5_K_M "Hello" > /dev/null 2>&1
+        docker compose exec -T ollama ollama run llama3.1:8b-instruct-q4_K_M "Hello" > /dev/null 2>&1
         end_time=$(date +%s)
         response_time=$((end_time - start_time))
         echo "   📊 Response time: ${response_time} seconds (should be <10s after optimization)"

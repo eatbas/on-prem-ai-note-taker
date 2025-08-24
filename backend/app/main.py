@@ -6,7 +6,6 @@ import json
 from typing import Any, Dict, List, Optional
 import asyncio
 import logging
-import secrets
 import uuid
 from datetime import datetime
 
@@ -30,6 +29,7 @@ from .progress import job_store, Phase  # Import new progress module
 from .api import router as jobs_router  # Import the new jobs API router
 from .chunked_service import chunked_service  # Import the new chunked service
 from .prompts import get_chunk_prompt, get_merge_prompt  # Import prompts
+from .utils import require_basic_auth, get_whisper_model, validate_language  # Import from utils to avoid circular import
 
 
 app = FastAPI(title="On-Prem AI Note Taker", version="0.1.0")
@@ -55,22 +55,6 @@ app.add_middleware(
 
 # Include the jobs API router
 app.include_router(jobs_router)
-
-# Optional Basic Auth
-security = HTTPBasic()
-
-def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
-	"""Enforce HTTP Basic auth if username/password are set in settings.
-	If not set, auth is disabled and the request is allowed."""
-	if not settings.basic_auth_username or not settings.basic_auth_password:
-		return None
-	if not credentials:
-		raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
-	is_user_ok = secrets.compare_digest(credentials.username or "", settings.basic_auth_username)
-	is_pass_ok = secrets.compare_digest(credentials.password or "", settings.basic_auth_password)
-	if not (is_user_ok and is_pass_ok):
-		raise HTTPException(status_code=401, detail="Unauthorized", headers={"WWW-Authenticate": "Basic"})
-	return None
 
 
 class TranscriptionSegment(BaseModel):
@@ -202,25 +186,7 @@ async def shutdown_event():
 	logger.info("Job management system stopped")
 
 
-def get_whisper_model() -> WhisperModel:
-	global _whisper_model
-	if _whisper_model is None:
-		logger.info(f"Loading Whisper model: {settings.whisper_model_name} with device: {settings.whisper_device}, compute_type: {settings.whisper_compute_type}, beam_size: {settings.whisper_beam_size}")
-		try:
-			_whisper_model = WhisperModel(
-				settings.whisper_model_name,
-				device=settings.whisper_device,  # Use configured device (forced CPU for VPS)
-				compute_type=settings.whisper_compute_type,
-				download_root=settings.whisper_download_root,
-				local_files_only=False,
-				cpu_threads=settings.whisper_cpu_threads,  # Optimize for VPS CPU count
-				beam_size=settings.whisper_beam_size  # Use configured beam size for CPU optimization
-			)
-			logger.info(f"Whisper model {settings.whisper_model_name} loaded successfully with VPS optimizations")
-		except Exception as e:
-			logger.error(f"Failed to load Whisper model: {str(e)}")
-			raise
-	return _whisper_model
+# get_whisper_model function moved to utils.py to avoid circular import
 
 
 def get_transcribe_semaphore() -> asyncio.Semaphore:
@@ -231,30 +197,7 @@ def get_transcribe_semaphore() -> asyncio.Semaphore:
 	return _transcribe_semaphore
 
 
-def validate_language(language: Optional[str]) -> str:
-	"""Validate and normalize language parameter for TR/EN restrictions"""
-	if not language or language.lower() == "auto":
-		return "auto"
-	
-	lang_lower = language.lower().strip()
-	
-	# Check if language is in allowed list
-	if settings.force_language_validation and lang_lower not in [lang.lower() for lang in settings.allowed_languages]:
-		raise HTTPException(
-			status_code=400, 
-			detail=f"Language '{language}' not allowed. Allowed languages: {', '.join(settings.allowed_languages)}"
-		)
-	
-	# Normalize language codes
-	if lang_lower in ["tr", "turkish", "türkçe"]:
-		return "tr"
-	elif lang_lower in ["en", "english"]:
-		return "en"
-	elif lang_lower == "auto":
-		return "auto"
-	else:
-		# For other languages, return as-is if validation is not strict
-		return lang_lower
+# validate_language function moved to utils.py to avoid circular import
 
 
 @app.get("/api/health")
@@ -707,17 +650,11 @@ class AdminMeetingResponse(BaseModel):
 	tags: Optional[List[str]] = []
 
 
-def require_admin_auth(credentials: HTTPBasicCredentials = Depends(security)) -> None:
+def require_admin_auth(credentials: HTTPBasicCredentials = Depends(require_basic_auth)) -> None:
 	"""Enforce admin authentication - uses same basic auth but could be extended"""
-	if not settings.basic_auth_username or not settings.basic_auth_password:
-		return None
-	if not credentials:
-		raise HTTPException(status_code=401, detail="Admin access required", headers={"WWW-Authenticate": "Basic"})
-	is_user_ok = secrets.compare_digest(credentials.username or "", settings.basic_auth_username)
-	is_pass_ok = secrets.compare_digest(credentials.password or "", settings.basic_auth_password)
-	if not (is_user_ok and is_pass_ok):
-		raise HTTPException(status_code=401, detail="Admin access required", headers={"WWW-Authenticate": "Basic"})
-	return None
+	# This function now just calls require_basic_auth from utils
+	# The actual auth logic is handled there
+	pass
 
 
 @app.get("/api/admin/users")

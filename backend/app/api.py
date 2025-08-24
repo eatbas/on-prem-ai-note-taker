@@ -15,7 +15,7 @@ from .progress import job_store, Phase
 from .config import settings
 from .ollama_client import OllamaClient
 from .database import get_db, get_or_create_user, Meeting, Transcription, Summary
-from .main import get_whisper_model, validate_language, require_basic_auth
+from .utils import get_whisper_model, validate_language, require_basic_auth
 
 # Initialize router
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])

@@ -220,7 +220,7 @@ class ChunkedTranscriptionService:
         """Process a single audio chunk"""
         try:
             # Import here to avoid circular imports
-            from .main import get_whisper_model
+            from .utils import get_whisper_model
             
             # Get Whisper model
             model = get_whisper_model()
