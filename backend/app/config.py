@@ -41,7 +41,7 @@ class Settings:
 	log_level: str = os.getenv("LOG_LEVEL", "INFO")
 
 	# Ollama
-	ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+	ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 	ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct")
 	ollama_timeout_seconds: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
 	
@@ -54,7 +54,7 @@ class Settings:
 	basic_auth_password: str = os.getenv("BASIC_AUTH_PASSWORD", "")
 
 	# Redis Queue System
-	redis_url: str = os.getenv("REDIS_URL", "redis://localhost:6379")
+	redis_url: str = os.getenv("REDIS_URL", "redis://redis:6385")
 	queue_max_workers: int = int(os.getenv("QUEUE_MAX_WORKERS", "2"))
 	use_queue_system: bool = os.getenv("USE_QUEUE_SYSTEM", "true").lower() == "true"
 	
