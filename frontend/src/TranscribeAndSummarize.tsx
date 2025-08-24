@@ -15,7 +15,7 @@ interface TranscribeAndSummarizeProps {
 
 export default function TranscribeAndSummarize({ online, vpsUp }: TranscribeAndSummarizeProps) {
 	const [selectedFile, setSelectedFile] = useState<File | null>(null)
-	const [language, setLanguage] = useState<'auto' | 'tr' | 'en'>('auto')
+	const [language, setLanguage] = useState<'auto' | 'tr' | 'en'>('tr')
 	const [isProcessing, setIsProcessing] = useState(false)
 	const [jobId, setJobId] = useState<string | null>(null)
 	const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
@@ -349,9 +349,9 @@ export default function TranscribeAndSummarize({ online, vpsUp }: TranscribeAndS
 						justifyContent: 'center'
 					}}>
 						{[
-							{ value: 'auto', label: 'Auto' },
 							{ value: 'tr', label: 'Türkçe' },
-							{ value: 'en', label: 'English' }
+							{ value: 'en', label: 'English' },
+							{ value: 'auto', label: 'Auto' }
 						].map((option) => (
 							<button
 								key={option.value}
