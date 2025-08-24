@@ -502,18 +502,5 @@ main() {
 echo "🚀 Starting script execution..."
 echo "⏰ Script will timeout after 15 minutes to prevent hanging..."
 
-# Run main function with timeout protection
-if timeout 900 bash -c 'main "$@"'; then
-    echo "✅ Script completed successfully!"
-else
-    echo ""
-    echo "⚠️  Script timed out or encountered an issue"
-    echo "🔍 Checking current service status..."
-    docker compose ps
-    echo ""
-    echo "📊 Current resource usage:"
-    docker stats --no-stream
-    echo ""
-    echo "🎯 Your services may still be working correctly!"
-    echo "💡 You can manually test with: docker exec -it \$(docker ps -q --filter 'name=ollama') ollama run qwen2.5:3b-instruct 'Hello'"
-fi
+# Call main function directly
+main
