@@ -35,24 +35,16 @@ def get_whisper_model() -> WhisperModel:
     """Get or create the Whisper model instance."""
     try:
         # Initialize Whisper model with VPS optimizations
+        # Note: beam_size, word_timestamps, vad_filter are transcribe() parameters, not constructor parameters
         model = WhisperModel(
             settings.whisper_model_name,  # First positional argument is the model name
             compute_type=settings.whisper_compute_type,
             device=settings.whisper_device,
             cpu_threads=settings.whisper_cpu_threads,
-            memory_limit_gb=settings.whisper_memory_limit_gb,
             download_root=settings.whisper_download_root,
-            local_files_only=False,
-            beam_size=settings.whisper_beam_size,
-            # Enable speaker identification
-            word_timestamps=True,
-            vad_filter=True,
-            vad_parameters=dict(
-                min_silence_duration_ms=500,
-                speech_pad_ms=100
-            )
+            local_files_only=False
         )
-        logger.info(f"Whisper model {settings.whisper_model_name} loaded successfully")
+        logger.info(f"Whisper model {settings.whisper_model_name} loaded successfully with device={settings.whisper_device}")
         return model
     except Exception as e:
         logger.error(f"Failed to load Whisper model: {e}")

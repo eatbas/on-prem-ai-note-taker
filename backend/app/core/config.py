@@ -21,7 +21,7 @@ class Settings:
 	whisper_compute_type: str = os.getenv("WHISPER_COMPUTE_TYPE", "int8")
 	whisper_device: str = os.getenv("WHISPER_DEVICE", "cpu")  # Force CPU for VPS
 	whisper_cpu_threads: int = int(os.getenv("WHISPER_CPU_THREADS", "6"))  # Optimize for 6 vCPU
-	whisper_memory_limit_gb: int = int(os.getenv("WHISPER_MEMORY_LIMIT_GB", "16"))  # Leave 2GB for system
+
 	whisper_beam_size: int = int(os.getenv("WHISPER_BEAM_SIZE", "1"))  # Beam size for CPU optimization
 	whisper_download_root: str = os.getenv("WHISPER_DOWNLOAD_ROOT", "./models")
 	

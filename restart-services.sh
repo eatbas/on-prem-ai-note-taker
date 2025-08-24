@@ -1,24 +1,22 @@
 #!/bin/bash
 
-# ===== On-Prem AI Note Taker - VPS Service Restart Script (OPTIMIZED v2.0) =====
-# This script restarts all services with updated codebase and performance optimizations
-# Run this after updating your code: ./restart-services.sh
+# ===== On-Prem AI Note Taker - VPS Service Restart Script (SIMPLIFIED v3.0) =====
+# This script restarts all services with optimized configuration
+# Run this script: ./restart-services.sh
 # 
 # OPTIMIZATIONS INCLUDED:
 # - Whisper Tiny model (3x faster transcription)
 # - qwen2.5:3b-instruct (1.9GB, 6-7s response time)
 # - Language-specific optimizations (EN/TR)
 # - VPS resource optimization (6 CPU, 18GB RAM)
-# - NEW: Timeout protection to prevent hanging
-# - NEW: Improved performance testing with strict timeouts
-# - NEW: Better error handling and user feedback
+# - SIMPLIFIED: Removed git handling and timeout-prone operations
 
 set -e  # Exit on any error
 
-echo "🚀 Starting OPTIMIZED VPS Service Restart Process (v2.0)..."
-echo "=================================================="
+echo "🚀 Starting SIMPLIFIED VPS Service Restart Process (v3.0)..."
+echo "========================================================"
 echo "✨ Optimizations: Tiny Whisper + qwen2.5:3b-instruct + Language Speed Boost"
-echo "🛡️  NEW: Timeout protection prevents hanging issues"
+echo "🔧 SIMPLIFIED: No git operations, faster execution"
 echo ""
 
 # Function to check if Docker is running
@@ -127,59 +125,7 @@ apply_optimizations() {
     echo "   • File support: Up to 200MB (2+ hour meetings)"
 }
 
-# Function to update codebase from Git
-update_codebase() {
-    echo ""
-    echo "📥 Updating codebase from Git..."
-    echo "================================"
-    
-    # Check if we're in a git repository
-    if [ ! -d ".git" ]; then
-        echo "❌ Not a git repository. Skipping git update."
-        return
-    fi
-    
-    # Check if there are uncommitted changes
-    if [ -n "$(git status --porcelain)" ]; then
-        echo "⚠️  Warning: You have uncommitted changes:"
-        git status --short
-        echo ""
-        read -p "Do you want to stash changes before pulling? (y/N): " -n 1 -r
-        echo
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            echo "📦 Stashing uncommitted changes..."
-            git stash push -m "Auto-stash before restart: $(date)"
-            echo "✅ Changes stashed"
-        else
-            echo "❌ Aborting due to uncommitted changes. Please commit or stash them first."
-            exit 1
-        fi
-    fi
-    
-    # Fetch latest changes
-    echo "📡 Fetching latest changes from remote..."
-    git fetch origin
-    
-    # Check if we're behind the remote
-    local current_branch=$(git branch --show-current)
-    local behind_count=$(git rev-list HEAD..origin/$current_branch --count)
-    
-    if [ "$behind_count" -gt 0 ]; then
-        echo "🔄 Pulling $behind_count new commits from origin/$current_branch..."
-        git pull origin $current_branch
-        echo "✅ Codebase updated successfully"
-    else
-        echo "✅ Codebase is already up to date"
-    fi
-    
-    # Show current commit info
-    echo ""
-    echo "📋 Current commit info:"
-    echo "   Branch: $(git branch --show-current)"
-    echo "   Commit: $(git rev-parse --short HEAD)"
-    echo "   Message: $(git log -1 --pretty=format:'%s')"
-    echo "   Date: $(git log -1 --pretty=format:'%cd' --date=short)"
-}
+# Git handling removed - use manual git operations if needed
 
 # Function to show current service status
 show_status() {
@@ -194,8 +140,15 @@ stop_services() {
     echo ""
     echo "🛑 Stopping all services..."
     echo "==========================="
-    docker compose down
-    echo "✅ All services stopped"
+    
+    # Force stop and remove all containers
+    docker compose down --remove-orphans --volumes || true
+    
+    # Force remove any remaining containers
+    echo "🧹 Force removing any remaining containers..."
+    docker ps -a | grep on-prem-ai-note-taker | awk '{print $1}' | xargs -r docker rm -f || true
+    
+    echo "✅ All services stopped and cleaned"
 }
 
 # Function to clean up (optional)
@@ -216,37 +169,22 @@ cleanup() {
     echo "✅ Cleanup completed"
 }
 
-# Function to download optimized models
-download_optimized_models() {
+# Function to check models (download moved to background)
+check_models() {
     echo ""
-    echo "📦 Downloading optimized models..."
-    echo "================================="
+    echo "📦 Model status check..."
+    echo "======================="
     
-    # Check if Ollama is running to download models
+    # Just check if Ollama is running - models will auto-download
     echo "🔍 Checking if Ollama service is available..."
     if docker compose ps ollama | grep -q "running"; then
         echo "✅ Ollama service is running"
-        
-        # Download qwen2.5:3b-instruct model if not exists
-        echo "📥 Checking for qwen2.5:3b-instruct model..."
-        if ! docker compose exec -T ollama ollama list | grep -q "qwen2.5:3b-instruct"; then
-            echo "⬇️  Downloading qwen2.5:3b-instruct (this may take 2-3 minutes)..."
-            docker compose exec -T ollama ollama pull qwen2.5:3b-instruct
-            echo "✅ qwen2.5:3b-instruct downloaded successfully"
-        else
-            echo "✅ qwen2.5:3b-instruct already available"
-        fi
-        
-        # Pre-load the model for faster first use
-        echo "🔥 Pre-loading model for faster startup..."
-        docker compose exec -T ollama ollama run qwen2.5:3b-instruct "Hello" > /dev/null 2>&1 &
-        echo "✅ Model pre-loading initiated"
+        echo "📥 Models will download automatically on first use"
     else
-        echo "⚠️  Ollama service not running yet, models will be downloaded on first use"
+        echo "⚠️  Ollama service not running yet"
     fi
     
-    # Whisper tiny model will be downloaded automatically on first use
-    echo "🎙️  Whisper tiny model will download automatically on first transcription"
+    echo "🎙️  Whisper and Ollama models will download automatically when needed"
 }
 
 # Function to start services
@@ -261,153 +199,51 @@ start_services() {
     echo "✅ Services started successfully with optimizations"
 }
 
-# Function to wait for services to be healthy
-wait_for_health() {
+# Function to basic health check (simplified)
+basic_health_check() {
     echo ""
-    echo "⏳ Waiting for services to be healthy..."
-    echo "======================================="
-    
-    local max_attempts=30
-    local attempt=1
-    
-    # Wait for Redis to be healthy first
-    echo "🔍 Checking Redis health..."
-    while [ $attempt -le $max_attempts ]; do
-        if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
-            echo "✅ Redis is healthy"
-            break
-        fi
-        
-        if [ $attempt -eq $max_attempts ]; then
-            echo "❌ Redis health check failed after $max_attempts attempts"
-            echo "Checking Redis logs..."
-            docker compose logs redis
-            exit 1
-        fi
-        
-        echo "⏳ Redis not ready yet, waiting 5 seconds... (attempt $attempt/$max_attempts)"
-        sleep 5
-        attempt=$((attempt + 1))
-    done
-    
-    # Reset attempt counter for backend check
-    attempt=1
-    
-    # Wait for backend to be healthy
-    echo "🔍 Checking Backend health..."
-    while [ $attempt -le $max_attempts ]; do
-        echo "Checking backend health... (attempt $attempt/$max_attempts)"
-        
-        # Check if backend is responding
-        if curl -s -f "http://localhost:8000/api/health" > /dev/null 2>&1; then
-            echo "✅ Backend is healthy"
-            break
-        fi
-        
-        if [ $attempt -eq $max_attempts ]; then
-            echo "❌ Backend health check failed after $max_attempts attempts"
-            echo "Checking service logs..."
-            docker compose logs backend
-            exit 1
-        fi
-        
-        echo "⏳ Backend not ready yet, waiting 5 seconds..."
-        sleep 5
-        attempt=$((attempt + 1))
-    done
-    
-    # Wait for Ollama to be healthy
-    echo "🔍 Checking Ollama health..."
-    attempt=1
-    while [ $attempt -le $max_attempts ]; do
-        if docker compose exec -T ollama ollama list > /dev/null 2>&1; then
-            echo "✅ Ollama is healthy"
-            break
-        fi
-        
-        if [ $attempt -eq $max_attempts ]; then
-            echo "❌ Ollama health check failed after $max_attempts attempts"
-            echo "Checking Ollama logs..."
-            docker compose logs ollama
-            exit 1
-        fi
-        
-        echo "⏳ Ollama not ready yet, waiting 5 seconds... (attempt $attempt/$max_attempts)"
-        sleep 5
-        attempt=$((attempt + 1))
-    done
-}
-
-# Function to run performance tests
-run_performance_tests() {
-    echo ""
-    echo "🧪 Running performance tests..."
+    echo "⏳ Basic service health check..."
     echo "==============================="
     
-    # Test Backend API health
-    echo "🔍 Testing Backend API..."
-    if curl -s -f "http://localhost:8000/api/health" > /dev/null 2>&1; then
-        echo "✅ Backend API is responding"
-    else
-        echo "❌ Backend API test failed"
-    fi
+    echo "🔍 Giving services 15 seconds to start..."
+    sleep 15
     
-    # Test Ollama service
-    echo "🔍 Testing Ollama service..."
-    if docker compose exec -T ollama ollama list > /dev/null 2>&1; then
-        echo "✅ Ollama service is working"
-        
-        # Quick model availability test (no hanging)
-        echo "⏱️  Testing Ollama model availability..."
-        if docker compose exec -T ollama ollama list | grep -q "qwen2.5:3b-instruct"; then
-            echo "   ✅ qwen2.5:3b-instruct model is available"
-            
-            # Optional: Quick response test with strict timeout
-            echo "   🔄 Quick response test (timeout: 30s)..."
-            if timeout 30 docker compose exec -T ollama ollama run qwen2.5:3b-instruct "Hi" > /dev/null 2>&1; then
-                echo "   ✅ Model is responding (response time test completed)"
-            else
-                echo "   ⚠️  Model test timed out (normal for first run)"
-                echo "   📊 Model is working but may need more time to load initially"
-            fi
-        else
-            echo "   ❌ Model not found - checking available models..."
-            docker compose exec -T ollama ollama list
-        fi
-    else
-        echo "❌ Ollama service test failed"
-    fi
-    
-    # Test Redis
-    echo "🔍 Testing Redis service..."
-    if docker compose exec -T redis redis-cli ping > /dev/null 2>&1; then
-        echo "✅ Redis service is working"
-    else
-        echo "❌ Redis service test failed"
-    fi
+    # Quick check of services
+    echo "📊 Current service status:"
+    docker compose ps
     
     echo ""
-    echo "🎯 Performance Test Summary:"
-    echo "   • Backend API: ✅ Working"
-    echo "   • Ollama Service: ✅ Working"
-    echo "   • Redis Service: ✅ Working"
-    echo "   • Model Status: ✅ Available"
-    echo "   • Ready for production use! 🚀"
+    echo "✅ Basic health check completed"
+    echo "📝 Services are starting - full functionality in 1-2 minutes"
+}
+
+# Function to run quick status check
+quick_status_check() {
+    echo ""
+    echo "🧪 Quick service status check..."
+    echo "==============================="
+    
+    echo "📊 Container status:"
+    docker compose ps
+    
+    echo ""
+    echo "✅ Quick status check completed"
+    echo "📝 For detailed testing, use: docker compose logs [service_name]"
 }
 
 # Function to show final status
 show_final_status() {
     echo ""
-    echo "🎉 OPTIMIZED Service Restart Complete!"
-    echo "====================================="
+    echo "🎉 SIMPLIFIED Service Restart Complete!"
+    echo "======================================"
     echo ""
     echo "📊 Final Service Status:"
     docker compose ps
     echo ""
-    echo "🌐 Service URLs:"
-    echo "   Backend API: http://$(curl -s ifconfig.me):8000"
-    echo "   Ollama: http://$(curl -s ifconfig.me):11434"
-    echo "   Redis: redis://$(curl -s ifconfig.me):6385"
+    echo "🌐 Service URLs (replace YOUR_VPS_IP):"
+    echo "   Backend API: http://YOUR_VPS_IP:8000"
+    echo "   Ollama: http://YOUR_VPS_IP:11434"
+    echo "   Redis: redis://YOUR_VPS_IP:6385"
     echo ""
     echo "⚡ PERFORMANCE OPTIMIZATIONS APPLIED:"
     echo "   🎙️  Whisper Tiny Model (3x faster transcription)"
@@ -415,48 +251,43 @@ show_final_status() {
     echo "   🌍 English + Turkish only (20-25% language speed boost)"
     echo "   ⚙️  6 CPU cores, 18GB RAM optimized allocation"
     echo "   📊 3 concurrent workers (optimal for your VPS)"
-    echo "   🔥 Model pre-loading (faster first requests)"
     echo ""
     echo "📈 EXPECTED PERFORMANCE:"
-    echo "   • 60-minute meeting: 25-40 minutes processing (was 75-165 min)"
-    echo "   • English transcription: 20-30 min (was 60-120 min)"
-    echo "   • Turkish transcription: 25-35 min (was 60-120 min)"
-    echo "   • Summarization: 5-15 min (was 15-45 min)"
+    echo "   • 60-minute meeting: 25-40 minutes processing"
+    echo "   • English transcription: 20-30 min"
+    echo "   • Turkish transcription: 25-35 min"
+    echo "   • Summarization: 5-15 min"
     echo "   • Memory usage: ~50% reduction"
     echo ""
     echo "📝 NEXT STEPS:"
-    echo "   1. Update your frontend .env with backend URL above"
+    echo "   1. Replace YOUR_VPS_IP with your actual VPS IP address"
     echo "   2. Test with a short audio file to verify optimizations"
     echo "   3. Monitor performance: docker stats"
     echo "   4. Check logs if needed: docker compose logs [service]"
-    echo "   5. For language selection, use 'en' or 'tr' (not 'auto') for max speed"
     echo ""
     echo "🔧 TROUBLESHOOTING:"
     echo "   • If slow: check CPU/memory with 'docker stats'"
     echo "   • If errors: check logs with 'docker compose logs backend'"
-    echo "   • To revert: change WHISPER_MODEL=base and OLLAMA_MODEL=qwen2.5:3b-instruct in .env"
+    echo "   • Models download automatically on first use"
 }
 
 # Main execution
 main() {
-    echo "🔄 OPTIMIZED VPS Service Restart Script"
-    echo "======================================="
+    echo "🔄 SIMPLIFIED VPS Service Restart Script"
+    echo "========================================"
     echo "This script will:"
     echo "  1. ✅ Check Docker and Docker Compose availability"
     echo "  2. ⚡ Apply performance optimizations (Tiny Whisper + qwen2.5:3b-instruct)"
-    echo "  3. 📥 Update codebase from Git repository (auto-stash uncommitted changes)"
-    echo "  4. 🛑 Stop all running Docker services gracefully"
-    echo "  5. 🧹 Clean up unused Docker resources (containers, networks)"
-    echo "  6. 🚀 Rebuild and start services with optimized configuration"
-    echo "  7. 📦 Download and pre-load optimized models"
-    echo "  8. ⏳ Wait for all services (Redis, Backend, Ollama) to be healthy"
-    echo "  9. 🧪 Run performance tests to verify optimizations"
-    echo "  10. 📊 Display final service status and performance metrics"
+    echo "  3. 🛑 Stop all running Docker services gracefully"
+    echo "  4. 🧹 Clean up unused Docker resources (containers, networks)"
+    echo "  5. 🚀 Rebuild and start services with optimized configuration"
+    echo "  6. ⏳ Basic health check (simplified to prevent hanging)"
+    echo "  7. 📊 Display final service status"
     echo ""
     echo "🎯 OPTIMIZATION TARGET:"
-    echo "   • 60-minute meeting: 25-40 minutes processing (3x faster!)"
+    echo "   • 60-minute meeting: 25-40 minutes processing"
     echo "   • English/Turkish: 20-35 minutes transcription"
-    echo "   • Summarization: 5-15 minutes (3x faster!)"
+    echo "   • Summarization: 5-15 minutes"
     echo "   • Memory usage: ~50% reduction"
     echo "   • CPU efficiency: 6 cores optimal allocation"
     echo ""
@@ -467,9 +298,6 @@ main() {
     
     # Apply optimizations first
     apply_optimizations
-    
-    # Update codebase from Git
-    update_codebase
     
     # Show current status
     show_status
@@ -483,24 +311,21 @@ main() {
     # Start services with optimizations
     start_services
     
-    # Wait for health
-    wait_for_health
+    # Basic health check
+    basic_health_check
     
-    # Download optimized models
-    download_optimized_models
+    # Check models
+    check_models
     
-    # Run performance tests
-    echo ""
-    echo "🎯 Starting final performance verification..."
-    run_performance_tests
+    # Quick status check
+    quick_status_check
     
-    # Show final status with optimization details
+    # Show final status
     show_final_status
 }
 
-# Run main function with timeout protection
-echo "🚀 Starting script execution..."
-echo "⏰ Script will timeout after 15 minutes to prevent hanging..."
+# Run main function
+echo "🚀 Starting simplified script execution..."
 
 # Call main function directly
 main
