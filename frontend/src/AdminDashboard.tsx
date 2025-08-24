@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from './Toast'
+import ProgressDashboard from './ProgressDashboard'
 
 interface User {
     id: string
@@ -90,7 +91,7 @@ async function makeAdminRequest(path: string, options?: RequestInit) {
 
 export default function AdminDashboard() {
     const navigate = useNavigate()
-    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings'>('stats')
+    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'progress'>('stats')
     const [stats, setStats] = useState<Stats | null>(null)
     const [users, setUsers] = useState<User[]>([])
     const [meetings, setMeetings] = useState<AdminMeeting[]>([])
@@ -258,7 +259,8 @@ export default function AdminDashboard() {
                 {[
                     { key: 'stats', label: '📊 Statistics', icon: '📊' },
                     { key: 'users', label: '👥 Users', icon: '👥' },
-                    { key: 'meetings', label: '📋 Meetings', icon: '📋' }
+                    { key: 'meetings', label: '📋 Meetings', icon: '📋' },
+                    { key: 'progress', label: '📈 Progress', icon: '📈' }
                 ].map(tab => (
                     <button
                         key={tab.key}
@@ -647,6 +649,16 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Progress Tab */}
+            {activeTab === 'progress' && (
+                <div>
+                    <ProgressDashboard
+                        online={true} // TODO: Get actual online status
+                        vpsUp={true} // TODO: Get actual VPS status
+                    />
                 </div>
             )}
         </div>

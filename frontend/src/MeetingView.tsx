@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { db } from './db'
 import { syncMeeting, updateMeetingTags } from './offline'
 import { updateMeeting } from './api'
+import TagsManager from './TagsManager'
 
 export default function MeetingView({ meetingId }: { meetingId: string }) {
 	const [meeting, setMeeting] = useState<any>(null)
@@ -83,6 +84,24 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 				</div>
 				<div style={{ marginBottom: 12, color: '#64748b' }}>
 					📅 {new Date(meeting.createdAt).toLocaleString()} {meeting.duration && `• ⏱️ ${Math.round(meeting.duration/60)} min`}
+				</div>
+
+				{/* Tags Manager */}
+				<div style={{ marginBottom: 16 }}>
+					<TagsManager
+						meetingId={meetingId}
+						currentTags={meeting.tags || []}
+						onTagsUpdate={async (tags) => {
+							try {
+								await updateMeetingTags(meetingId, tags)
+								setMeeting(await db.meetings.get(meetingId))
+							} catch (err) {
+								console.error('Failed to update tags:', err)
+							}
+						}}
+						online={true} // TODO: Pass actual online status
+						vpsUp={true} // TODO: Pass actual VPS status
+					/>
 				</div>
 				
 				{/* Upload Progress for Local/Queued Meetings */}

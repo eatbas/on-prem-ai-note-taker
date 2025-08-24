@@ -236,4 +236,139 @@ export function createJobProgressStream(jobId: string): EventSource {
 	return eventSource
 }
 
+// ===== 🏷️ TAGS MANAGEMENT =====
+export interface Tag {
+	name: string
+	count: number
+}
+
+export async function getTags(): Promise<Tag[]> {
+	const resp = await fetch(`${apiBase}/tags`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get tags failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function updateMeetingTags(meetingId: string, tags: string[]): Promise<any> {
+	const resp = await fetch(`${apiBase}/meetings/${meetingId}/tags`, {
+		method: 'PUT',
+		headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+		body: JSON.stringify({ tags }),
+	})
+	if (!resp.ok) throw new Error(`Update meeting tags failed: ${resp.status}`)
+	return resp.json()
+}
+
+// ===== 📤 QUEUE SYSTEM =====
+export interface QueueStats {
+	active_tasks: number
+	pending_tasks: number
+	failed_tasks: number
+	completed_tasks: number
+	workers_running: number
+}
+
+export async function getQueueStats(): Promise<QueueStats> {
+	const resp = await fetch(`${apiBase}/queue/stats`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get queue stats failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function submitQueueTranscription(file: File, language: string = 'auto'): Promise<{ task_id: string }> {
+	const form = new FormData()
+	form.append('file', file)
+	form.append('language', language)
+
+	const resp = await fetch(`${apiBase}/queue/transcribe`, {
+		method: 'POST',
+		body: form,
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Queue transcription failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function submitQueueSummarization(text: string): Promise<{ task_id: string }> {
+	const resp = await fetch(`${apiBase}/queue/summarize`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+		body: JSON.stringify({ text }),
+	})
+	if (!resp.ok) throw new Error(`Queue summarization failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function getQueueTaskStatus(taskId: string): Promise<any> {
+	const resp = await fetch(`${apiBase}/queue/task/${taskId}/status`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get queue task status failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function getQueueTaskResult(taskId: string): Promise<any> {
+	const resp = await fetch(`${apiBase}/queue/task/${taskId}/result`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get queue task result failed: ${resp.status}`)
+	return resp.json()
+}
+
+// ===== 📈 PROGRESS STATISTICS =====
+export interface ProgressStats {
+	total_jobs: number
+	completed_jobs: number
+	failed_jobs: number
+	running_jobs: number
+	average_completion_time: number
+}
+
+export async function getProgressStats(): Promise<ProgressStats> {
+	const resp = await fetch(`${apiBase}/progress/stats`, {
+		method: 'GET',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Get progress stats failed: ${resp.status}`)
+	return resp.json()
+}
+
+// ===== 🎬 ENHANCED MEETING WORKFLOW =====
+export async function startMeeting(title: string): Promise<{ meeting_id: string; message: string }> {
+	const form = new FormData()
+	form.append('title', title)
+
+	const resp = await fetch(`${apiBase}/meetings/start`, {
+		method: 'POST',
+		body: form,
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Start meeting failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function uploadMeetingAudio(
+	meetingId: string, 
+	file: File, 
+	language: string = 'auto'
+): Promise<any> {
+	const form = new FormData()
+	form.append('file', file)
+	form.append('language', language)
+
+	const resp = await fetch(`${apiBase}/meetings/${meetingId}/upload-audio`, {
+		method: 'POST',
+		body: form,
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Upload meeting audio failed: ${resp.status}`)
+	return resp.json()
+}
+
 
