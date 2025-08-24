@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { addChunk, createMeeting, syncMeeting } from './offline'
+import { addChunk, createMeeting, syncMeeting, autoProcessMeetingRecording } from './offline'
 import { db } from './db'
 
 export default function Recorder({ 
@@ -396,19 +396,19 @@ export default function Recorder({
 				db.meetings.update(meetingId, { title, updatedAt: Date.now(), duration: recordingTime })
 			}
 			
-			// Automatically sync the meeting after recording ends
+			// Automatically process the meeting after recording ends
 			setTimeout(async () => {
 				try {
-					console.log('Auto-syncing meeting after recording ended...')
+					console.log('Auto-processing meeting after recording ended...')
 					setSyncStatus('syncing')
-					await syncMeeting(meetingId)
-					console.log('Meeting auto-synced successfully!')
+					await autoProcessMeetingRecording(meetingId, title)
+					console.log('Meeting auto-processed successfully!')
 					setSyncStatus('success')
 					setRetryCount(0) // Reset retry count on success
 					// Reset success status after 3 seconds
 					setTimeout(() => setSyncStatus('idle'), 3000)
 				} catch (error) {
-					console.error('Auto-sync failed:', error)
+					console.error('Auto-processing failed:', error)
 					setSyncStatus('failed')
 					
 					// Auto-retry with exponential backoff (max 3 retries)
@@ -419,10 +419,10 @@ export default function Recorder({
 							setRetryCount(prev => prev + 1)
 							setSyncStatus('syncing')
 							// Recursive retry
-							retrySync(meetingId, retryCount + 1)
+							retryAutoProcess(meetingId, title, retryCount + 1)
 						}, delay)
 					} else {
-						console.log('Max retries reached, giving up auto-sync')
+						console.log('Max retries reached, giving up auto-processing')
 						// Reset retry count and failed status after 5 seconds
 						setTimeout(() => {
 							setSyncStatus('idle')
@@ -437,17 +437,17 @@ export default function Recorder({
 		setRecordingTime(0)
 	}
 
-	// Helper function for retrying sync with exponential backoff
-	async function retrySync(meetingId: string, attempt: number) {
+	// Helper function for retrying auto-processing with exponential backoff
+	async function retryAutoProcess(meetingId: string, title: string, attempt: number) {
 		try {
-			await syncMeeting(meetingId)
-			console.log(`Meeting auto-synced successfully on retry attempt ${attempt}!`)
+			await autoProcessMeetingRecording(meetingId, title)
+			console.log(`Meeting auto-processed successfully on retry attempt ${attempt}!`)
 			setSyncStatus('success')
 			setRetryCount(0) // Reset retry count on success
 			// Reset success status after 3 seconds
 			setTimeout(() => setSyncStatus('idle'), 3000)
 		} catch (error) {
-			console.error(`Auto-sync retry attempt ${attempt} failed:`, error)
+			console.error(`Auto-processing retry attempt ${attempt} failed:`, error)
 			setSyncStatus('failed')
 			
 			// Continue retry chain if we haven't reached max attempts
@@ -457,10 +457,11 @@ export default function Recorder({
 				setTimeout(() => {
 					setRetryCount(prev => prev + 1)
 					setSyncStatus('syncing')
-					retrySync(meetingId, attempt + 1)
+					// Recursive retry
+					retryAutoProcess(meetingId, title, attempt + 1)
 				}, delay)
 			} else {
-				console.log('Max retries reached, giving up auto-sync')
+				console.log('Max retries reached, giving up auto-processing')
 				// Reset retry count and failed status after 5 seconds
 				setTimeout(() => {
 					setSyncStatus('idle')
@@ -1017,9 +1018,9 @@ export default function Recorder({
 						color: syncStatus === 'syncing' ? '#92400e' : 
 							   syncStatus === 'success' ? '#166534' : '#991b1b'
 					}}>
-						{syncStatus === 'syncing' && `🔄 Processing meeting with AI...${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}`}
-						{syncStatus === 'success' && '✅ Meeting processed successfully!'}
-						{syncStatus === 'failed' && `❌ Auto-processing failed${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}. You can manually retry.`}
+											{syncStatus === 'syncing' && `🔄 Processing meeting with AI...${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}`}
+					{syncStatus === 'success' && '✅ Meeting processed successfully with AI transcription and summary!'}
+					{syncStatus === 'failed' && `❌ Auto-processing failed${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}. You can manually retry.`}
 					</span>
 				</div>
 			)}

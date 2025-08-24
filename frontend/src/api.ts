@@ -175,6 +175,34 @@ export async function submitTranscribeAndSummarizeJob(
 	return resp.json()
 }
 
+export async function autoProcessMeeting(
+	file: File, 
+	language: string = 'auto',
+	title: string = 'Auto-recorded meeting'
+): Promise<{
+	meeting_id: string
+	status: string
+	transcript: string
+	summary: string
+	language: string
+	duration?: number
+	segments: Array<{ start: number; end: number; text: string }>
+	message: string
+}> {
+	const form = new FormData()
+	form.append('file', file)
+	form.append('language', language)
+	form.append('title', title)
+
+	const resp = await fetch(`${apiBase}/meetings/auto-process`, {
+		method: 'POST',
+		body: form,
+		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Auto-process meeting failed: ${resp.status}`)
+	return resp.json()
+}
+
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
 	const resp = await fetch(`${apiBase}/jobs/${jobId}/status`, {
 		method: 'GET',

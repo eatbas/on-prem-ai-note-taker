@@ -36,7 +36,7 @@ def get_whisper_model() -> WhisperModel:
     try:
         # Initialize Whisper model with VPS optimizations
         model = WhisperModel(
-            model_name=settings.whisper_model_name,
+            settings.whisper_model_name,  # First positional argument is the model name
             compute_type=settings.whisper_compute_type,
             device=settings.whisper_device,
             cpu_threads=settings.whisper_cpu_threads,

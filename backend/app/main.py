@@ -1392,3 +1392,144 @@ async def upload_meeting_audio(
     }
 
 
+@app.post("/api/meetings/auto-process")
+async def auto_process_meeting(
+    file: UploadFile = File(...),
+    language: Optional[str] = Form(default="auto"),
+    title: Optional[str] = Form(default="Auto-recorded meeting"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    _: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Automatically process a meeting recording with transcription and summarization"""
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    
+    # Validate file
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="File must have a filename")
+    
+    # Read and validate file size
+    content = await file.read()
+    size_mb = len(content) / (1024 * 1024)
+    if size_mb > settings.max_upload_mb:
+        raise HTTPException(
+            status_code=413, 
+            detail=f"File too large: {size_mb:.1f} MB > {settings.max_upload_mb} MB"
+        )
+    
+    # Validate language
+    try:
+        validated_language = validate_language(language)
+    except HTTPException as e:
+        raise HTTPException(status_code=400, detail=str(e.detail))
+    
+    # Get or create user
+    user = get_or_create_user(db)
+    
+    # Create meeting record
+    meeting_id = str(uuid.uuid4())
+    meeting = Meeting(
+        id=meeting_id,
+        user_id=user.id,
+        title=title,
+        tags=json.dumps(["auto-processed"])
+    )
+    db.add(meeting)
+    
+    try:
+        # Process the audio file directly
+        sem = get_transcribe_semaphore()
+        model = get_whisper_model()
+        
+        async with sem:
+            # Save to temp file
+            with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.filename or "audio")[1]) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            
+            try:
+                # Transcribe with VPS optimizations
+                segments, info = model.transcribe(
+                    tmp_path,
+                    language=validated_language if validated_language != "auto" else None,
+                    vad_filter=True,
+                    vad_parameters=dict(
+                        min_silence_duration_ms=500,
+                        speech_pad_ms=100
+                    ),
+                    beam_size=1,
+                    best_of=1,
+                    temperature=0.0,
+                    compression_ratio_threshold=2.4,
+                    log_prob_threshold=-1.0
+                )
+                
+                # Process segments
+                segments_out = []
+                text_parts = []
+                for s in segments:
+                    text_cleaned = s.text.strip()
+                    if text_cleaned:
+                        segments_out.append({
+                            "start": float(s.start),
+                            "end": float(s.end),
+                            "text": text_cleaned
+                        })
+                        text_parts.append(text_cleaned)
+                
+                transcript_text = "\n".join(text_parts).strip()
+                
+                # Save transcription
+                transcription = Transcription(
+                    meeting_id=meeting_id,
+                    text=transcript_text,
+                    language=info.language if hasattr(info, "language") else validated_language,
+                )
+                db.add(transcription)
+                
+                # Update meeting duration if available
+                if hasattr(info, "duration") and info.duration:
+                    meeting.duration = info.duration
+                
+                # Generate summary using Ollama
+                summary = _ollama_client.summarize(transcript_text)
+                
+                # Save summary
+                summary_obj = Summary(
+                    meeting_id=meeting_id,
+                    summary_text=summary,
+                    model_used=settings.ollama_model,
+                )
+                db.add(summary_obj)
+                
+                # Commit all changes
+                db.commit()
+                
+                logger.info(f"Auto-processed meeting {meeting_id}: {len(segments_out)} segments, language: {validated_language}")
+                
+                return {
+                    "meeting_id": meeting_id,
+                    "status": "completed",
+                    "transcript": transcript_text,
+                    "summary": summary,
+                    "language": validated_language,
+                    "duration": getattr(info, "duration", None),
+                    "segments": segments_out,
+                    "message": f"Meeting '{title}' processed successfully with {len(segments_out)} segments"
+                }
+                
+            finally:
+                # Cleanup temp file
+                try:
+                    os.remove(tmp_path)
+                except OSError:
+                    pass
+                    
+    except Exception as e:
+        # Rollback on error
+        db.rollback()
+        logger.error(f"Failed to auto-process meeting: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to process meeting: {str(e)}")
+
+

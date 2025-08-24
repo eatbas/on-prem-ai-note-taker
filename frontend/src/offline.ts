@@ -1,5 +1,5 @@
 import { db, Meeting, Chunk } from './db'
-import { transcribeAndSummarize } from './api'
+import { transcribeAndSummarize, autoProcessMeeting } from './api'
 
 export function generateId(prefix = 'id'): string {
 	return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`
@@ -140,6 +140,71 @@ export async function syncAllQueued(): Promise<void> {
 
 export async function updateMeetingTags(meetingId: string, tags: string[]): Promise<void> {
 	await db.meetings.update(meetingId, { tags, updatedAt: Date.now() })
+}
+
+export async function autoProcessMeetingRecording(
+	meetingId: string,
+	title?: string
+): Promise<void> {
+	const meeting = await db.meetings.get(meetingId)
+	if (!meeting) {
+		throw new Error('Meeting not found')
+	}
+	
+	const file = await assembleFileFromChunks(meetingId)
+	if (file.size === 0) {
+		throw new Error('No audio data found for this meeting')
+	}
+	
+	console.log(`Auto-processing meeting ${meetingId}, file size: ${(file.size / 1024 / 1024).toFixed(2)} MB`)
+	
+	try {
+		// Use the new auto-process endpoint for better reliability
+		const result = await autoProcessMeeting(
+			file, 
+			meeting.language, 
+			title || meeting.title
+		)
+		
+		// Save the results to local database
+		await db.notes.put({ 
+			meetingId, 
+			transcript: result.transcript, 
+			createdAt: Date.now(), 
+			summary: result.summary 
+		})
+		
+		// Update meeting status and metadata
+		await db.meetings.update(meetingId, { 
+			status: 'sent', 
+			updatedAt: Date.now(),
+			title: result.message.includes('Meeting') ? result.message.split("'")[1] : meeting.title
+		})
+		
+		console.log(`Successfully auto-processed meeting ${meetingId}`)
+	} catch (e) {
+		await db.meetings.update(meetingId, { 
+			status: 'queued', 
+			updatedAt: Date.now() 
+		})
+		console.error(`Failed to auto-process meeting ${meetingId}:`, e)
+		
+		// Provide more specific error messages
+		if (e instanceof Error) {
+			if (e.message.includes('Failed to fetch') || e.message.includes('fetch')) {
+				throw new Error('Cannot connect to AI backend server. Make sure the backend is running and accessible.')
+			} else if (e.message.includes('401') || e.message.includes('Unauthorized')) {
+				throw new Error('Authentication failed. Check your credentials.')
+			} else if (e.message.includes('413') || e.message.includes('too large')) {
+				throw new Error('Audio file too large. Try recording shorter sessions.')
+			} else if (e.message.includes('500')) {
+				throw new Error('Server error. The AI backend may be having issues.')
+			} else if (e.message.includes('Auto-process meeting failed')) {
+				throw new Error('Failed to process meeting automatically. Please try again.')
+			}
+		}
+		throw e
+	}
 }
 
 
