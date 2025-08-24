@@ -46,30 +46,46 @@ const API_BASE = (() => {
     return (import.meta as any).env.VITE_API_BASE_URL || '/api'
 })()
 
-async function makeAdminRequest(path: string, options?: RequestInit) {
-    const username = prompt('Admin Username:')
-    const password = prompt('Admin Password:')
+// Get auth credentials from environment variables
+const getAuthCredentials = () => {
+    const username = (import.meta as any).env.VITE_BASIC_AUTH_USERNAME
+    const password = (import.meta as any).env.VITE_BASIC_AUTH_PASSWORD
     
     if (!username || !password) {
-        throw new Error('Admin credentials required')
+        throw new Error('Admin credentials not configured. Please check your .env.local file.')
     }
     
-    const token = btoa(`${username}:${password}`)
-    
-    const response = await fetch(`${API_BASE}${path}`, {
-        ...options,
-        headers: {
-            'Authorization': `Basic ${token}`,
-            'Content-Type': 'application/json',
-            ...options?.headers,
-        },
-    })
-    
-    if (!response.ok) {
-        throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+    return { username, password }
+}
+
+async function makeAdminRequest(path: string, options?: RequestInit) {
+    try {
+        const credentials = getAuthCredentials()
+        const token = btoa(`${credentials.username}:${credentials.password}`)
+        
+        const response = await fetch(`${API_BASE}${path}`, {
+            ...options,
+            headers: {
+                'Authorization': `Basic ${token}`,
+                'Content-Type': 'application/json',
+                ...options?.headers,
+            },
+        })
+        
+        if (!response.ok) {
+            if (response.status === 401) {
+                throw new Error('Invalid credentials. Please check your .env.local file.')
+            }
+            throw new Error(`Request failed: ${response.status} ${response.statusText}`)
+        }
+        
+        return response.json()
+    } catch (err) {
+        if (err instanceof Error && err.message.includes('credentials not configured')) {
+            throw new Error('Admin authentication not configured. Please set VITE_BASIC_AUTH_USERNAME and VITE_BASIC_AUTH_PASSWORD in your .env.local file.')
+        }
+        throw err
     }
-    
-    return response.json()
 }
 
 export default function AdminDashboard() {

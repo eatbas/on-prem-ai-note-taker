@@ -477,24 +477,34 @@ export default function Recorder({
 		return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 	}
 
+	// Store multiple system audio analyzers
+	const systemAnalyzersRef = useRef<AnalyserNode[]>([])
+
 	// Audio level monitoring functions
 	function startAudioLevelMonitoring(systemStreams: MediaStream[], micStream: MediaStream) {
 		if (audioContextRef.current) {
 			audioContextRef.current.close()
 		}
 		
+		// Clear previous system analyzers
+		systemAnalyzersRef.current = []
+		
 		audioContextRef.current = new AudioContext()
 		
 		// Monitor system audio levels from ALL sources
 		if (systemStreams.length > 0 && audioContextRef.current) {
-			systemStreams.forEach(stream => {
+			console.log(`Setting up audio monitoring for ${systemStreams.length} system audio sources`)
+			
+			systemStreams.forEach((stream, index) => {
 				const systemSource = audioContextRef.current!.createMediaStreamSource(stream)
-				analyserRef.current = audioContextRef.current!.createAnalyser()
-				analyserRef.current.fftSize = 256
-				analyserRef.current.smoothingTimeConstant = 0.3
-				analyserRef.current.minDecibels = -90
-				analyserRef.current.maxDecibels = -10
-				systemSource.connect(analyserRef.current)
+				const analyser = audioContextRef.current!.createAnalyser()
+				analyser.fftSize = 256
+				analyser.smoothingTimeConstant = 0.3
+				analyser.minDecibels = -90
+				analyser.maxDecibels = -10
+				systemSource.connect(analyser)
+				systemAnalyzersRef.current.push(analyser)
+				console.log(`System audio source ${index + 1} analyzer created`)
 			})
 		}
 		
@@ -507,22 +517,44 @@ export default function Recorder({
 			microphoneAnalyserRef.current.minDecibels = -90
 			microphoneAnalyserRef.current.maxDecibels = -10
 			micSource.connect(microphoneAnalyserRef.current)
+			console.log('Microphone analyzer created')
 		}
 		
 		// Start monitoring loop
 		function updateAudioLevels() {
-			if (analyserRef.current) {
-				const systemData = new Uint8Array(analyserRef.current.frequencyBinCount)
-				analyserRef.current.getByteFrequencyData(systemData)
-				// Calculate RMS (Root Mean Square) for better level representation
-				const systemSum = systemData.reduce((sum, value) => sum + value * value, 0)
-				const systemRms = Math.sqrt(systemSum / systemData.length)
-				const normalizedSystemLevel = systemRms / 255
-				setSystemAudioLevel(normalizedSystemLevel)
+			// Aggregate system audio levels from ALL analyzers
+			if (systemAnalyzersRef.current.length > 0) {
+				let maxSystemLevel = 0
+				let totalSystemLevel = 0
+				let activeStreams = 0
 				
-				// Debug logging
-				if (normalizedSystemLevel > 0.1) {
-					console.log('System Audio Level:', normalizedSystemLevel.toFixed(3))
+				systemAnalyzersRef.current.forEach((analyser, index) => {
+					const systemData = new Uint8Array(analyser.frequencyBinCount)
+					analyser.getByteFrequencyData(systemData)
+					// Calculate RMS (Root Mean Square) for better level representation
+					const systemSum = systemData.reduce((sum, value) => sum + value * value, 0)
+					const systemRms = Math.sqrt(systemSum / systemData.length)
+					const normalizedLevel = systemRms / 255
+					
+					// Track the maximum level across all sources (for responsive UI)
+					maxSystemLevel = Math.max(maxSystemLevel, normalizedLevel)
+					
+					// Also track total for averaging
+					totalSystemLevel += normalizedLevel
+					if (normalizedLevel > 0.01) activeStreams++
+					
+					// Debug logging for each stream
+					if (normalizedLevel > 0.1) {
+						console.log(`System Audio Source ${index + 1} Level:`, normalizedLevel.toFixed(3))
+					}
+				})
+				
+				// Use the maximum level across all sources to show activity on any source
+				setSystemAudioLevel(maxSystemLevel)
+				
+				// Enhanced debug logging
+				if (maxSystemLevel > 0.1) {
+					console.log(`Combined System Audio - Max: ${maxSystemLevel.toFixed(3)}, Active sources: ${activeStreams}/${systemAnalyzersRef.current.length}`)
 				}
 			}
 			
@@ -558,6 +590,10 @@ export default function Recorder({
 			audioContextRef.current = null
 		}
 		
+		// Clear all system audio analyzers
+		systemAnalyzersRef.current = []
+		analyserRef.current = null
+		microphoneAnalyserRef.current = null
 		setSystemAudioLevel(0)
 		setMicrophoneLevel(0)
 	}
