@@ -11,11 +11,11 @@ from fastapi import APIRouter, File, UploadFile, Form, HTTPException, Header, De
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from .progress import job_store, Phase
-from .config import settings
-from .ollama_client import OllamaClient
+from .workers.progress import job_store, Phase
+from .core.config import settings
+from .clients.ollama_client import OllamaClient
 from .database import get_db, get_or_create_user, Meeting, Transcription, Summary
-from .utils import get_whisper_model, validate_language, require_basic_auth
+from .core.utils import get_whisper_model, validate_language, require_basic_auth
 
 # Initialize router
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
