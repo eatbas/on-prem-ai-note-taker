@@ -1,0 +1,2 @@
+scripts\start-electron-dev.bat
+.\scripts\build-desktop-app.bat

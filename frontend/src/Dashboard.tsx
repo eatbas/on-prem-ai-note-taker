@@ -256,7 +256,7 @@ export default function Dashboard({
 				{[
 					{ id: 'local', label: '📁 Local Meetings', icon: '🏠' },
 					{ id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
-					{ id: 'llama', label: '🤖 Ask Llama', icon: '💬' }
+					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
 				].map((tab) => (
 					<button
 						key={tab.id}

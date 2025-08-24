@@ -12,7 +12,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 	}>>([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [model] = useState<string>('3.1 8B') // Hardcoded to your only model
+	const [model] = useState<string>('AI Assistant') // Generic name instead of hardcoded model
 	const [requestId, setRequestId] = useState(0)
 
 	// Remove the availableModels state and useEffect since we only have one model
@@ -42,7 +42,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					id: currentRequestId,
 					question: currentPrompt,
 					answer: result.response,
-					model: currentModel || 'default',
+					model: currentModel || 'AI Assistant',
 					timestamp: new Date()
 				}
 				setChatHistory(prev => [...prev, newChatEntry])
@@ -52,7 +52,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 			console.error(`[Request ${currentRequestId}] Chat request failed:`, err)
 			// Only update error if this is still the current request
 			if (currentRequestId === requestId + 1) {
-				setError(err instanceof Error ? err.message : 'Failed to get response from Llama')
+				setError(err instanceof Error ? err.message : 'Failed to get response from AI Assistant')
 			}
 		} finally {
 			// Only update loading if this is still the current request
@@ -92,7 +92,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					fontWeight: '600',
 					color: '#1e293b'
 				}}>
-					🤖 Ask Llama
+					🤖 Ask AI Assistant
 				</h2>
 				<p style={{
 					margin: '0',
@@ -100,7 +100,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					color: '#64748b',
 					lineHeight: '1.6'
 				}}>
-					Ask Llama anything! This AI assistant can help with questions, analysis, writing, and more.
+					Ask your AI assistant anything! This AI can help with questions, analysis, writing, and more.
 				</p>
 				
 				{/* Model indicator */}
@@ -117,7 +117,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 						fontWeight: '600',
 						color: '#0c4a6e'
 					}}>
-						🤖 Using Model: {model}
+						🤖 AI Assistant Ready
 					</span>
 				</div>
 				
@@ -226,7 +226,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					<textarea
 						value={prompt}
 						onChange={(e) => setPrompt(e.target.value)}
-						placeholder="Ask Llama anything... (e.g., 'Explain quantum computing', 'Write a poem about AI', 'Help me plan a project')"
+						placeholder="Ask your AI assistant anything... (e.g., 'Explain quantum computing', 'Write a poem about AI', 'Help me plan a project')"
 						disabled={!online || !vpsUp || loading}
 						style={{
 							flex: 1,
@@ -268,7 +268,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 							}
 						}}
 					>
-						{loading ? '🤔 Thinking...' : '💬 Ask Llama'}
+						{loading ? '🤔 Thinking...' : '💬 Ask AI Assistant'}
 					</button>
 					{chatHistory.length > 0 && (
 						<button

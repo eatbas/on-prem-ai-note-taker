@@ -31,11 +31,10 @@ if %errorlevel% neq 0 (
 for /f "tokens=*" %%i in ('node --version') do set NODE_VERSION=%%i
 echo ✅ Node.js %NODE_VERSION% found
 
-REM Check Python
-where python >nul 2>nul
-if %errorlevel% neq 0 (
-    echo ⚠️  Python not found - backend may not work in packaged app
-)
+echo.
+echo 📋 Architecture: Desktop App (Frontend Only) + VPS Backend
+echo 💡 The desktop app will connect to your VPS for AI services
+echo 🌐 No local Python backend needed
 
 REM Step 1: Build Frontend
 echo.
@@ -55,29 +54,9 @@ call npm run build
 cd ..
 echo ✅ Frontend built successfully
 
-REM Step 2: Prepare Backend
+REM Step 2: Prepare Electron
 echo.
-echo 📦 Step 2: Preparing Backend...
-cd backend
-
-REM Create virtual environment if needed
-if not exist "venv" (
-    echo Creating Python virtual environment...
-    python -m venv venv
-)
-
-REM Install backend dependencies
-echo Installing backend dependencies...
-call venv\Scripts\activate.bat
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-
-cd ..
-echo ✅ Backend prepared successfully
-
-REM Step 3: Prepare Electron
-echo.
-echo 📦 Step 3: Preparing Electron App...
+echo 📦 Step 2: Preparing Electron App...
 cd electron
 
 REM Install Electron dependencies
@@ -93,9 +72,9 @@ xcopy /E /I /Y "..\frontend\dist" "dist"
 
 echo ✅ Electron prepared successfully
 
-REM Step 4: Build executables
+REM Step 3: Build executables
 echo.
-echo 📦 Step 4: Building Desktop Application...
+echo 📦 Step 3: Building Desktop Application...
 echo Choose your platform:
 echo 1. Windows (.exe)
 echo 2. macOS (.dmg) - Not available on Windows
@@ -127,9 +106,9 @@ echo 📁 Output location: electron\dist-electron\
 echo.
 echo 📋 What's included:
 echo - ✅ React frontend (built for production)
-echo - ✅ Python backend (with SQLite database)
 echo - ✅ Electron wrapper (native desktop app)
 echo - ✅ Automatic VPS connection for AI services
+echo - ❌ NO Python backend (connects to VPS instead)
 echo.
 echo 🚀 Next steps:
 echo 1. Find your installer in electron\dist-electron\
@@ -141,5 +120,12 @@ echo - Store all data locally in %%USERPROFILE%%\.on-prem-ai-notes\
 echo - Connect to VPS at %VPS_IP% for AI processing
 echo - Work offline for viewing existing notes
 echo - Auto-detect your username for authentication
+echo.
+echo 🌐 VPS Services Required:
+echo - Backend API running on port 8000
+echo - Ollama running on port 11434
+echo - Database and file storage
+echo.
+echo 💡 This creates a lightweight desktop app that uses your VPS for AI processing!
 
 pause

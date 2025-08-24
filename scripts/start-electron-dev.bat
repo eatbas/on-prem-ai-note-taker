@@ -22,6 +22,7 @@ set "VITE_DEBUG=true"
 
 echo 🔗 Development mode will connect to VPS at: %VITE_API_BASE_URL%
 echo 📝 Note: App will use VPS backend for AI services (transcription, chat, etc.)
+echo 🌐 No local Python backend needed - everything runs on VPS
 
 echo.
 echo 📦 Setting up frontend for development...
@@ -55,6 +56,7 @@ set "BASIC_AUTH_PASSWORD=wj2YyxrJ4cqcXgCA"
 
 echo 🚀 Starting Electron with VPS connection...
 echo 💡 The app will now load from the live Vite dev server!
+echo 🌐 All AI processing will happen on your VPS
 call npm start
 cd ..
 
@@ -62,4 +64,5 @@ echo.
 echo ✅ Development session ended
 echo 💡 Remember: The app always connects to VPS for AI services
 echo 🧹 Don't forget to close the Vite dev server window if it's still running
+echo 🌐 No local Python backend needed - everything runs on VPS
 pause
