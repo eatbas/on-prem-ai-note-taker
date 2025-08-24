@@ -12,7 +12,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 	}>>([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
-	const [model] = useState<string>('AI Assistant') // Generic name instead of hardcoded model
+	const [model] = useState<string>('qwen2.5:3b-instruct') // Use actual Ollama model name
 	const [requestId, setRequestId] = useState(0)
 
 	// Debug logging for status
@@ -57,7 +57,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					id: currentRequestId,
 					question: currentPrompt,
 					answer: result.response,
-					model: currentModel || 'AI Assistant',
+					model: currentModel || 'qwen2.5:3b-instruct',
 					timestamp: new Date()
 				}
 				setChatHistory(prev => [...prev, newChatEntry])
@@ -107,7 +107,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					fontWeight: '600',
 					color: '#1e293b'
 				}}>
-					🤖 Ask AI Assistant
+					🤖 Ask qwen2.5:3b-instruct
 				</h2>
 				<p style={{
 					margin: '0',
