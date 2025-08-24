@@ -4,7 +4,7 @@ import Recorder from './Recorder'
 import Dashboard from './Dashboard'
 import MeetingView from './MeetingView'
 import AdminDashboard from './AdminDashboard'
-import QueueProcessor from './QueueProcessor'
+
 import { watchOnline } from './offline'
 import { getVpsHealth } from './api'
 import { useToast } from './Toast'
@@ -256,31 +256,7 @@ function AppShell({
 						>
 							🛠️ Admin Dashboard
 						</button>
-						<button
-							onClick={() => navigate('/queue')}
-							style={{
-								padding: '8px 16px',
-								backgroundColor: '#2563eb',
-								color: 'white',
-								border: 'none',
-								borderRadius: '8px',
-								fontSize: '14px',
-								fontWeight: '600',
-								cursor: 'pointer',
-								transition: 'all 0.2s ease',
-								display: 'flex',
-								alignItems: 'center',
-								gap: '8px'
-							}}
-							onMouseEnter={(e) => {
-								e.currentTarget.style.backgroundColor = '#1d4ed8'
-							}}
-							onMouseLeave={(e) => {
-								e.currentTarget.style.backgroundColor = '#2563eb'
-							}}
-						>
-							📤 Queue Processing
-						</button>
+
 					</div>
 				</header>
 				
@@ -566,7 +542,7 @@ export default function App() {
 					/>
 				} />
 				<Route path="/admin" element={<AdminDashboard />} />
-				<Route path="/queue" element={<QueueProcessor online={online} vpsUp={vpsUp} />} />
+				
 			</Routes>
 		</Router>
 	)

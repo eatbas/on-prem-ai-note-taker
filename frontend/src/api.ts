@@ -41,28 +41,113 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	if (opts?.language) form.append('language', opts.language)
 	if (opts?.vadFilter !== undefined) form.append('vad_filter', String(opts.vadFilter))
 
+	// Add job to queue for tracking
+	const jobId = `transcribe_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+	
+	// Import and add to queue (dynamic import to avoid circular dependencies)
+	try {
+		const { addJobToQueue } = await import('./jobQueueManager')
+		addJobToQueue(jobId, 'pending', `Transcribing audio file`)
+	} catch (err) {
+		console.warn('Could not add job to queue:', err)
+	}
+
 	const resp = await fetch(`${apiBase}/transcribe`, {
 		method: 'POST',
 		body: form,
 		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
 	})
-	if (!resp.ok) throw new Error(`Transcribe failed: ${resp.status}`)
-	return resp.json()
+	
+	if (!resp.ok) {
+		// Update job status to failed
+		try {
+			const { updateJobInQueue } = await import('./jobQueueManager')
+			updateJobInQueue(jobId, { status: 'error', message: `Failed to transcribe audio` })
+		} catch (err) {
+			console.warn('Could not update job status:', err)
+		}
+		throw new Error(`Transcribe failed: ${resp.status}`)
+	}
+	
+	const result = await resp.json()
+	
+	// Update job status to completed
+	try {
+		const { updateJobInQueue } = await import('./jobQueueManager')
+		updateJobInQueue(jobId, { 
+			status: 'done', 
+			message: `Audio transcribed successfully`,
+			progress: 100,
+			canGoBack: true
+		})
+	} catch (err) {
+		console.warn('Could not update job status:', err)
+	}
+	
+	return result
 }
 
 export async function summarize(text: string) {
+	// Add job to queue for tracking
+	const jobId = `summarize_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+	
+	// Import and add to queue (dynamic import to avoid circular dependencies)
+	try {
+		const { addJobToQueue } = await import('./jobQueueManager')
+		addJobToQueue(jobId, 'pending', `Generating summary from text`)
+	} catch (err) {
+		console.warn('Could not add job to queue:', err)
+	}
+
 	const resp = await fetch(`${apiBase}/summarize`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
 		body: JSON.stringify({ text }),
 	})
-	if (!resp.ok) throw new Error(`Summarize failed: ${resp.status}`)
-	return resp.json()
+	
+	if (!resp.ok) {
+		// Update job status to failed
+		try {
+			const { updateJobInQueue } = await import('./jobQueueManager')
+			updateJobInQueue(jobId, { status: 'error', message: `Failed to generate summary` })
+		} catch (err) {
+			console.warn('Could not update job status:', err)
+		}
+		throw new Error(`Summarize failed: ${resp.status}`)
+	}
+	
+	const result = await resp.json()
+	
+	// Update job status to completed
+	try {
+		const { updateJobInQueue } = await import('./jobQueueManager')
+		updateJobInQueue(jobId, { 
+			status: 'done', 
+			message: `Summary generated successfully`,
+			progress: 100,
+			canGoBack: true
+		})
+	} catch (err) {
+		console.warn('Could not update job status:', err)
+	}
+	
+	return result
 }
 
 export async function chat(prompt: string, model?: string) {
 	const controller = new AbortController()
 	const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+	
+	// Add job to queue for tracking
+	const jobId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+	
+	// Import and add to queue (dynamic import to avoid circular dependencies)
+	try {
+		const { addJobToQueue } = await import('./jobQueueManager')
+		addJobToQueue(jobId, 'pending', `Processing AI chat request`)
+	} catch (err) {
+		console.warn('Could not add job to queue:', err)
+	}
 	
 	try {
 		const resp = await fetch(`${apiBase}/chat`, {
@@ -74,10 +159,32 @@ export async function chat(prompt: string, model?: string) {
 		
 		if (!resp.ok) {
 			const errorText = await resp.text()
+			// Update job status to failed
+			try {
+				const { updateJobInQueue } = await import('./jobQueueManager')
+				updateJobInQueue(jobId, { status: 'error', message: `Chat failed: ${resp.status}` })
+			} catch (err) {
+				console.warn('Could not update job status:', err)
+			}
 			throw new Error(`Chat failed: ${resp.status} - ${errorText}`)
 		}
 		
-		return resp.json()
+		const result = await resp.json()
+		
+		// Update job status to completed
+		try {
+			const { updateJobInQueue } = await import('./jobQueueManager')
+			updateJobInQueue(jobId, { 
+				status: 'done', 
+				message: `AI chat completed successfully`,
+				progress: 100,
+				canGoBack: true
+			})
+		} catch (err) {
+			console.warn('Could not update job status:', err)
+		}
+		
+		return result
 	} finally {
 		clearTimeout(timeoutId)
 	}
@@ -89,13 +196,50 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	if (opts?.language) form.append('language', opts.language)
 	if (opts?.vadFilter !== undefined) form.append('vad_filter', String(opts.vadFilter))
 
+	// Add job to queue for tracking
+	const jobId = `transcribe_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+	
+	// Import and add to queue (dynamic import to avoid circular dependencies)
+	try {
+		const { addJobToQueue } = await import('./jobQueueManager')
+		addJobToQueue(jobId, 'pending', `Transcribing and summarizing audio file`)
+	} catch (err) {
+		console.warn('Could not add job to queue:', err)
+	}
+
 	const resp = await fetch(`${apiBase}/transcribe-and-summarize`, {
 		method: 'POST',
 		body: form,
 		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
 	})
-	if (!resp.ok) throw new Error(`Transcribe+Summarize failed: ${resp.status}`)
-	return resp.json()
+	
+	if (!resp.ok) {
+		// Update job status to failed
+		try {
+			const { updateJobInQueue } = await import('./jobQueueManager')
+			updateJobInQueue(jobId, { status: 'error', message: `Failed to transcribe and summarize audio` })
+		} catch (err) {
+			console.warn('Could not update job status:', err)
+		}
+		throw new Error(`Transcribe+Summarize failed: ${resp.status}`)
+	}
+	
+	const result = await resp.json()
+	
+	// Update job status to completed
+	try {
+		const { updateJobInQueue } = await import('./jobQueueManager')
+		updateJobInQueue(jobId, { 
+			status: 'done', 
+			message: `Audio transcribed and summarized successfully`,
+			progress: 100,
+			canGoBack: true
+		})
+	} catch (err) {
+		console.warn('Could not update job status:', err)
+	}
+	
+	return result
 }
 
 export async function getMeetings() {
@@ -194,13 +338,50 @@ export async function autoProcessMeeting(
 	form.append('language', language)
 	form.append('title', title)
 
+	// Add job to queue for tracking
+	const jobId = `meeting_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+	
+	// Import and add to queue (dynamic import to avoid circular dependencies)
+	try {
+		const { addJobToQueue } = await import('./jobQueueManager')
+		addJobToQueue(jobId, 'pending', `Processing meeting: ${title}`)
+	} catch (err) {
+		console.warn('Could not add job to queue:', err)
+	}
+
 	const resp = await fetch(`${apiBase}/meetings/auto-process`, {
 		method: 'POST',
 		body: form,
 		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
 	})
-	if (!resp.ok) throw new Error(`Auto-process meeting failed: ${resp.status}`)
-	return resp.json()
+	
+	if (!resp.ok) {
+		// Update job status to failed
+		try {
+			const { updateJobInQueue } = await import('./jobQueueManager')
+			updateJobInQueue(jobId, { status: 'error', message: `Failed to process meeting: ${title}` })
+		} catch (err) {
+			console.warn('Could not update job status:', err)
+		}
+		throw new Error(`Auto-process meeting failed: ${resp.status}`)
+	}
+	
+	const result = await resp.json()
+	
+	// Update job status to completed
+	try {
+		const { updateJobInQueue } = await import('./jobQueueManager')
+		updateJobInQueue(jobId, { 
+			status: 'done', 
+			message: `Meeting processed successfully: ${title}`,
+			progress: 100,
+			canGoBack: true
+		})
+	} catch (err) {
+		console.warn('Could not update job status:', err)
+	}
+	
+	return result
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
@@ -369,6 +550,274 @@ export async function uploadMeetingAudio(
 	})
 	if (!resp.ok) throw new Error(`Upload meeting audio failed: ${resp.status}`)
 	return resp.json()
+}
+
+// ===== 🔍 VPS DIAGNOSTICS =====
+export interface VpsDiagnosticResult {
+	step: string
+	status: 'success' | 'error' | 'warning'
+	message: string
+	details?: any
+	responseTime?: number
+}
+
+export async function runVpsDiagnostics(): Promise<VpsDiagnosticResult[]> {
+	const results: VpsDiagnosticResult[] = []
+	const startTime = Date.now()
+	
+	// Step 1: Test basic connectivity
+	try {
+		const step1Start = Date.now()
+		const resp = await fetch(`${apiBase}/health`, { 
+			method: 'GET', 
+			headers: { ...getAuthHeader() },
+			signal: AbortSignal.timeout(10000) // 10 second timeout
+		})
+		const step1Time = Date.now() - step1Start
+		
+		if (resp.ok) {
+			const health = await resp.json()
+			results.push({
+				step: 'Basic Connectivity',
+				status: 'success',
+				message: `✅ Connected to VPS in ${step1Time}ms`,
+				details: health,
+				responseTime: step1Time
+			})
+		} else {
+			results.push({
+				step: 'Basic Connectivity',
+				status: 'error',
+				message: `❌ HTTP ${resp.status}: ${resp.statusText}`,
+				details: { status: resp.status, statusText: resp.statusText },
+				responseTime: step1Time
+			})
+		}
+	} catch (err) {
+		results.push({
+			step: 'Basic Connectivity',
+			status: 'error',
+			message: `❌ Connection failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+			details: err
+		})
+	}
+	
+	// Step 2: Test authentication
+	try {
+		const step2Start = Date.now()
+		const resp = await fetch(`${apiBase}/health`, { 
+			method: 'GET',
+			signal: AbortSignal.timeout(10000)
+		})
+		const step2Time = Date.now() - step2Start
+		
+		if (resp.status === 401) {
+			results.push({
+				step: 'Authentication',
+				status: 'success',
+				message: '✅ Authentication required (expected)',
+				details: { status: resp.status },
+				responseTime: step2Time
+			})
+		} else if (resp.ok) {
+			results.push({
+				step: 'Authentication',
+				status: 'warning',
+				message: '⚠️ No authentication required (unexpected)',
+				details: { status: resp.status },
+				responseTime: step2Time
+			})
+		} else {
+			results.push({
+				step: 'Authentication',
+				status: 'error',
+				message: `❌ Unexpected response: ${resp.status}`,
+				details: { status: resp.status, statusText: resp.statusText },
+				responseTime: step2Time
+			})
+		}
+	} catch (err) {
+		results.push({
+			step: 'Authentication',
+			status: 'error',
+			message: `❌ Auth test failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+			details: err
+		})
+	}
+	
+	// Step 3: Test with proper authentication
+	try {
+		const step3Start = Date.now()
+		const resp = await fetch(`${apiBase}/health`, { 
+			method: 'GET',
+			headers: { ...getAuthHeader() },
+			signal: AbortSignal.timeout(10000)
+		})
+		const step3Time = Date.now() - step3Start
+		
+		if (resp.ok) {
+			const health = await resp.json()
+			results.push({
+				step: 'Authenticated Access',
+				status: 'success',
+				message: `✅ Successfully authenticated in ${step3Time}ms`,
+				details: health,
+				responseTime: step3Time
+			})
+		} else {
+			results.push({
+				step: 'Authenticated Access',
+				status: 'error',
+				message: `❌ Auth failed: ${resp.status} ${resp.statusText}`,
+				details: { status: resp.status, statusText: resp.statusText },
+				responseTime: step3Time
+			})
+		}
+	} catch (err) {
+		results.push({
+			step: 'Authenticated Access',
+			status: 'error',
+			message: `❌ Auth test failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+			details: err
+		})
+	}
+	
+	// Step 4: Test file upload endpoint (without file)
+	try {
+		const step4Start = Date.now()
+		const resp = await fetch(`${apiBase}/transcribe`, { 
+			method: 'POST',
+			headers: { ...getAuthHeader() },
+			body: new FormData(), // Empty form data
+			signal: AbortSignal.timeout(15000)
+		})
+		const step4Time = Date.now() - step4Start
+		
+		// We expect this to fail (no file), but we want to see the error
+		if (resp.status === 422 || resp.status === 400) {
+			results.push({
+				step: 'File Upload Endpoint',
+				status: 'success',
+				message: `✅ Upload endpoint accessible (expected validation error)`,
+				details: { status: resp.status, statusText: resp.statusText },
+				responseTime: step4Time
+			})
+		} else if (resp.ok) {
+			results.push({
+				step: 'File Upload Endpoint',
+				status: 'warning',
+				message: `⚠️ Upload endpoint accepted empty data (unexpected)`,
+				details: { status: resp.status },
+				responseTime: step4Time
+			})
+		} else {
+			results.push({
+				step: 'File Upload Endpoint',
+				status: 'error',
+				message: `❌ Upload endpoint error: ${resp.status} ${resp.statusText}`,
+				details: { status: resp.status, statusText: resp.statusText },
+				responseTime: step4Time
+			})
+		}
+	} catch (err) {
+		results.push({
+			step: 'File Upload Endpoint',
+			status: 'error',
+			message: `❌ Upload endpoint test failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+			details: err
+		})
+	}
+	
+	// Step 5: Test with a small dummy file
+	try {
+		const step5Start = Date.now()
+		const dummyFile = new File(['test audio content'], 'test.wav', { type: 'audio/wav' })
+		const formData = new FormData()
+		formData.append('file', dummyFile)
+		
+		const resp = await fetch(`${apiBase}/transcribe`, { 
+			method: 'POST',
+			headers: { ...getAuthHeader() },
+			body: formData,
+			signal: AbortSignal.timeout(30000) // Longer timeout for file processing
+		})
+		const step5Time = Date.now() - step5Start
+		
+		if (resp.ok) {
+			results.push({
+				step: 'File Processing',
+				status: 'success',
+				message: `✅ File processing successful in ${step5Time}ms`,
+				details: { status: resp.status, responseTime: step5Time },
+				responseTime: step5Time
+			})
+		} else {
+			const errorText = await resp.text()
+			results.push({
+				step: 'File Processing',
+				status: 'error',
+				message: `❌ File processing failed: ${resp.status} ${resp.statusText}`,
+				details: { status: resp.status, statusText: resp.statusText, error: errorText },
+				responseTime: step5Time
+			})
+		}
+	} catch (err) {
+		results.push({
+			step: 'File Processing',
+			status: 'error',
+			message: `❌ File processing test failed: ${err instanceof Error ? err.message : 'Unknown error'}`,
+			details: err
+		})
+	}
+	
+	// Step 6: Overall summary
+	const totalTime = Date.now() - startTime
+	const successCount = results.filter(r => r.status === 'success').length
+	const errorCount = results.filter(r => r.status === 'error').length
+	const warningCount = results.filter(r => r.status === 'warning').length
+	
+	results.push({
+		step: 'Diagnostic Summary',
+		status: errorCount === 0 ? 'success' : 'error',
+		message: `📊 Completed in ${totalTime}ms: ${successCount} ✅, ${warningCount} ⚠️, ${errorCount} ❌`,
+		details: { totalTime, successCount, warningCount, errorCount }
+	})
+	
+	return results
+}
+
+// ===== 🧪 QUICK CONNECTION TEST =====
+export async function quickVpsTest(): Promise<{ success: boolean; message: string; details?: any }> {
+	try {
+		const startTime = Date.now()
+		const resp = await fetch(`${apiBase}/health`, { 
+			method: 'GET', 
+			headers: { ...getAuthHeader() },
+			signal: AbortSignal.timeout(5000) // 5 second timeout
+		})
+		const responseTime = Date.now() - startTime
+		
+		if (resp.ok) {
+			const health = await resp.json()
+			return {
+				success: true,
+				message: `✅ VPS connected successfully in ${responseTime}ms`,
+				details: { health, responseTime }
+			}
+		} else {
+			return {
+				success: false,
+				message: `❌ VPS responded with error: ${resp.status} ${resp.statusText}`,
+				details: { status: resp.status, statusText: resp.statusText, responseTime }
+			}
+		}
+	} catch (err) {
+		return {
+			success: false,
+			message: `❌ Cannot connect to VPS: ${err instanceof Error ? err.message : 'Unknown error'}`,
+			details: { error: err }
+		}
+	}
 }
 
 

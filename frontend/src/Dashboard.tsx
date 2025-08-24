@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listMeetings, syncMeeting, watchOnline } from './offline'
-import { getMeetings, getVpsHealth, updateMeeting } from './api'
+import { getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult } from './api'
 import { db } from './db'
 import AskLlama from './AskLlama'
+import JobQueue from './JobQueue'
+import { useToast } from './Toast'
+import { createRippleEffect } from './utils'
 
 export default function Dashboard({ 
 	onOpen, 
@@ -30,10 +33,16 @@ export default function Dashboard({
 	const [error, setError] = useState<string | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
-	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama'>('local')
+	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'jobs'>('local')
 	const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
 	const [vpsLoading, setVpsLoading] = useState(false)
 	const [vpsError, setVpsError] = useState<string | null>(null)
+	const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
+	const { showToast, ToastContainer } = useToast()
+	const [vpsDiagnosticResults, setVpsDiagnosticResults] = useState<VpsDiagnosticResult[]>([])
+	const [showVpsDiagnostics, setShowVpsDiagnostics] = useState(false)
+	const [quickTestResult, setQuickTestResult] = useState<any>(null)
+	const [showQuickTest, setShowQuickTest] = useState(false)
 
 	async function refresh() {
 		setLoading(true)
@@ -105,6 +114,83 @@ export default function Dashboard({
 		}
 	}
 
+	async function checkBackendStatus() {
+		try {
+			setLoading(true)
+			const health = await getVpsHealth()
+			showToast(`Backend is healthy! 🟢 Whisper: ${health.whisper_model}, Ollama: ${health.ollama_model}`, 'success')
+		} catch (err) {
+			console.error('Backend health check failed:', err)
+			const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+			
+			if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch')) {
+				showToast('❌ Cannot connect to backend server. Check if the backend is running.', 'error')
+			} else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+				showToast('❌ Authentication failed. Check your credentials.', 'error')
+			} else if (errorMessage.includes('500')) {
+				showToast('❌ Backend server error. The AI services may be having issues.', 'error')
+			} else {
+				showToast(`❌ Backend check failed: ${errorMessage}`, 'error')
+			}
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	async function runFullVpsDiagnostics() {
+		try {
+			setLoading(true)
+			showToast('🔍 Running comprehensive VPS diagnostics...', 'info')
+			
+			const results = await runVpsDiagnostics()
+			
+			// Show summary toast
+			const successCount = results.filter(r => r.status === 'success').length
+			const errorCount = results.filter(r => r.status === 'error').length
+			
+			if (errorCount === 0) {
+				showToast(`✅ All VPS tests passed! (${successCount} successful)`, 'success')
+			} else {
+				showToast(`❌ VPS diagnostics found ${errorCount} issues. Check details below.`, 'error')
+			}
+			
+			// Store results for display
+			setVpsDiagnosticResults(results)
+			setShowVpsDiagnostics(true)
+			
+		} catch (err) {
+			console.error('VPS diagnostics failed:', err)
+			showToast(`❌ Diagnostics failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+		} finally {
+			setLoading(false)
+		}
+	}
+
+	async function quickVpsConnectionTest() {
+		try {
+			setLoading(true)
+			showToast('🧪 Running quick VPS connection test...', 'info')
+			
+			const result = await quickVpsTest()
+			
+			if (result.success) {
+				showToast(result.message, 'success')
+			} else {
+				showToast(result.message, 'error')
+			}
+			
+			// Store result for display
+			setQuickTestResult(result)
+			setShowQuickTest(true)
+			
+		} catch (err) {
+			console.error('Quick VPS test failed:', err)
+			showToast(`❌ Quick test failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
+		} finally {
+			setLoading(false)
+		}
+	}
+
 	useEffect(() => {
 		refresh()
 	}, [text, tag, online])
@@ -129,11 +215,35 @@ export default function Dashboard({
 	async function retry(meetingId: string) {
 		try {
 			setError(null)
+			// Add loading state for this specific meeting
+			setSendingMeetings(prev => new Set(prev).add(meetingId))
 			await syncMeeting(meetingId)
 			await refresh()
+			showToast('Meeting sent successfully! 🎉', 'success')
 		} catch (err) {
 			console.error('Retry failed:', err)
-			setError(`Failed to send meeting: ${err instanceof Error ? err.message : 'Unknown error'}`)
+			const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+			setError(`Failed to send meeting: ${errorMessage}`)
+			
+			// Show specific error messages based on error type
+			if (errorMessage.includes('Server error') || errorMessage.includes('500')) {
+				showToast('Server error: The AI backend may be having issues. Please try again later.', 'error')
+			} else if (errorMessage.includes('Cannot connect')) {
+				showToast('Connection error: Cannot reach the AI backend server.', 'error')
+			} else if (errorMessage.includes('Authentication failed')) {
+				showToast('Authentication error: Please check your credentials.', 'error')
+			} else if (errorMessage.includes('too large')) {
+				showToast('File too large: Try recording shorter sessions.', 'error')
+			} else {
+				showToast(`Failed to send meeting: ${errorMessage}`, 'error')
+			}
+		} finally {
+			// Remove loading state
+			setSendingMeetings(prev => {
+				const newSet = new Set(prev)
+				newSet.delete(meetingId)
+				return newSet
+			})
 		}
 	}
 
@@ -197,7 +307,27 @@ export default function Dashboard({
 					color: currentPage === 1 ? '#9ca3af' : '#374151',
 					borderRadius: '6px',
 					cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-					fontSize: '14px'
+					fontSize: '14px',
+					transition: 'all 0.2s ease',
+					transform: 'scale(1)'
+				}}
+				onMouseDown={(e) => {
+					if (currentPage !== 1) {
+						e.currentTarget.style.transform = 'scale(0.95)'
+						e.currentTarget.style.backgroundColor = '#e5e7eb'
+					}
+				}}
+				onMouseUp={(e) => {
+					if (currentPage !== 1) {
+						e.currentTarget.style.transform = 'scale(1)'
+						e.currentTarget.style.backgroundColor = 'white'
+					}
+				}}
+				onMouseLeave={(e) => {
+					if (currentPage !== 1) {
+						e.currentTarget.style.transform = 'scale(1)'
+						e.currentTarget.style.backgroundColor = 'white'
+					}
 				}}
 			>
 				← Previous
@@ -221,7 +351,27 @@ export default function Dashboard({
 					color: currentPage === totalPages ? '#9ca3af' : '#374151',
 					borderRadius: '6px',
 					cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-					fontSize: '14px'
+					fontSize: '14px',
+					transition: 'all 0.2s ease',
+					transform: 'scale(1)'
+				}}
+				onMouseDown={(e) => {
+					if (currentPage !== totalPages) {
+						e.currentTarget.style.transform = 'scale(0.95)'
+						e.currentTarget.style.backgroundColor = '#e5e7eb'
+					}
+				}}
+				onMouseUp={(e) => {
+					if (currentPage !== totalPages) {
+						e.currentTarget.style.transform = 'scale(1)'
+						e.currentTarget.style.backgroundColor = 'white'
+					}
+				}}
+				onMouseLeave={(e) => {
+					if (currentPage !== totalPages) {
+						e.currentTarget.style.transform = 'scale(1)'
+						e.currentTarget.style.backgroundColor = 'white'
+					}
 				}}
 			>
 				Next →
@@ -231,6 +381,8 @@ export default function Dashboard({
 
 	return (
 		<div>
+			{/* Toast Container */}
+			<ToastContainer />
 
 			{error && (
 				<div style={{ 
@@ -256,7 +408,8 @@ export default function Dashboard({
 				{[
 					{ id: 'local', label: '📁 Local Meetings', icon: '🏠' },
 					{ id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
-					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
+					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' },
+					{ id: 'jobs', label: '📋 Job Queue', icon: '⚙️' }
 				].map((tab) => (
 					<button
 						key={tab.id}
@@ -275,7 +428,8 @@ export default function Dashboard({
 							alignItems: 'center',
 							justifyContent: 'center',
 							gap: '8px',
-							borderRight: tab.id !== 'llama' ? '1px solid #e2e8f0' : 'none'
+							borderRight: tab.id !== 'jobs' ? '1px solid #e2e8f0' : 'none',
+							transform: 'scale(1)'
 						}}
 						onMouseEnter={(e) => {
 							if (activeTab !== tab.id) {
@@ -287,6 +441,12 @@ export default function Dashboard({
 								e.currentTarget.style.backgroundColor = '#f8fafc'
 							}
 						}}
+						onMouseDown={(e) => {
+							e.currentTarget.style.transform = 'scale(0.98)'
+						}}
+						onMouseUp={(e) => {
+							e.currentTarget.style.transform = 'scale(1)'
+						}}
 					>
 						<span style={{ fontSize: '18px' }}>{tab.icon}</span>
 						{tab.label}
@@ -294,9 +454,311 @@ export default function Dashboard({
 				))}
 			</div>
 
+			{/* Backend Status Check */}
+			{online && (
+				<div style={{
+					display: 'flex',
+					justifyContent: 'center',
+					marginBottom: '16px',
+					padding: '12px',
+					backgroundColor: '#f8fafc',
+					borderRadius: '8px',
+					border: '1px solid #e2e8f0'
+				}}>
+					<div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+						<button
+							onClick={(e) => {
+								createRippleEffect(e)
+								checkBackendStatus()
+							}}
+							disabled={loading}
+							style={{
+								padding: '8px 16px',
+								backgroundColor: loading ? '#9ca3af' : '#10b981',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: loading ? 'not-allowed' : 'pointer',
+								fontSize: '14px',
+								fontWeight: '500',
+								transition: 'all 0.2s ease',
+								transform: 'scale(1)'
+							}}
+							onMouseDown={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(0.95)'
+									e.currentTarget.style.backgroundColor = '#059669'
+								}
+							}}
+							onMouseUp={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#10b981'
+								}
+							}}
+							onMouseLeave={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#10b981'
+								}
+							}}
+						>
+							{loading ? '🔍 Checking...' : '🔍 Check Backend Status'}
+						</button>
+						
+						<button
+							onClick={(e) => {
+								createRippleEffect(e)
+								quickVpsConnectionTest()
+							}}
+							disabled={loading}
+							style={{
+								padding: '8px 16px',
+								backgroundColor: loading ? '#9ca3af' : '#3b82f6',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: loading ? 'not-allowed' : 'pointer',
+								fontSize: '14px',
+								fontWeight: '500',
+								transition: 'all 0.2s ease',
+								transform: 'scale(1)'
+							}}
+							onMouseDown={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(0.95)'
+									e.currentTarget.style.backgroundColor = '#2563eb'
+								}
+							}}
+							onMouseUp={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#3b82f6'
+								}
+							}}
+							onMouseLeave={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#3b82f6'
+								}
+							}}
+						>
+							{loading ? '🧪 Testing...' : '🧪 Quick VPS Test'}
+						</button>
+						
+						<button
+							onClick={(e) => {
+								createRippleEffect(e)
+								runFullVpsDiagnostics()
+							}}
+							disabled={loading}
+							style={{
+								padding: '8px 16px',
+								backgroundColor: loading ? '#9ca3af' : '#8b5cf6',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: loading ? 'not-allowed' : 'pointer',
+								fontSize: '14px',
+								fontWeight: '500',
+								transition: 'all 0.2s ease',
+								transform: 'scale(1)'
+							}}
+							onMouseDown={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(0.95)'
+									e.currentTarget.style.backgroundColor = '#7c3aed'
+								}
+							}}
+							onMouseUp={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#8b5cf6'
+								}
+							}}
+							onMouseLeave={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#8b5cf6'
+								}
+							}}
+						>
+							{loading ? '🔬 Running...' : '🔬 Full VPS Diagnostics'}
+						</button>
+					</div>
+					
+					<span style={{ 
+						marginLeft: '12px', 
+						fontSize: '14px', 
+						color: '#6b7280',
+						display: 'flex',
+						alignItems: 'center',
+						gap: '8px'
+					}}>
+						<span style={{ 
+							width: '8px', 
+							height: '8px', 
+							borderRadius: '50%', 
+							backgroundColor: online ? '#10b981' : '#ef4444' 
+						}}></span>
+						{online ? 'Online' : 'Offline'}
+					</span>
+				</div>
+			)}
+
+			{/* Quick Test Results */}
+			{showQuickTest && quickTestResult && (
+				<div style={{
+					marginBottom: '16px',
+					padding: '16px',
+					backgroundColor: quickTestResult.success ? '#f0fdf4' : '#fef2f2',
+					border: `1px solid ${quickTestResult.success ? '#bbf7d0' : '#fecaca'}`,
+					borderRadius: '8px'
+				}}>
+					<div style={{
+						display: 'flex',
+						justifyContent: 'space-between',
+						alignItems: 'center',
+						marginBottom: '8px'
+					}}>
+						<h4 style={{ margin: 0, color: quickTestResult.success ? '#166534' : '#dc2626' }}>
+							🧪 Quick VPS Test Result
+						</h4>
+						<button
+							onClick={() => setShowQuickTest(false)}
+							style={{
+								background: 'none',
+								border: 'none',
+								fontSize: '18px',
+								cursor: 'pointer',
+								color: '#6b7280'
+							}}
+						>
+							✕
+						</button>
+					</div>
+					<p style={{ margin: 0, color: quickTestResult.success ? '#166534' : '#dc2626' }}>
+						{quickTestResult.message}
+					</p>
+					{quickTestResult.details && (
+						<details style={{ marginTop: '8px' }}>
+							<summary style={{ cursor: 'pointer', color: '#6b7280' }}>View Details</summary>
+							<pre style={{ 
+								margin: '8px 0 0 0', 
+								padding: '8px', 
+								backgroundColor: 'rgba(0,0,0,0.05)', 
+								borderRadius: '4px',
+								fontSize: '12px',
+								overflow: 'auto'
+							}}>
+								{JSON.stringify(quickTestResult.details, null, 2)}
+							</pre>
+						</details>
+					)}
+				</div>
+			)}
+
+			{/* Full Diagnostic Results */}
+			{showVpsDiagnostics && vpsDiagnosticResults.length > 0 && (
+				<div style={{
+					marginBottom: '16px',
+					padding: '16px',
+					backgroundColor: '#f8fafc',
+					border: '1px solid #e2e8f0',
+					borderRadius: '8px'
+				}}>
+					<div style={{
+						display: 'flex',
+						justifyContent: 'space-between',
+						alignItems: 'center',
+						marginBottom: '16px'
+					}}>
+						<h4 style={{ margin: 0, color: '#1e293b' }}>
+							🔬 VPS Diagnostic Results
+						</h4>
+						<button
+							onClick={() => setShowVpsDiagnostics(false)}
+							style={{
+								background: 'none',
+								border: 'none',
+								fontSize: '18px',
+								cursor: 'pointer',
+								color: '#6b7280'
+							}}
+						>
+							✕
+						</button>
+					</div>
+					
+					<div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+						{vpsDiagnosticResults.map((result, index) => (
+							<div key={index} style={{
+								padding: '12px',
+								backgroundColor: result.status === 'success' ? '#f0fdf4' : 
+												result.status === 'warning' ? '#fef3c7' : '#fef2f2',
+								border: `1px solid ${result.status === 'success' ? '#bbf7d0' : 
+													result.status === 'warning' ? '#fde68a' : '#fecaca'}`,
+								borderRadius: '6px'
+							}}>
+								<div style={{
+									display: 'flex',
+									justifyContent: 'space-between',
+									alignItems: 'center',
+									marginBottom: '4px'
+								}}>
+									<strong style={{ 
+										color: result.status === 'success' ? '#166534' : 
+												result.status === 'warning' ? '#92400e' : '#dc2626'
+									}}>
+										{result.step}
+									</strong>
+									{result.responseTime && (
+										<span style={{ 
+											fontSize: '12px', 
+											color: '#6b7280',
+											backgroundColor: 'rgba(0,0,0,0.05)',
+											padding: '2px 6px',
+											borderRadius: '4px'
+										}}>
+											{result.responseTime}ms
+										</span>
+									)}
+								</div>
+								<p style={{ 
+									margin: 0, 
+									color: result.status === 'success' ? '#166534' : 
+											result.status === 'warning' ? '#92400e' : '#dc2626'
+								}}>
+									{result.message}
+								</p>
+								{result.details && (
+									<details style={{ marginTop: '8px' }}>
+										<summary style={{ cursor: 'pointer', color: '#6b7280' }}>View Details</summary>
+										<pre style={{ 
+											margin: '8px 0 0 0', 
+											padding: '8px', 
+											backgroundColor: 'rgba(0,0,0,0.05)', 
+											borderRadius: '4px',
+											fontSize: '12px',
+											overflow: 'auto'
+										}}>
+											{JSON.stringify(result.details, null, 2)}
+										</pre>
+									</details>
+								)}
+							</div>
+						))}
+					</div>
+				</div>
+			)}
+
 			{/* Tab Content */}
 			{activeTab === 'llama' && (
 				<AskLlama online={online} vpsUp={vpsUp} />
+			)}
+			
+			{activeTab === 'jobs' && (
+				<JobQueue online={online} vpsUp={vpsUp} />
 			)}
 
 			{activeTab === 'local' && (
@@ -418,6 +880,7 @@ export default function Dashboard({
 								<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
 									<button 
 										onClick={(e) => {
+											createRippleEffect(e)
 											e.stopPropagation()
 											onOpen(m.id)
 										}} 
@@ -428,7 +891,21 @@ export default function Dashboard({
 											border: 'none',
 											borderRadius: '4px',
 											cursor: 'pointer',
-											fontWeight: '500'
+											fontWeight: '500',
+											transition: 'all 0.2s ease',
+											transform: 'scale(1)'
+										}}
+										onMouseDown={(e) => {
+											e.currentTarget.style.transform = 'scale(0.95)'
+											e.currentTarget.style.backgroundColor = '#2563eb'
+										}}
+										onMouseUp={(e) => {
+											e.currentTarget.style.transform = 'scale(1)'
+											e.currentTarget.style.backgroundColor = '#3b82f6'
+										}}
+										onMouseLeave={(e) => {
+											e.currentTarget.style.transform = 'scale(1)'
+											e.currentTarget.style.backgroundColor = '#3b82f6'
 										}}
 									>
 										📄 Open
@@ -436,22 +913,44 @@ export default function Dashboard({
 									{m.status !== 'sent' && (
 										<button 
 											onClick={(e) => {
+												createRippleEffect(e)
 												e.stopPropagation()
 												retry(m.id)
 											}} 
-											disabled={!online} 
+											disabled={!online || sendingMeetings.has(m.id)} 
 											style={{ 
 												padding: '8px 16px',
-												backgroundColor: '#10b981',
+												backgroundColor: sendingMeetings.has(m.id) ? '#9ca3af' : '#10b981',
 												color: 'white',
 												border: 'none',
 												borderRadius: '4px',
-												cursor: online ? 'pointer' : 'not-allowed',
+												cursor: (online && !sendingMeetings.has(m.id)) ? 'pointer' : 'not-allowed',
 												fontWeight: '500',
-												opacity: online ? 1 : 0.6
+												opacity: online ? 1 : 0.6,
+												transition: 'all 0.2s ease',
+												transform: 'scale(1)',
+												minWidth: '80px'
+											}}
+											onMouseDown={(e) => {
+												if (online && !sendingMeetings.has(m.id)) {
+													e.currentTarget.style.transform = 'scale(0.95)'
+													e.currentTarget.style.backgroundColor = '#059669'
+												}
+											}}
+											onMouseUp={(e) => {
+												if (online && !sendingMeetings.has(m.id)) {
+													e.currentTarget.style.transform = 'scale(1)'
+													e.currentTarget.style.backgroundColor = '#10b981'
+												}
+											}}
+											onMouseLeave={(e) => {
+												if (online && !sendingMeetings.has(m.id)) {
+													e.currentTarget.style.transform = 'scale(1)'
+													e.currentTarget.style.backgroundColor = '#10b981'
+												}
 											}}
 										>
-											📤 Send
+											{sendingMeetings.has(m.id) ? '⏳ Sending...' : '📤 Send'}
 										</button>
 									)}
 								</div>
@@ -496,7 +995,27 @@ export default function Dashboard({
 											backgroundColor: currentPage === 1 ? '#f3f4f6' : 'white',
 											borderRadius: '4px',
 											cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-											fontSize: '12px'
+											fontSize: '12px',
+											transition: 'all 0.2s ease',
+											transform: 'scale(1)'
+										}}
+										onMouseDown={(e) => {
+											if (currentPage !== 1) {
+												e.currentTarget.style.transform = 'scale(0.95)'
+												e.currentTarget.style.backgroundColor = '#e5e7eb'
+											}
+										}}
+										onMouseUp={(e) => {
+											if (currentPage !== 1) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
+										}}
+										onMouseLeave={(e) => {
+											if (currentPage !== 1) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
 										}}
 									>
 										⏮️ First
@@ -510,7 +1029,27 @@ export default function Dashboard({
 											backgroundColor: currentPage === 1 ? '#f3f4f6' : 'white',
 											borderRadius: '4px',
 											cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-											fontSize: '12px'
+											fontSize: '12px',
+											transition: 'all 0.2s ease',
+											transform: 'scale(1)'
+										}}
+										onMouseDown={(e) => {
+											if (currentPage !== 1) {
+												e.currentTarget.style.transform = 'scale(0.95)'
+												e.currentTarget.style.backgroundColor = '#e5e7eb'
+											}
+										}}
+										onMouseUp={(e) => {
+											if (currentPage !== 1) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
+										}}
+										onMouseLeave={(e) => {
+											if (currentPage !== 1) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
 										}}
 									>
 										⬅️ Previous
@@ -558,7 +1097,27 @@ export default function Dashboard({
 											backgroundColor: currentPage === totalPages ? '#f3f4f6' : 'white',
 											borderRadius: '4px',
 											cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-											fontSize: '12px'
+											fontSize: '12px',
+											transition: 'all 0.2s ease',
+											transform: 'scale(1)'
+										}}
+										onMouseDown={(e) => {
+											if (currentPage !== totalPages) {
+												e.currentTarget.style.transform = 'scale(0.95)'
+												e.currentTarget.style.backgroundColor = '#e5e7eb'
+											}
+										}}
+										onMouseUp={(e) => {
+											if (currentPage !== totalPages) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
+										}}
+										onMouseLeave={(e) => {
+											if (currentPage !== totalPages) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
 										}}
 									>
 										Next ➡️
@@ -572,7 +1131,27 @@ export default function Dashboard({
 											backgroundColor: currentPage === totalPages ? '#f3f4f6' : 'white',
 											borderRadius: '4px',
 											cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-											fontSize: '12px'
+											fontSize: '12px',
+											transition: 'all 0.2s ease',
+											transform: 'scale(1)'
+										}}
+										onMouseDown={(e) => {
+											if (currentPage !== totalPages) {
+												e.currentTarget.style.transform = 'scale(0.95)'
+												e.currentTarget.style.backgroundColor = '#e5e7eb'
+											}
+										}}
+										onMouseUp={(e) => {
+											if (currentPage !== totalPages) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
+										}}
+										onMouseLeave={(e) => {
+											if (currentPage !== totalPages) {
+												e.currentTarget.style.transform = 'scale(1)'
+												e.currentTarget.style.backgroundColor = 'white'
+											}
 										}}
 									>
 										Last ⏭️
@@ -822,7 +1401,8 @@ export default function Dashboard({
 									fontSize: '14px',
 									fontWeight: '600',
 									cursor: vpsLoading ? 'not-allowed' : 'pointer',
-									transition: 'all 0.2s ease'
+									transition: 'all 0.2s ease',
+									transform: 'scale(1)'
 								}}
 								onMouseEnter={(e) => {
 									if (!vpsLoading) {
@@ -831,6 +1411,18 @@ export default function Dashboard({
 								}}
 								onMouseLeave={(e) => {
 									if (!vpsLoading) {
+										e.currentTarget.style.backgroundColor = '#0ea5e9'
+									}
+								}}
+								onMouseDown={(e) => {
+									if (!vpsLoading) {
+										e.currentTarget.style.transform = 'scale(0.95)'
+										e.currentTarget.style.backgroundColor = '#0369a1'
+									}
+								}}
+								onMouseUp={(e) => {
+									if (!vpsLoading) {
+										e.currentTarget.style.transform = 'scale(1)'
 										e.currentTarget.style.backgroundColor = '#0ea5e9'
 									}
 								}}
@@ -848,11 +1440,18 @@ export default function Dashboard({
 function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string; onSaved: () => void }) {
     const [editing, setEditing] = useState(false)
     const [value, setValue] = useState(title)
+    const { showToast } = useToast()
+    
     useEffect(() => setValue(title), [title])
     async function save() {
         const trimmed = value.trim()
         if (trimmed && trimmed !== title) {
-            try { await updateMeeting(id, trimmed) } catch {}
+            try { 
+                await updateMeeting(id, trimmed) 
+                showToast('Title updated successfully! ✏️', 'success')
+            } catch (err) {
+                showToast('Failed to update title. Please try again.', 'error')
+            }
         }
         setEditing(false)
         onSaved()
@@ -865,11 +1464,39 @@ function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string
                 onBlur={save}
                 onKeyDown={e => { if (e.key === 'Enter') save() }}
                 autoFocus
-                style={{ fontSize: 18, fontWeight: 600, width: '100%', padding: 4 }}
+                style={{ 
+                    fontSize: 18, 
+                    fontWeight: 600, 
+                    width: '100%', 
+                    padding: 4,
+                    border: '2px solid #3b82f6',
+                    borderRadius: '4px',
+                    outline: 'none',
+                    backgroundColor: '#f0f9ff'
+                }}
             />
         )
     }
-    return <span onClick={() => setEditing(true)} style={{ cursor: 'text' }}>{title}</span>
+    return (
+        <span 
+            onClick={() => setEditing(true)} 
+            style={{ 
+                cursor: 'text',
+                padding: '2px 4px',
+                borderRadius: '4px',
+                transition: 'all 0.2s ease',
+                backgroundColor: 'transparent'
+            }}
+            onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#f1f5f9'
+            }}
+            onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent'
+            }}
+        >
+            {title}
+        </span>
+    )
 }
 
 

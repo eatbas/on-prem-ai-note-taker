@@ -14,6 +14,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 	const [error, setError] = useState<string | null>(null)
 	const [model] = useState<string>('qwen2.5:3b-instruct') // Use actual Ollama model name
 	const [requestId, setRequestId] = useState(0)
+	const [activeTab, setActiveTab] = useState<'current' | 'history'>('current')
 
 	// Debug logging for status
 	useEffect(() => {
@@ -62,6 +63,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 				}
 				setChatHistory(prev => [...prev, newChatEntry])
 				setPrompt('') // Clear the input after successful submission
+				setActiveTab('history') // Switch to history tab to show the new response
 			}
 		} catch (err) {
 			console.error(`[Request ${currentRequestId}] Chat request failed:`, err)
@@ -89,6 +91,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 		setError(null)
 		setPrompt('')
 		setRequestId(0)
+		setActiveTab('current')
 	}
 
 	return (
@@ -107,7 +110,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					fontWeight: '600',
 					color: '#1e293b'
 				}}>
-					🤖 Ask qwen2.5:3b-instruct
+					🤖 Ask AI Assistant
 				</h2>
 				<p style={{
 					margin: '0',
@@ -199,308 +202,473 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 				</div>
 			</div>
 
-			{/* Chat form */}
-			<form onSubmit={handleSubmit} style={{ marginBottom: '24px' }}>
-				{/* Loading indicator */}
-				{loading && (
-					<div style={{
-						padding: '12px 16px',
-						backgroundColor: '#fef3c7',
-						border: '1px solid #f59e0b',
-						borderRadius: '8px',
-						marginBottom: '16px',
-						textAlign: 'center',
-						color: '#92400e',
-						fontWeight: '500'
-					}}>
-						⏳ Form is disabled while processing request #{requestId + 1}. Please wait or cancel the request.
-					</div>
-				)}
+			{/* Tab Navigation */}
+			<div style={{
+				display: 'flex',
+				borderBottom: '2px solid #e2e8f0',
+				marginBottom: '24px'
+			}}>
+				<button
+					onClick={() => setActiveTab('current')}
+					style={{
+						padding: '16px 24px',
+						backgroundColor: activeTab === 'current' ? '#3b82f6' : 'transparent',
+						color: activeTab === 'current' ? 'white' : '#64748b',
+						border: 'none',
+						borderRadius: '8px 8px 0 0',
+						fontSize: '16px',
+						fontWeight: '600',
+						cursor: 'pointer',
+						transition: 'all 0.2s ease',
+						borderBottom: activeTab === 'current' ? '2px solid #3b82f6' : 'none'
+					}}
+				>
+					💬 Current Chat
+				</button>
+				<button
+					onClick={() => setActiveTab('history')}
+					style={{
+						padding: '16px 24px',
+						backgroundColor: activeTab === 'history' ? '#3b82f6' : 'transparent',
+						color: activeTab === 'history' ? 'white' : '#64748b',
+						border: 'none',
+						borderRadius: '8px 8px 0 0',
+						fontSize: '16px',
+						fontWeight: '600',
+						cursor: 'pointer',
+						transition: 'all 0.2s ease',
+						borderBottom: activeTab === 'history' ? '2px solid #3b82f6' : 'none'
+					}}
+				>
+					📚 Past Queries ({chatHistory.length})
+				</button>
+			</div>
 
-				{/* Status message */}
-				{loading && (
-					<div style={{
-						padding: '12px 16px',
-						backgroundColor: '#dbeafe',
-						border: '1px solid #3b82f6',
-						borderRadius: '8px',
-						marginBottom: '16px',
-						textAlign: 'center',
-						color: '#1e40af',
-						fontWeight: '500'
-					}}>
-						🔄 Processing request #{requestId + 1}... Please wait or cancel if needed.
-					</div>
-				)}
-
-				<div style={{
-					display: 'flex',
-					gap: '12px',
-					alignItems: 'flex-start'
-				}}>
-					<textarea
-						value={prompt}
-						onChange={(e) => setPrompt(e.target.value)}
-						placeholder="Ask your AI assistant anything... (e.g., 'Explain quantum computing', 'Write a poem about AI', 'Help me plan a project')"
-						disabled={!online || !vpsUp || loading}
-						style={{
-							flex: 1,
-							minHeight: '120px',
-							padding: '16px',
-							border: '2px solid #d1d5db',
-							borderRadius: '8px',
-							fontSize: '16px',
-							fontFamily: 'inherit',
-							resize: 'vertical',
-							backgroundColor: (!online || !vpsUp || loading) ? '#f3f4f6' : 'white',
-							color: (!online || !vpsUp || loading) ? '#9ca3af' : '#374151'
-						}}
-					/>
-					<button
-						type="submit"
-						disabled={isDisabled}
-						style={{
-							padding: '16px 24px',
-							backgroundColor: isDisabled ? '#9ca3af' : '#3b82f6',
-							color: 'white',
-							border: 'none',
-							borderRadius: '8px',
-							fontSize: '16px',
-							fontWeight: '600',
-							cursor: isDisabled ? 'not-allowed' : 'pointer',
-							transition: 'all 0.2s ease',
-							whiteSpace: 'nowrap',
-							minWidth: '120px'
-						}}
-						onMouseEnter={(e) => {
-							if (!isDisabled) {
-								e.currentTarget.style.backgroundColor = '#2563eb'
-							}
-						}}
-						onMouseLeave={(e) => {
-							if (!isDisabled) {
-								e.currentTarget.style.backgroundColor = '#3b82f6'
-							}
-						}}
-					>
-						{loading ? '🤔 Thinking...' : '💬 Ask AI Assistant'}
-					</button>
-					{chatHistory.length > 0 && (
-						<button
-							type="button"
-							onClick={resetChat}
-							style={{
-								padding: '16px 24px',
-								backgroundColor: '#6b7280',
-								color: 'white',
-								border: 'none',
-								borderRadius: '8px',
-								fontSize: '16px',
-								fontWeight: '600',
-								cursor: 'pointer',
-								transition: 'all 0.2s ease',
-								whiteSpace: 'nowrap',
-								minWidth: '120px'
-							}}
-							onMouseEnter={(e) => {
-								e.currentTarget.style.backgroundColor = '#4b5563'
-							}}
-							onMouseLeave={(e) => {
-								e.currentTarget.style.backgroundColor = '#6b7280'
-							}}
-						>
-							🗑️ Clear Chat
-						</button>
-					)}
-					{chatHistory.length > 0 && (
-						<button
-							type="button"
-							onClick={resetChat}
-							style={{
-								padding: '16px 24px',
-								backgroundColor: '#10b981',
-								color: 'white',
-								border: 'none',
-								borderRadius: '8px',
-								fontSize: '16px',
-								fontWeight: '600',
-								cursor: 'pointer',
-								transition: 'all 0.2s ease',
-								whiteSpace: 'nowrap',
-								minWidth: '120px'
-							}}
-							onMouseEnter={(e) => {
-								e.currentTarget.style.backgroundColor = '#059669'
-							}}
-							onMouseLeave={(e) => {
-								e.currentTarget.style.backgroundColor = '#10b981'
-							}}
-						>
-							💬 New Chat
-						</button>
-					)}
+			{/* Current Chat Tab */}
+			{activeTab === 'current' && (
+				<div>
+					{/* Loading indicator */}
 					{loading && (
-						<button
-							type="button"
-							onClick={handleCancel}
-							style={{
-								padding: '16px 24px',
-								backgroundColor: '#ef4444',
-								color: 'white',
-								border: 'none',
-								borderRadius: '8px',
-								fontSize: '16px',
-								fontWeight: '600',
-								cursor: 'pointer',
-								transition: 'all 0.2s ease',
-								whiteSpace: 'nowrap',
-								minWidth: '120px'
-							}}
-							onMouseEnter={(e) => {
-								e.currentTarget.style.backgroundColor = '#dc2626'
-							}}
-							onMouseLeave={(e) => {
-								e.currentTarget.style.backgroundColor = '#ef4444'
-							}}
-						>
-							⚠️ Cancel Request
-						</button>
+						<div style={{
+							padding: '12px 16px',
+							backgroundColor: '#fef3c7',
+							border: '1px solid #f59e0b',
+							borderRadius: '8px',
+							marginBottom: '16px',
+							textAlign: 'center',
+							color: '#92400e',
+							fontWeight: '500'
+						}}>
+							⏳ Form is disabled while processing request #{requestId + 1}. Please wait or cancel the request.
+						</div>
 					)}
-				</div>
-			</form>
 
-			{/* Error display */}
-			{error && (
-				<div style={{ 
-					padding: '16px', 
-					backgroundColor: '#fee2e2', 
-					border: '1px solid #fecaca',
-					borderRadius: '8px',
-					marginBottom: '24px',
-					color: '#dc2626'
-				}}>
-					⚠️ <strong>Error:</strong> {error}
+					{/* Status message */}
+					{loading && (
+						<div style={{
+							padding: '12px 16px',
+							backgroundColor: '#dbeafe',
+							border: '1px solid #3b82f6',
+							borderRadius: '8px',
+							marginBottom: '16px',
+							textAlign: 'center',
+							color: '#1e40af',
+							fontWeight: '500'
+						}}>
+							🔄 Processing request #{requestId + 1}... Please wait or cancel if needed.
+						</div>
+					)}
+
+					{/* Chat form */}
+					<form onSubmit={handleSubmit} style={{ marginBottom: '24px' }}>
+						<div style={{
+							display: 'flex',
+							flexDirection: 'column',
+							gap: '16px'
+						}}>
+							<textarea
+								value={prompt}
+								onChange={(e) => setPrompt(e.target.value)}
+								placeholder="Ask your AI assistant anything... (e.g., 'Explain quantum computing', 'Write a poem about AI', 'Help me plan a project')"
+								disabled={!online || !vpsUp || loading}
+								style={{
+									width: '100%',
+									minHeight: '120px',
+									padding: '16px',
+									border: '2px solid #d1d5db',
+									borderRadius: '8px',
+									fontSize: '16px',
+									fontFamily: 'inherit',
+									resize: 'vertical',
+									backgroundColor: (!online || !vpsUp || loading) ? '#f3f4f6' : 'white',
+									color: (!online || !vpsUp || loading) ? '#9ca3af' : '#374151'
+								}}
+							/>
+							
+							{/* Button row below text box */}
+							<div style={{
+								display: 'flex',
+								gap: '12px',
+								justifyContent: 'flex-start',
+								flexWrap: 'wrap'
+							}}>
+								<button
+									type="submit"
+									disabled={isDisabled}
+									style={{
+										padding: '16px 24px',
+										backgroundColor: isDisabled ? '#9ca3af' : '#3b82f6',
+										color: 'white',
+										border: 'none',
+										borderRadius: '8px',
+										fontSize: '16px',
+										fontWeight: '600',
+										cursor: isDisabled ? 'not-allowed' : 'pointer',
+										transition: 'all 0.2s ease',
+										whiteSpace: 'nowrap',
+										minWidth: '120px'
+									}}
+									onMouseEnter={(e) => {
+										if (!isDisabled) {
+											e.currentTarget.style.backgroundColor = '#2563eb'
+										}
+									}}
+									onMouseLeave={(e) => {
+										if (!isDisabled) {
+											e.currentTarget.style.backgroundColor = '#3b82f6'
+										}
+									}}
+								>
+									{loading ? '🤔 Thinking...' : '💬 Ask AI Assistant'}
+								</button>
+								
+								{loading && (
+									<button
+										type="button"
+										onClick={handleCancel}
+										style={{
+											padding: '16px 24px',
+											backgroundColor: '#ef4444',
+											color: 'white',
+											border: 'none',
+											borderRadius: '8px',
+											fontSize: '16px',
+											fontWeight: '600',
+											cursor: 'pointer',
+											transition: 'all 0.2s ease',
+											whiteSpace: 'nowrap',
+											minWidth: '120px'
+										}}
+										onMouseEnter={(e) => {
+											e.currentTarget.style.backgroundColor = '#dc2626'
+										}}
+										onMouseLeave={(e) => {
+											e.currentTarget.style.backgroundColor = '#ef4444'
+										}}
+									>
+										⚠️ Cancel Request
+									</button>
+								)}
+							</div>
+						</div>
+					</form>
+
+					{/* Error display */}
+					{error && (
+						<div style={{ 
+							padding: '16px', 
+							backgroundColor: '#fee2e2', 
+							border: '1px solid #fecaca',
+							borderRadius: '8px',
+							marginBottom: '24px',
+							color: '#dc2626'
+						}}>
+							⚠️ <strong>Error:</strong> {error}
+						</div>
+					)}
+
+					{/* Example prompts */}
+					{online && vpsUp && !loading && (
+						<div style={{
+							padding: '20px',
+							backgroundColor: '#f8fafc',
+							border: '1px solid #e2e8f0',
+							borderRadius: '8px',
+							marginTop: '24px'
+						}}>
+							<h4 style={{
+								margin: '0 0 16px 0',
+								fontSize: '1.1rem',
+								fontWeight: '600',
+								color: '#374151'
+							}}>
+								💡 Example prompts to try:
+							</h4>
+							<div style={{
+								display: 'grid',
+								gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+								gap: '12px'
+							}}>
+								{[
+									'Explain quantum computing in simple terms',
+									'Write a short poem about artificial intelligence',
+									'Help me plan a weekend trip to the mountains',
+									'What are the benefits of meditation?',
+									'Explain how machine learning works',
+									'Give me ideas for a healthy dinner recipe'
+								].map((example, index) => (
+									<button
+										key={index}
+										onClick={() => setPrompt(example)}
+										style={{
+											padding: '12px 16px',
+											backgroundColor: 'white',
+											border: '1px solid #d1d5db',
+											borderRadius: '6px',
+											fontSize: '14px',
+											color: '#374151',
+											cursor: 'pointer',
+											transition: 'all 0.2s ease',
+											textAlign: 'left',
+											lineHeight: '1.4'
+										}}
+										onMouseEnter={(e) => {
+											e.currentTarget.style.backgroundColor = '#f3f4f6'
+											e.currentTarget.style.borderColor = '#9ca3af'
+										}}
+										onMouseLeave={(e) => {
+											e.currentTarget.style.backgroundColor = 'white'
+											e.currentTarget.style.borderColor = '#d1d5db'
+										}}
+									>
+										{example}
+									</button>
+								))}
+							</div>
+						</div>
+					)}
 				</div>
 			)}
 
-			{/* Chat history display */}
-			{chatHistory.length > 0 && (
-				<div style={{ marginTop: '24px' }}>
-					<h3 style={{
-						margin: '0 0 16px 0',
-						fontSize: '1.3rem',
-						fontWeight: '600',
-						color: '#0c4a6e',
+			{/* Past Queries Tab */}
+			{activeTab === 'history' && (
+				<div>
+					{/* Header with actions */}
+					<div style={{
 						display: 'flex',
+						justifyContent: 'space-between',
 						alignItems: 'center',
-						gap: '8px'
+						marginBottom: '24px'
 					}}>
-						💬 Chat History ({chatHistory.length} conversations)
-					</h3>
-					
-					{chatHistory.map((chat, index) => (
-						<div key={chat.id} style={{
-							marginBottom: '24px',
-							border: '2px solid #e2e8f0',
-							borderRadius: '12px',
-							overflow: 'hidden'
+						<h3 style={{
+							margin: '0',
+							fontSize: '1.3rem',
+							fontWeight: '600',
+							color: '#0c4a6e'
 						}}>
-							{/* Question section */}
+							📚 Chat History ({chatHistory.length} conversations)
+						</h3>
+						
+						{chatHistory.length > 0 && (
 							<div style={{
-								padding: '16px 20px',
-								backgroundColor: '#f8fafc',
-								borderBottom: '1px solid #e2e8f0'
+								display: 'flex',
+								gap: '12px'
 							}}>
-								<div style={{
-									display: 'flex',
-									justifyContent: 'space-between',
-									alignItems: 'center',
-									marginBottom: '8px'
-								}}>
-									<span style={{
+								<button
+									onClick={() => setActiveTab('current')}
+									style={{
+										padding: '12px 20px',
+										backgroundColor: '#10b981',
+										color: 'white',
+										border: 'none',
+										borderRadius: '8px',
 										fontSize: '14px',
 										fontWeight: '600',
-										color: '#64748b'
-									}}>
-										👤 Your Question #{chat.id}
-									</span>
-									<span style={{
-										fontSize: '12px',
-										color: '#94a3b8',
-										fontStyle: 'italic'
-									}}>
-										{chat.timestamp.toLocaleTimeString()}
-									</span>
-								</div>
-								<div style={{
-									fontSize: '16px',
-									lineHeight: '1.6',
-									color: '#374151',
-									whiteSpace: 'pre-wrap'
-								}}>
-									{chat.question}
-								</div>
+										cursor: 'pointer',
+										transition: 'all 0.2s ease'
+									}}
+									onMouseEnter={(e) => {
+										e.currentTarget.style.backgroundColor = '#059669'
+									}}
+									onMouseLeave={(e) => {
+										e.currentTarget.style.backgroundColor = '#10b981'
+									}}
+								>
+									💬 New Chat
+								</button>
+								<button
+									onClick={resetChat}
+									style={{
+										padding: '12px 20px',
+										backgroundColor: '#6b7280',
+										color: 'white',
+										border: 'none',
+										borderRadius: '8px',
+										fontSize: '14px',
+										fontWeight: '600',
+										cursor: 'pointer',
+										transition: 'all 0.2s ease'
+									}}
+									onMouseEnter={(e) => {
+										e.currentTarget.style.backgroundColor = '#4b5563'
+									}}
+									onMouseLeave={(e) => {
+										e.currentTarget.style.backgroundColor = '#6b7280'
+									}}
+								>
+									🗑️ Clear All
+								</button>
 							</div>
-							
-							{/* Answer section */}
-							<div style={{
-								padding: '20px',
-								backgroundColor: '#f0f9ff',
-								borderLeft: '4px solid #0ea5e9'
-							}}>
-								<div style={{
-									display: 'flex',
-									justifyContent: 'space-between',
-									alignItems: 'center',
-									marginBottom: '12px'
+						)}
+					</div>
+
+					{/* Chat history display */}
+					{chatHistory.length > 0 ? (
+						<div>
+							{chatHistory.map((chat, index) => (
+								<div key={chat.id} style={{
+									marginBottom: '24px',
+									border: '2px solid #e2e8f0',
+									borderRadius: '12px',
+									overflow: 'hidden'
 								}}>
-									<span style={{
-										fontSize: '14px',
-										fontWeight: '600',
-										color: '#0c4a6e'
-									}}>
-										🤖 Llama's Response
-									</span>
+									{/* Question section */}
 									<div style={{
-										display: 'flex',
-										alignItems: 'center',
-										gap: '8px'
+										padding: '16px 20px',
+										backgroundColor: '#f8fafc',
+										borderBottom: '1px solid #e2e8f0'
 									}}>
-										<span style={{
-											fontSize: '12px',
-											color: '#0c4a6e',
-											backgroundColor: 'white',
-											padding: '4px 8px',
-											borderRadius: '6px',
-											border: '1px solid #0ea5e9',
-											fontWeight: '500'
+										<div style={{
+											display: 'flex',
+											justifyContent: 'space-between',
+											alignItems: 'center',
+											marginBottom: '8px'
 										}}>
-											Model: {chat.model}
-										</span>
-										<span style={{
-											fontSize: '12px',
-											color: '#0c4a6e',
-											backgroundColor: 'white',
-											padding: '4px 8px',
-											borderRadius: '6px',
-											border: '1px solid #0ea5e9',
-											fontWeight: '500'
+											<span style={{
+												fontSize: '14px',
+												fontWeight: '600',
+												color: '#64748b'
+											}}>
+												👤 Your Question #{chat.id}
+											</span>
+											<span style={{
+												fontSize: '12px',
+												color: '#94a3b8',
+												fontStyle: 'italic'
+											}}>
+												{chat.timestamp.toLocaleTimeString()}
+											</span>
+										</div>
+										<div style={{
+											fontSize: '16px',
+											lineHeight: '1.6',
+											color: '#374151',
+											whiteSpace: 'pre-wrap'
 										}}>
-											Request #{chat.id}
-										</span>
+											{chat.question}
+										</div>
+									</div>
+									
+									{/* Answer section */}
+									<div style={{
+										padding: '20px',
+										backgroundColor: '#f0f9ff',
+										borderLeft: '4px solid #0ea5e9'
+									}}>
+										<div style={{
+											display: 'flex',
+											justifyContent: 'space-between',
+											alignItems: 'center',
+											marginBottom: '12px'
+										}}>
+											<span style={{
+												fontSize: '14px',
+												fontWeight: '600',
+												color: '#0c4a6e'
+											}}>
+												🤖 AI Response
+											</span>
+											<div style={{
+												display: 'flex',
+												alignItems: 'center',
+												gap: '8px'
+											}}>
+												<span style={{
+													fontSize: '12px',
+													color: '#0c4a6e',
+													backgroundColor: 'white',
+													padding: '4px 8px',
+													borderRadius: '6px',
+													border: '1px solid #0ea5e9',
+													fontWeight: '500'
+												}}>
+													Model: {chat.model}
+												</span>
+												<span style={{
+													fontSize: '12px',
+													color: '#0c4a6e',
+													backgroundColor: 'white',
+													padding: '4px 8px',
+													borderRadius: '6px',
+													border: '1px solid #0ea5e9',
+													fontWeight: '500'
+												}}>
+													Request #{chat.id}
+												</span>
+											</div>
+										</div>
+										<div style={{
+											fontSize: '16px',
+											lineHeight: '1.7',
+											color: '#0c4a6e',
+											whiteSpace: 'pre-wrap'
+										}}>
+											{chat.answer}
+										</div>
 									</div>
 								</div>
-								<div style={{
-									fontSize: '16px',
-									lineHeight: '1.7',
-									color: '#0c4a6e',
-									whiteSpace: 'pre-wrap'
-								}}>
-									{chat.answer}
-								</div>
-							</div>
+							))}
 						</div>
-					))}
+					) : (
+						<div style={{
+							padding: '40px',
+							textAlign: 'center',
+							backgroundColor: '#f8fafc',
+							border: '2px dashed #d1d5db',
+							borderRadius: '12px',
+							color: '#64748b'
+						}}>
+							<p style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '500' }}>
+								📚 No chat history yet
+							</p>
+							<p style={{ margin: '0', fontSize: '14px' }}>
+								Start a conversation in the Current Chat tab to see your queries here!
+							</p>
+							<button
+								onClick={() => setActiveTab('current')}
+								style={{
+									marginTop: '16px',
+									padding: '12px 24px',
+									backgroundColor: '#3b82f6',
+									color: 'white',
+									border: 'none',
+									borderRadius: '8px',
+									fontSize: '14px',
+									fontWeight: '600',
+									cursor: 'pointer',
+									transition: 'all 0.2s ease'
+								}}
+								onMouseEnter={(e) => {
+									e.currentTarget.style.backgroundColor = '#2563eb'
+								}}
+								onMouseLeave={(e) => {
+									e.currentTarget.style.backgroundColor = '#3b82f6'
+								}}
+							>
+								💬 Start Chatting
+							</button>
+						</div>
+					)}
 				</div>
 			)}
 
@@ -512,78 +680,18 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 					border: '1px solid #fde68a',
 					borderRadius: '8px',
 					textAlign: 'center',
-					color: '#92400e'
+					color: '#92400e',
+					marginTop: '24px'
 				}}>
 					<p style={{ margin: '0 0 12px 0', fontWeight: '500' }}>
 						{!online ? '🔴 You are currently offline' : '🔴 VPS connection is down'}
 					</p>
 					<p style={{ margin: '0', fontSize: '14px' }}>
 						{!online 
-							? 'Please check your internet connection to use Llama.'
+							? 'Please check your internet connection to use AI Assistant.'
 							: 'Please check your VPS connection or contact your administrator.'
 						}
 					</p>
-				</div>
-			)}
-
-			{/* Example prompts */}
-			{online && vpsUp && !loading && (
-				<div style={{
-					padding: '20px',
-					backgroundColor: '#f8fafc',
-					border: '1px solid #e2e8f0',
-					borderRadius: '8px',
-					marginTop: '24px'
-				}}>
-					<h4 style={{
-						margin: '0 0 16px 0',
-						fontSize: '1.1rem',
-						fontWeight: '600',
-						color: '#374151'
-					}}>
-						💡 Example prompts to try:
-					</h4>
-					<div style={{
-						display: 'grid',
-						gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-						gap: '12px'
-					}}>
-						{[
-							'Explain quantum computing in simple terms',
-							'Write a short poem about artificial intelligence',
-							'Help me plan a weekend trip to the mountains',
-							'What are the benefits of meditation?',
-							'Explain how machine learning works',
-							'Give me ideas for a healthy dinner recipe'
-						].map((example, index) => (
-							<button
-								key={index}
-								onClick={() => setPrompt(example)}
-								style={{
-									padding: '12px 16px',
-									backgroundColor: 'white',
-									border: '1px solid #d1d5db',
-									borderRadius: '6px',
-									fontSize: '14px',
-									color: '#374151',
-									cursor: 'pointer',
-									transition: 'all 0.2s ease',
-									textAlign: 'left',
-									lineHeight: '1.4'
-								}}
-								onMouseEnter={(e) => {
-									e.currentTarget.style.backgroundColor = '#f3f4f6'
-									e.currentTarget.style.borderColor = '#9ca3af'
-								}}
-								onMouseLeave={(e) => {
-									e.currentTarget.style.backgroundColor = 'white'
-									e.currentTarget.style.borderColor = '#d1d5db'
-								}}
-							>
-								{example}
-							</button>
-						))}
-					</div>
 				</div>
 			)}
 		</div>
