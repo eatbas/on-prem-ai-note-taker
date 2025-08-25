@@ -936,35 +936,7 @@ export default function Dashboard({
 						</div>
 					)}
 
-					{/* Recording in progress indicator */}
-					{isRecording && recordingMeetingId && (
-						<div style={{
-							padding: '16px',
-							backgroundColor: '#dcfce7',
-							border: '2px solid #22c55e',
-							borderRadius: '8px',
-							marginBottom: '16px',
-							display: 'flex',
-							alignItems: 'center',
-							gap: '12px'
-						}}>
-							<div style={{
-								width: '12px',
-								height: '12px',
-								backgroundColor: '#ef4444',
-								borderRadius: '50%',
-								animation: 'pulse 1.5s infinite'
-							}} />
-							<div>
-								<div style={{ fontWeight: '600', color: '#166534', fontSize: '16px' }}>
-									🎙️ Recording in Progress
-								</div>
-								<div style={{ color: '#166534', fontSize: '14px' }}>
-									Meeting ID: {recordingMeetingId?.slice(0, 8)}... • Click to view when recording completes
-								</div>
-							</div>
-						</div>
-					)}
+					{/* Recording in progress indicator - Removed as requested */}
 
 					{/* Local meetings list */}
 					<ul style={{ listStyle: 'none', padding: 0 }}>

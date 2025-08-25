@@ -156,30 +156,6 @@ function AppShell({
 						gap: '8px',
 						alignItems: 'center'
 					}}>
-						{isRecording && recordingMeetingId && (
-							<div style={{
-								display: 'flex',
-								alignItems: 'center',
-								gap: '8px',
-								padding: '8px 12px',
-								backgroundColor: '#dcfce7',
-								border: '2px solid #22c55e',
-								borderRadius: '8px',
-								fontSize: '14px',
-								fontWeight: '600',
-								color: '#166534'
-							}}>
-								<div style={{
-									width: '8px',
-									height: '8px',
-									backgroundColor: '#ef4444',
-									borderRadius: '50%',
-									animation: 'pulse 1.5s infinite'
-								}} />
-								🎙️ Recording...
-							</div>
-						)}
-						
 						<Recorder 
 							onCreated={onRecordingCreated}
 							onStopped={onRecordingStopped}
@@ -413,30 +389,6 @@ function MeetingRoute({
 						gap: '8px',
 						alignItems: 'center'
 					}}>
-						{isRecording && recordingMeetingId && (
-							<div style={{
-								display: 'flex',
-								alignItems: 'center',
-								gap: '8px',
-								padding: '8px 12px',
-								backgroundColor: '#dcfce7',
-								border: '2px solid #22c55e',
-								borderRadius: '8px',
-								fontSize: '14px',
-								fontWeight: '600',
-								color: '#166534'
-							}}>
-								<div style={{
-									width: '8px',
-									height: '8px',
-									backgroundColor: '#ef4444',
-									borderRadius: '50%',
-									animation: 'pulse 1.5s infinite'
-								}} />
-								🎙️ Recording...
-							</div>
-						)}
-						
 					</div>
 				</div>
 			</div>
@@ -476,50 +428,7 @@ function MeetingRoute({
 					</button>
 				</nav>
 				
-				{/* Recording status indicator */}
-				{isRecording && recordingMeetingId && (
-					<div style={{
-						padding: '12px 16px',
-						backgroundColor: '#dcfce7',
-						border: '2px solid #22c55e',
-						borderRadius: '8px',
-						marginBottom: '16px',
-						display: 'flex',
-						alignItems: 'center',
-						gap: '12px'
-					}}>
-						<div style={{
-							width: '12px',
-							height: '12px',
-							backgroundColor: '#ef4444',
-							borderRadius: '50%',
-							animation: 'pulse 1.5s infinite'
-						}} />
-						<div style={{ flex: 1 }}>
-							<div style={{ fontWeight: '600', color: '#166534', fontSize: '14px' }}>
-								🎙️ Recording in Progress
-							</div>
-							<div style={{ color: '#166534', fontSize: '12px' }}>
-								Meeting ID: {recordingMeetingId?.slice(0, 8)}... • Return to dashboard to stop recording
-							</div>
-						</div>
-						<button
-							onClick={() => navigate('/')}
-							style={{
-								padding: '8px 12px',
-								backgroundColor: '#22c55e',
-								color: 'white',
-								border: 'none',
-								borderRadius: '6px',
-								fontSize: '12px',
-								fontWeight: '600',
-								cursor: 'pointer'
-							}}
-						>
-							Go to Dashboard
-						</button>
-					</div>
-				)}
+				{/* Recording status indicator - Removed as requested */}
 				
 				<MeetingView 
 					meetingId={id} 
@@ -542,11 +451,20 @@ export default function App() {
 	// Global recording state
 	const [isRecording, setIsRecording] = useState(false)
 	const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null)
+	const [recordingTime, setRecordingTime] = useState(0)
+
+	// Format recording time as HH:MM:SS
+	const formatRecordingTime = () => {
+		const hours = Math.floor(recordingTime / 3600)
+		const minutes = Math.floor((recordingTime % 3600) / 60)
+		const seconds = recordingTime % 60
+		return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`
+	}
 
 	// Debug logging for status
 	useEffect(() => {
-		console.log('🔍 App Debug Status:', { online, vpsUp, isElectron, isRecording, recordingMeetingId })
-	}, [online, vpsUp, isRecording, recordingMeetingId])
+		console.log('🔍 App Debug Status:', { online, vpsUp, isElectron, isRecording, recordingMeetingId, recordingTime })
+	}, [online, vpsUp, isRecording, recordingMeetingId, recordingTime])
 
 	useEffect(() => {
 		const stop = watchOnline(setOnline)
@@ -560,12 +478,14 @@ export default function App() {
 			// Always keep App state in sync with global state
 			setIsRecording(globalState.isRecording)
 			setRecordingMeetingId(globalState.meetingId)
+			setRecordingTime(globalState.recordingTime)
 		})
 
 		// Initialize with current global state
 		const currentState = globalRecordingManager.getState()
 		setIsRecording(currentState.isRecording)
 		setRecordingMeetingId(currentState.meetingId)
+		setRecordingTime(currentState.recordingTime)
 
 		return unsubscribe
 	}, [])
@@ -645,10 +565,7 @@ export default function App() {
 							borderRadius: '50%',
 							animation: 'pulse 1.5s infinite'
 						}} />
-						🎙️ Recording in Progress • Meeting: {recordingMeetingId.slice(0, 8)}...
-						<span style={{ opacity: 0.9, fontSize: '12px' }}>
-							(Recording will continue across all pages)
-						</span>
+						🎙️ Recording in Progress • Meeting: {recordingMeetingId.slice(0, 8)}... • {formatRecordingTime()}
 					</div>
 				</div>
 			)}

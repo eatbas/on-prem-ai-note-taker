@@ -897,125 +897,14 @@ export default function Recorder({
 				width: '100%',
 				maxWidth: '900px'
 			}}>
-				{/* Left Side - Microphone Selection */}
+				{/* Left Side - Empty for now */}
 				<div style={{ 
 					display: 'flex', 
 					flexDirection: 'column', 
 					alignItems: 'center',
 					flex: 1
 				}}>
-					{/* Microphone Visual */}
-					<div style={{ 
-						marginBottom: 24, 
-						display: 'flex', 
-						flexDirection: 'column', 
-						alignItems: 'center' 
-					}}>
-						<div style={{ 
-							fontSize: '48px', 
-							marginBottom: 12,
-							opacity: recording ? 1 : 0.7,
-							transform: recording ? 'scale(1.1)' : 'scale(1)',
-							transition: 'all 0.3s ease',
-							filter: recording ? 'drop-shadow(0 0 10px rgba(59, 130, 246, 0.5))' : 'none'
-						}}>
-							🎤
-						</div>
-						
-						{/* Microphone Selection */}
-						<div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-							<label style={{ display: 'block', marginBottom: 8, fontWeight: 'bold', fontSize: '14px' }}>
-								Select Microphone:
-							</label>
-							<select 
-								value={selectedMic} 
-								onChange={(e) => setSelectedMic(e.target.value)}
-								disabled={recording}
-								style={{ 
-									padding: '8px 12px', 
-									borderRadius: '6px', 
-									border: '1px solid #d1d5db',
-									backgroundColor: 'white',
-									fontSize: '14px',
-									minWidth: '200px',
-									marginBottom: '12px'
-								}}
-							>
-								{availableMics.map(mic => {
-									// Show the real device name exactly as it comes from the system
-									return (
-										<option key={mic.deviceId} value={mic.deviceId}>
-											{mic.label}
-										</option>
-									)
-								})}
-							</select>
-							
-							{/* Show current microphone usage */}
-							{selectedMic && (
-								<div style={{ 
-									display: 'flex',
-									flexDirection: 'column',
-									alignItems: 'center',
-									gap: '8px',
-									padding: '12px',
-									backgroundColor: recording ? '#dcfce7' : '#f8fafc',
-									border: recording ? '2px solid #22c55e' : '1px solid #e2e8f0',
-									borderRadius: '8px',
-									minWidth: '250px'
-								}}>
-									<div style={{ 
-										fontSize: '12px', 
-										fontWeight: '600',
-										color: recording ? '#166534' : '#1e293b',
-										textAlign: 'center'
-									}}>
-										{recording ? '🎙️ RECORDING' : '🎤'} {availableMics.find(mic => mic.deviceId === selectedMic)?.label || 'Selected microphone'}
-									</div>
-									
-									{recording ? (
-										// Show live recording indicator
-										<div style={{
-											display: 'flex',
-											alignItems: 'center',
-											gap: '8px'
-										}}>
-											<div style={{
-												width: '12px',
-												height: '12px',
-												backgroundColor: '#ef4444',
-												borderRadius: '50%',
-												animation: 'pulse 1.5s infinite'
-											}} />
-											<div style={{
-												padding: '8px 16px',
-												backgroundColor: '#22c55e',
-												color: 'white',
-												borderRadius: '20px',
-												fontSize: '12px',
-												fontWeight: '600'
-											}}>
-												LIVE • {formatTime(recordingTime)}
-											</div>
-										</div>
-									) : (
-										<MicrophoneUsageIndicator deviceId={selectedMic} size="large" />
-									)}
-									
-									{!recording && isMonitoringMics && (
-										<div style={{
-											fontSize: '11px',
-											color: '#64748b',
-											textAlign: 'center',
-											fontStyle: 'italic'
-										}}>
-											Real-time audio level monitoring active
-										</div>
-									)}
-								</div>
-							)}
-						</div>
-					</div>
+					{/* Content removed as requested */}
 				</div>
 			</div>
 
@@ -1069,31 +958,7 @@ export default function Recorder({
 				</button>
 			</div>
 
-			{/* Recording Status */}
-			{recording && (
-				<div style={{ 
-					marginBottom: 16, 
-					padding: '12px 16px', 
-					backgroundColor: '#dcfce7', 
-					border: '1px solid #22c55e',
-					borderRadius: '8px',
-					display: 'flex',
-					alignItems: 'center',
-					justifyContent: 'center',
-					gap: '12px'
-				}}>
-					<div style={{ 
-						width: '12px', 
-						height: '12px', 
-						backgroundColor: '#ef4444', 
-						borderRadius: '50%',
-						animation: 'pulse 1.5s infinite'
-					}}></div>
-					<span style={{ fontWeight: 'bold', color: '#166534' }}>
-						Recording... {formatTime(recordingTime)}
-					</span>
-				</div>
-			)}
+			{/* Recording Status - Removed as requested */}
 
 			{/* Microphone Selection Modal */}
 			{showMicModal && (

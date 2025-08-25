@@ -137,10 +137,8 @@ class GlobalRecordingManager {
 		// Start recording timer
 		this.state.recordingInterval = window.setInterval(() => {
 			this.state.recordingTime += 1
-			// Only notify listeners every 5 seconds to avoid performance issues
-			if (this.state.recordingTime % 5 === 0) {
-				this.notifyListeners()
-			}
+			// Notify listeners every second for real-time timer updates
+			this.notifyListeners()
 			// Save state every 10 seconds
 			if (this.state.recordingTime % 10 === 0) {
 				this.saveState()
