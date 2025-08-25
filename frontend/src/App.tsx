@@ -9,6 +9,7 @@ import { watchOnline } from './offline'
 import { getVpsHealth } from './api'
 import { useToast } from './Toast'
 import { globalRecordingManager } from './globalRecordingManager'
+import { clearStuckRecordingState } from './utils'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
@@ -503,6 +504,61 @@ export default function App() {
 		window.addEventListener('beforeunload', handleBeforeUnload)
 		return () => window.removeEventListener('beforeunload', handleBeforeUnload)
 	}, [isRecording])
+
+	// Keyboard shortcut to clear stuck recording states (Ctrl+Shift+R)
+	useEffect(() => {
+		const handleKeyDown = (e: KeyboardEvent) => {
+			if (e.ctrlKey && e.shiftKey && e.key === 'R') {
+				e.preventDefault()
+				console.log('🔧 Clearing stuck recording states via keyboard shortcut')
+				clearStuckRecordingState()
+				// Also clear the global recording manager state
+				if (globalRecordingManager.isRecordingInterrupted()) {
+					globalRecordingManager.clearInterruptedState()
+				}
+				alert('Stuck recording states cleared! You may need to refresh the page.')
+			}
+		}
+
+		window.addEventListener('keydown', handleKeyDown)
+		return () => window.removeEventListener('keydown', handleKeyDown)
+	}, [])
+
+	// Handle app closing while recording (Electron only)
+	useEffect(() => {
+		if (isElectron && typeof window !== 'undefined' && (window as any).electronAPI) {
+			const handleAppClosing = () => {
+				console.log('🎙️ App closing while recording - stopping recording...')
+				if (isRecording && recordingMeetingId) {
+					// Save current state before stopping
+					globalRecordingManager.saveCurrentState()
+					// Stop recording immediately
+					globalRecordingManager.stopRecording()
+				}
+			}
+
+			// Listen for app closing stop recording command
+			;(window as any).electronAPI.onAppClosingStopRecording(handleAppClosing)
+
+			return () => {
+				// Clean up listener
+				;(window as any).electronAPI.removeAppClosingStopRecordingListener()
+			}
+		}
+	}, [isRecording, recordingMeetingId])
+
+	// Check for saved recording state on app startup
+	useEffect(() => {
+		if (globalRecordingManager.hasSavedRecordingState()) {
+			console.log('🎙️ Found saved recording state from app closure')
+			// Clear the saved state since user should start fresh
+			globalRecordingManager.clearInterruptedState()
+			// Show a toast or alert to inform user
+			if (typeof window !== 'undefined' && (window as any).showToast) {
+				;(window as any).showToast('Previous recording was interrupted. Please start a new recording.', 'info')
+			}
+		}
+	}, [])
 
 	// Recording handlers
 	const handleRecordingCreated = (meetingId: string) => {

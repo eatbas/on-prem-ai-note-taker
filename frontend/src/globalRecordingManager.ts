@@ -117,6 +117,9 @@ class GlobalRecordingManager {
 	startRecording(meetingId: string, mediaRecorder: MediaRecorder) {
 		console.log('🎙️ Global Recording Manager: Starting recording for meeting:', meetingId)
 		
+		// Clear any previous saved recording state when starting new recording
+		this.clearSavedState()
+		
 		this.state.isRecording = true
 		this.state.meetingId = meetingId
 		this.state.mediaRecorder = mediaRecorder
@@ -219,6 +222,105 @@ class GlobalRecordingManager {
 		// Don't stop recording on cleanup - that's the whole point!
 		// Just clean up listeners
 		this.listeners.clear()
+	}
+
+	// Clear interrupted recording state
+	clearInterruptedState(): void {
+		console.log('🧹 Clearing interrupted recording state')
+		this.clearSavedState()
+		this.state.isRecording = false
+		this.state.meetingId = null
+		this.state.mediaRecorder = null
+		this.state.recordingTime = 0
+		this.state.chunkIndex = 0
+		this.state.recordingInterval = null
+		this.state.startTime = null
+		this.notifyListeners()
+	}
+
+	// Attempt to resume interrupted recording
+	async attemptResumeRecording(): Promise<boolean> {
+		if (!this.isRecordingInterrupted()) {
+			console.log('🎙️ No interrupted recording to resume')
+			return false
+		}
+
+		try {
+			console.log('🎙️ Attempting to resume interrupted recording...')
+			
+			// Request audio permissions again
+			const stream = await navigator.mediaDevices.getUserMedia({ 
+				audio: {
+					echoCancellation: true,
+					noiseSuppression: true,
+					autoGainControl: true
+				}
+			})
+
+			// Create new MediaRecorder
+			const mediaRecorder = new MediaRecorder(stream, {
+				mimeType: 'audio/webm;codecs=opus'
+			})
+
+			// Set up event handlers
+			mediaRecorder.ondataavailable = async (e) => {
+				if (e.data && e.data.size > 0 && this.state.meetingId) {
+					await addChunk(this.state.meetingId, e.data, this.state.chunkIndex++)
+					console.log(`📁 Global Recording Manager: Saved chunk ${this.state.chunkIndex - 1}`)
+					this.saveState()
+				}
+			}
+
+			// Start recording
+			mediaRecorder.start(1000) // 1 second chunks
+			
+			// Update state
+			this.state.mediaRecorder = mediaRecorder
+			this.state.startTime = Date.now() - (this.state.recordingTime * 1000) // Adjust start time
+			
+			// Restart recording timer
+			if (this.state.recordingInterval) {
+				clearInterval(this.state.recordingInterval)
+			}
+			
+			this.state.recordingInterval = window.setInterval(() => {
+				this.state.recordingTime += 1
+				this.notifyListeners()
+				if (this.state.recordingTime % 10 === 0) {
+					this.saveState()
+				}
+			}, 1000)
+
+			console.log('🎙️ Successfully resumed interrupted recording')
+			this.notifyListeners()
+			return true
+
+		} catch (error) {
+			console.error('🎙️ Failed to resume interrupted recording:', error)
+			return false
+		}
+	}
+
+	// Save current recording state when app is closing (without clearing)
+	saveCurrentState(): void {
+		if (this.state.isRecording && this.state.meetingId) {
+			console.log('🎙️ Saving current recording state before app close...')
+			this.saveState()
+		}
+	}
+
+	// Check if there's a saved recording state from app closure
+	hasSavedRecordingState(): boolean {
+		try {
+			const saved = localStorage.getItem('globalRecordingState')
+			if (saved) {
+				const persistentState = JSON.parse(saved)
+				return persistentState.isRecording && persistentState.meetingId
+			}
+		} catch (err) {
+			console.error('Failed to check saved recording state:', err)
+		}
+		return false
 	}
 }
 

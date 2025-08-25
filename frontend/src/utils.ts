@@ -60,7 +60,7 @@ export function createRippleEffect(event: React.MouseEvent<HTMLButtonElement>, c
  * @param wait - The delay in milliseconds
  */
 export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
-    let timeout: NodeJS.Timeout
+    let timeout: number | undefined
     return (...args: Parameters<T>) => {
         clearTimeout(timeout)
         timeout = setTimeout(() => func(...args), wait)
@@ -111,4 +111,48 @@ export function formatFileSize(bytes: number): string {
     const sizes = ['B', 'KB', 'MB', 'GB']
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+}
+
+/**
+ * Clear any stuck recording states from localStorage
+ * This is useful when recordings get interrupted and the state becomes corrupted
+ */
+export function clearStuckRecordingState(): void {
+	try {
+		// Clear the global recording state
+		localStorage.removeItem('globalRecordingState')
+		
+		// Also clear any other potential recording-related keys
+		const keysToRemove = [
+			'recordingState',
+			'meetingState',
+			'audioState'
+		]
+		
+		keysToRemove.forEach(key => {
+			if (localStorage.getItem(key)) {
+				localStorage.removeItem(key)
+				console.log(`🧹 Cleared stuck state: ${key}`)
+			}
+		})
+		
+		console.log('🧹 Successfully cleared all stuck recording states')
+	} catch (error) {
+		console.error('Failed to clear stuck recording states:', error)
+	}
+}
+
+/**
+ * Check if there are any stuck recording states
+ */
+export function hasStuckRecordingState(): boolean {
+	try {
+		const globalState = localStorage.getItem('globalRecordingState')
+		if (!globalState) return false
+		
+		const parsed = JSON.parse(globalState)
+		return parsed && parsed.isRecording === true
+	} catch {
+		return false
+	}
 }

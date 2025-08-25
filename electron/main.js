@@ -279,6 +279,42 @@ app.whenReady().then(() => {
 	}
 })
 
+// Add before-quit handler to properly handle recording when app closes
+app.on('before-quit', (event) => {
+	if (isRecording) {
+		console.log('🎙️ App closing while recording - stopping recording and saving data...')
+		event.preventDefault()
+		
+		// Stop recording data updates
+		stopRecordingDataUpdates()
+		
+		// Send stop recording command to main window if it exists and is not destroyed
+		if (mainWindow && !mainWindow.isDestroyed()) {
+			try {
+				mainWindow.webContents.send('app-closing-stop-recording')
+			} catch (error) {
+				console.log('Main window already destroyed, skipping stop recording command')
+			}
+		}
+		
+		// Also try to send to recorder window if it exists
+		if (recorderWindow && !recorderWindow.isDestroyed()) {
+			try {
+				recorderWindow.webContents.send('app-closing-stop-recording')
+			} catch (error) {
+				console.log('Recorder window already destroyed, skipping stop recording command')
+			}
+		}
+		
+		// Wait a bit for the recording to stop, then quit
+		setTimeout(() => {
+			console.log('🎙️ Recording stopped, now quitting app...')
+			app.isQuiting = true
+			app.quit()
+		}, 1000)
+	}
+})
+
 app.on('window-all-closed', () => {
 	if (process.platform !== 'darwin') {
 		app.quit()
@@ -327,39 +363,63 @@ ipcMain.on('set-mini-recorder-visible', (event, visible) => {
 
 // IPC handlers for recording data updates
 ipcMain.on('recording-data-update', (event, data) => {
-	if (recorderWindow && data.recording) {
-		recorderWindow.webContents.send('recording-data-update', data)
+	if (recorderWindow && !recorderWindow.isDestroyed() && data.recording) {
+		try {
+			recorderWindow.webContents.send('recording-data-update', data)
+		} catch (error) {
+			console.log('Recorder window destroyed, skipping recording data update')
+		}
 	}
 })
 
 // IPC handlers for tray actions
 ipcMain.on('tray-action', (event, action) => {
-	if (action === 'start-recording' && mainWindow) {
-		mainWindow.webContents.send('tray-action', 'start-recording')
-	} else if (action === 'stop-recording' && mainWindow) {
-		mainWindow.webContents.send('tray-action', 'stop-recording')
+	if (action === 'start-recording' && mainWindow && !mainWindow.isDestroyed()) {
+		try {
+			mainWindow.webContents.send('tray-action', 'start-recording')
+		} catch (error) {
+			console.log('Main window destroyed, skipping tray action')
+		}
+	} else if (action === 'stop-recording' && mainWindow && !mainWindow.isDestroyed()) {
+		try {
+			mainWindow.webContents.send('tray-action', 'stop-recording')
+		} catch (error) {
+			console.log('Main window destroyed, skipping tray action')
+		}
 	}
 })
 
 // IPC handler for stop recording from recorder window
 ipcMain.on('stop-recording', (event) => {
 	console.log('Stop recording requested from recorder window')
-	if (mainWindow) {
-		mainWindow.webContents.send('tray-action', 'stop-recording')
+	if (mainWindow && !mainWindow.isDestroyed()) {
+		try {
+			mainWindow.webContents.send('tray-action', 'stop-recording')
+		} catch (error) {
+			console.log('Main window destroyed, skipping stop recording command')
+		}
 	}
 })
 
 // IPC handler for recording data response from main window
 ipcMain.on('recording-data-response', (event, data) => {
-	if (recorderWindow && data.recording) {
-		recorderWindow.webContents.send('recording-data-update', data)
+	if (recorderWindow && !recorderWindow.isDestroyed() && data.recording) {
+		try {
+			recorderWindow.webContents.send('recording-data-update', data)
+		} catch (error) {
+			console.log('Recorder window destroyed, skipping recording data update')
+		}
 	}
 })
 
 // Function to send recording data to standalone window
 function sendRecordingDataToStandalone(data) {
-	if (recorderWindow && data.recording) {
-		recorderWindow.webContents.send('recording-data-update', data)
+	if (recorderWindow && !recorderWindow.isDestroyed() && data.recording) {
+		try {
+			recorderWindow.webContents.send('recording-data-update', data)
+		} catch (error) {
+			console.log('Recorder window destroyed, skipping recording data update')
+		}
 	}
 }
 
@@ -370,9 +430,14 @@ function startRecordingDataUpdates() {
 	}
 	
 	recordingDataTimer = setInterval(() => {
-		if (mainWindow && recorderWindow && isRecording) {
-			// Request recording data from main window
-			mainWindow.webContents.send('request-recording-data')
+		if (mainWindow && !mainWindow.isDestroyed() && recorderWindow && !recorderWindow.isDestroyed() && isRecording) {
+			try {
+				// Request recording data from main window
+				mainWindow.webContents.send('request-recording-data')
+			} catch (error) {
+				console.log('Window destroyed during recording data update, stopping timer')
+				stopRecordingDataUpdates()
+			}
 		}
 	}, 100) // Update 10 times per second
 }

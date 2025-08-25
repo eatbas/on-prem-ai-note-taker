@@ -218,6 +218,79 @@ export default function Dashboard({
 		}
 	}
 
+	async function clearAllLocalData() {
+		// Ask for confirmation before clearing all data
+		const confirmed = window.confirm(
+			'⚠️ WARNING: This will permanently delete ALL local data including:\n\n' +
+			'• All recorded meetings\n' +
+			'• All audio chunks\n' +
+			'• All transcripts and summaries\n' +
+			'• All local settings and preferences\n\n' +
+			'This action cannot be undone!\n\n' +
+			'Are you sure you want to continue?'
+		)
+		
+		if (!confirmed) {
+			console.log('🗑️ Data clearing cancelled by user')
+			return
+		}
+		
+		console.log('🗑️ Clearing all local data...')
+		setLoading(true)
+		
+		try {
+			// Clear IndexedDB - delete and recreate the database
+			try {
+				await db.delete()
+				console.log('🗑️ IndexedDB deleted')
+			} catch (dbError) {
+				console.log('🗑️ IndexedDB delete failed, trying to clear tables instead:', dbError)
+				// Fallback: clear all tables individually
+				await db.meetings.clear()
+				await db.chunks.clear()
+				await db.notes.clear()
+				console.log('🗑️ IndexedDB tables cleared')
+			}
+			
+			// Recreate the database if it was deleted
+			try {
+				await db.open()
+				console.log('🗑️ IndexedDB recreated/opened')
+			} catch (openError) {
+				console.log('🗑️ IndexedDB open failed, will be recreated on next use:', openError)
+			}
+			
+			// Clear localStorage
+			localStorage.clear()
+			console.log('🗑️ localStorage cleared')
+			
+			// Clear sessionStorage
+			sessionStorage.clear()
+			console.log('🗑️ sessionStorage cleared')
+			
+			// Clear any recording states
+			if (typeof window !== 'undefined' && (window as any).globalRecordingManager) {
+				(window as any).globalRecordingManager.clearInterruptedState()
+				console.log('🗑️ Recording states cleared')
+			}
+			
+			// Reset local state
+			setMeetings([])
+			setVpsMeetings([])
+			setError(null)
+			setVpsError(null)
+			
+			showToast('All local data cleared successfully! 🗑️', 'success')
+			console.log('✅ All local data cleared')
+			
+		} catch (err) {
+			console.error('❌ Failed to clear local data:', err)
+			showToast('Failed to clear some local data. Please try again.', 'error')
+		} finally {
+			setLoading(false)
+		}
+	}
+
 	async function refreshVpsMeetings() {
 		if (!online || !vpsUp) return
 		
@@ -625,6 +698,46 @@ export default function Dashboard({
 							}}
 						>
 							{loading ? '🔄 Refreshing...' : '🔄 Manual Refresh'}
+						</button>
+						
+						<button
+							onClick={(e) => {
+								createRippleEffect(e)
+								clearAllLocalData()
+							}}
+							disabled={loading}
+							style={{
+								padding: '8px 16px',
+								backgroundColor: loading ? '#9ca3af' : '#dc2626',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: loading ? 'not-allowed' : 'pointer',
+								fontSize: '14px',
+								fontWeight: '500',
+								transition: 'all 0.2s ease',
+								transform: 'scale(1)'
+							}}
+							onMouseDown={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(0.95)'
+									e.currentTarget.style.backgroundColor = '#b91c1c'
+								}
+							}}
+							onMouseUp={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#dc2626'
+								}
+							}}
+							onMouseLeave={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#dc2626'
+								}
+							}}
+						>
+							{loading ? '🗑️ Clearing...' : '🗑️ Clear All Local Data'}
 						</button>
 						
 						<button

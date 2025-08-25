@@ -53,6 +53,8 @@ export default function Recorder({
 	
 	// Use global recording state
 	const [globalRecordingState, setGlobalRecordingState] = useState<GlobalRecordingState>(globalRecordingManager.getState())
+	const [showInterruptionDialog, setShowInterruptionDialog] = useState(false)
+	const [interruptedInfo, setInterruptedInfo] = useState<{ meetingId: string; recordingTime: number } | null>(null)
 	
 	// Derived state from global manager
 	const recording = globalRecordingState.isRecording
@@ -89,14 +91,42 @@ export default function Recorder({
 		if (globalRecordingManager.isRecordingInterrupted()) {
 			const info = globalRecordingManager.getInterruptedRecordingInfo()
 			if (info) {
-				const message = `⚠️ Recording was interrupted by page refresh!\n\nMeeting: ${info.meetingId.slice(0, 8)}...\nRecorded time: ${Math.floor(info.recordingTime / 60)}:${(info.recordingTime % 60).toString().padStart(2, '0')}\n\nYou may need to restart recording to continue.`
-				alert(message)
+				setInterruptedInfo(info)
+				setShowInterruptionDialog(true)
 				console.warn('🎙️ Recording interrupted by page refresh:', info)
 			}
 		}
 		
 		return unsubscribe
 	}, [])
+
+	// Handle interruption dialog actions
+	const handleResumeRecording = async () => {
+		if (interruptedInfo) {
+			console.log('🎙️ User chose to resume interrupted recording')
+			// Attempt to resume recording
+			const success = await globalRecordingManager.attemptResumeRecording()
+			if (success) {
+				setShowInterruptionDialog(false)
+				setInterruptedInfo(null)
+				// Notify parent component that recording has resumed
+				if (onCreated && interruptedInfo.meetingId) {
+					onCreated(interruptedInfo.meetingId)
+				}
+			} else {
+				// If resume failed, show error and offer to clear state
+				alert('Failed to resume recording. The recording state will be cleared.')
+				handleClearInterruptedState()
+			}
+		}
+	}
+
+	const handleClearInterruptedState = () => {
+		console.log('🎙️ User chose to clear interrupted recording state')
+		globalRecordingManager.clearInterruptedState()
+		setShowInterruptionDialog(false)
+		setInterruptedInfo(null)
+	}
 
 	// Electron API integration
 	useEffect(() => {
@@ -394,7 +424,7 @@ export default function Recorder({
 		return () => {
 			// Only clean up microphone monitoring, not recording
 			const currentState = globalRecordingManager.getState()
-			console.log('🧹 Recorder component unmounting - recording will persist globally. Current state:', {
+			console.log('�� Recorder component unmounting - recording will persist globally. Current state:', {
 				isRecording: currentState.isRecording,
 				meetingId: currentState.meetingId,
 				recordingTime: currentState.recordingTime
@@ -1343,6 +1373,73 @@ export default function Recorder({
 					</div>
 				)}
 			</div>
+
+			{/* Interruption Dialog */}
+			{showInterruptionDialog && interruptedInfo && (
+				<div style={{
+					position: 'fixed',
+					top: 0,
+					left: 0,
+					right: 0,
+					bottom: 0,
+					backgroundColor: 'rgba(0, 0, 0, 0.5)',
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					zIndex: 1001
+				}}>
+					<div style={{
+						backgroundColor: 'white',
+						padding: '24px',
+						borderRadius: '12px',
+						maxWidth: '400px',
+						width: '90%',
+						textAlign: 'center'
+					}}>
+						<h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+							⚠️ Recording Interrupted
+						</h3>
+						<p style={{ margin: '16px 0 24px 0', color: '#374151', fontSize: '14px' }}>
+							Your recording was interrupted by a page refresh.
+							Would you like to resume from where you left off?
+						</p>
+						<div style={{ display: 'flex', gap: '12px' }}>
+							<button
+								onClick={handleResumeRecording}
+								style={{
+									padding: '8px 16px',
+									backgroundColor: '#3b82f6',
+									color: 'white',
+									border: 'none',
+									borderRadius: '6px',
+									fontSize: '14px',
+									fontWeight: '600',
+									cursor: 'pointer',
+									transition: 'all 0.2s ease'
+								}}
+							>
+								Resume Recording
+							</button>
+							<button
+								onClick={handleClearInterruptedState}
+								style={{
+									padding: '8px 16px',
+									backgroundColor: '#ef4444',
+									color: 'white',
+									border: 'none',
+									borderRadius: '6px',
+									fontSize: '14px',
+									fontWeight: '600',
+									cursor: 'pointer',
+									transition: 'all 0.2s ease'
+								}}
+							>
+								Clear State
+							</button>
+						</div>
+					</div>
+				</div>
+			)}
 		</>
 	)
 }

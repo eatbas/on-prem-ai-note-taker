@@ -65,5 +65,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	// Control mini recorder window visibility
 	setMiniRecorderVisible: (visible) => {
 		ipcRenderer.send('set-mini-recorder-visible', visible)
+	},
+	
+	// Listen for app closing stop recording command
+	onAppClosingStopRecording: (callback) => {
+		ipcRenderer.on('app-closing-stop-recording', (event) => callback())
+	},
+	
+	// Remove app closing stop recording listener
+	removeAppClosingStopRecordingListener: () => {
+		ipcRenderer.removeAllListeners('app-closing-stop-recording')
 	}
 })
