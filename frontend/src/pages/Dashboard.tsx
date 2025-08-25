@@ -1,11 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
-import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally } from './offline'
-import { getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting } from './api'
-import { db } from './db'
+import React, { useEffect, useMemo, useState } from 'react'
+import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../services'
 import AskLlama from './AskLlama'
-import JobQueue from './JobQueue'
-import { useToast } from './Toast'
-import { createRippleEffect } from './utils'
+import { JobQueue } from '../components/queue'
+import { useToast } from '../components/common'
+import { createRippleEffect } from '../utils'
 
 export default function Dashboard({ 
 	onOpen, 

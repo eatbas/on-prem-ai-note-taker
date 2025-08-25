@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getTags, updateMeetingTags, type Tag } from './api'
+import { getTags, updateMeetingTags, type Tag } from '../../services'
 
 interface TagsManagerProps {
 	meetingId?: string

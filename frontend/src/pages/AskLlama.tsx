@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { chat } from './api'
+import { chat } from '../services'
 
 export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: boolean | null }) {
 	const [prompt, setPrompt] = useState('')

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useToast } from './Toast'
-import ProgressDashboard from './ProgressDashboard'
+import { useToast } from '../components/common'
+import { ProgressDashboard } from '../components/queue'
 
 interface User {
     id: string

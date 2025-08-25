@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getJobStatus, cancelJob, JobStatus } from './api'
-import { jobQueueManager, type JobHistoryItem } from './jobQueueManager'
+import { getJobStatus, cancelJob, JobStatus } from '../../services'
+import { jobQueueManager, type JobHistoryItem } from '../../stores/jobQueueManager'
 
 interface JobQueueProps {
 	online: boolean

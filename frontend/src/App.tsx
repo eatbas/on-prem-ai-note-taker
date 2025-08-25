@@ -1,15 +1,11 @@
 import { BrowserRouter, HashRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
-import Recorder from './Recorder'
-import Dashboard from './Dashboard'
-import MeetingView from './MeetingView'
-import AdminDashboard from './AdminDashboard'
-
-import { watchOnline } from './offline'
-import { getVpsHealth } from './api'
-import { useToast } from './Toast'
-import { globalRecordingManager } from './globalRecordingManager'
-import { clearStuckRecordingState } from './utils'
+import { Dashboard, MeetingView, AdminDashboard } from './pages'
+import { Recorder, FloatingRecorder } from './components/recording'
+import { useToast } from './components/common'
+import { watchOnline, getVpsHealth } from './services'
+import { globalRecordingManager } from './stores/globalRecordingManager'
+import { clearStuckRecordingState } from './utils/'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
@@ -99,8 +95,7 @@ function AppShell({
 							border: '1px solid #d1d5db',
 							borderRadius: '4px',
 							fontSize: '14px',
-							maxWidth: '350px',
-							minWidth: '250px'
+							minWidth: '200px'
 						}}
 					/>
 					<select 
@@ -476,6 +471,7 @@ export default function App() {
 	useEffect(() => {
 		const unsubscribe = globalRecordingManager.subscribe((globalState) => {
 			console.log('🔄 App: Global recording state changed:', globalState)
+			console.log('⏱️ App: Timer update received - recording time:', globalState.recordingTime)
 			// Always keep App state in sync with global state
 			setIsRecording(globalState.isRecording)
 			setRecordingMeetingId(globalState.meetingId)
@@ -490,6 +486,9 @@ export default function App() {
 
 		return unsubscribe
 	}, [])
+
+	// Note: Timer updates are now handled by globalRecordingManager subscription
+	// No need for additional timer here - it was causing double counting
 
 	// Warn user before leaving/refreshing during recording
 	useEffect(() => {
@@ -576,6 +575,9 @@ export default function App() {
 		setRefreshSignal(Date.now())
 	}
 
+	// Debug logging for FloatingRecorder rendering
+	console.log('🎙️ App: About to render FloatingRecorder with:', { isRecording, recordingTime, recordingMeetingId })
+	
 	return (
 		<Router>
 			{/* Hidden Recorder component to manage global recording state */}
@@ -591,6 +593,20 @@ export default function App() {
 					vpsUp={vpsUp}
 				/>
 			</div>
+			
+			{/* Floating Recorder Widget - Frontend Only */}
+			<FloatingRecorder
+				isRecording={isRecording}
+				recordingTime={recordingTime}
+				onStopRecording={() => {
+					if (isRecording && recordingMeetingId) {
+						// Save current state before stopping
+						globalRecordingManager.saveCurrentState()
+						// Stop recording immediately
+						globalRecordingManager.stopRecording()
+					}
+				}}
+			/>
 			
 			{/* Global Recording Notification - Appears on all pages */}
 			{isRecording && recordingMeetingId && (

@@ -36,7 +36,7 @@ export async function listMeetings(query?: { tag?: string; text?: string; exclud
 	// Filter out meetings that are currently being recorded if requested
 	if (query?.excludeRecordingInProgress) {
 		// Import global recording manager to check active recording
-		const { globalRecordingManager } = await import('./globalRecordingManager')
+		const { globalRecordingManager } = await import('../stores/globalRecordingManager')
 		const currentRecording = globalRecordingManager.getState()
 		if (currentRecording.isRecording && currentRecording.meetingId) {
 			meetings = meetings.filter(m => m.id !== currentRecording.meetingId)

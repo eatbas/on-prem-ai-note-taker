@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { JobStatusResponse, createJobProgressStream } from './api'
+import { JobStatusResponse, createJobProgressStream } from '../../services'
 
 interface ProgressTrackerProps {
 	jobId: string

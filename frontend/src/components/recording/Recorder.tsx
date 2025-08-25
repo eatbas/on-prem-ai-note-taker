@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { addChunk, createMeeting, syncMeeting, autoProcessMeetingRecording } from './offline'
-import { db } from './db'
-import { globalRecordingManager, GlobalRecordingState } from './globalRecordingManager'
+import React, { useEffect, useRef, useState } from 'react'
+import { addChunk, createMeeting, syncMeeting, autoProcessMeetingRecording, db } from '../../services'
+import { globalRecordingManager, GlobalRecordingState } from '../../stores/globalRecordingManager'
 
 // Add CSS animations for the component
 const pulseAnimation = `
@@ -63,7 +62,7 @@ export default function Recorder({
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
 	const [selectedMic, setSelectedMic] = useState<string>('')
 	const [language, setLanguage] = useState<'auto' | 'tr' | 'en'>('tr')
-	const [openMiniRecorder, setOpenMiniRecorder] = useState(true)
+
 
 	const audioContextRef = useRef<AudioContext | null>(null)
 	const analyserRef = useRef<AnalyserNode | null>(null)
@@ -150,68 +149,12 @@ export default function Recorder({
 	// Update Electron tray when recording state changes
 	useEffect(() => {
 		if (window.electronAPI) {
+			console.log('🎙️ Sending recording state to Electron:', recording)
 			window.electronAPI.sendRecordingState(recording)
 		}
 	}, [recording])
 
-	// Send recording data updates to standalone window
-	useEffect(() => {
-		if (window.electronAPI && recording) {
-			// Send recording state to main process for standalone window
-			window.electronAPI.sendRecordingState(recording)
-			
-			// Send detailed recording data updates
-			const updateInterval = setInterval(() => {
-				if (window.electronAPI && recording) {
-					window.electronAPI.sendRecordingDataUpdate({
-						recording: true,
-						recordingTime,
-						systemAudioLevel,
-						microphoneLevel
-					})
-				}
-			}, 100) // Update 10 times per second
-			
-			return () => clearInterval(updateInterval)
-		}
-	}, [recording, recordingTime, systemAudioLevel, microphoneLevel])
-
-	// Listen for stop recording command from standalone window
-	useEffect(() => {
-		if (window.electronAPI) {
-			const handleStopRecording = () => {
-				if (recording) {
-					stop()
-				}
-			}
-			
-			window.electronAPI.onTrayAction((action) => {
-				if (action === 'stop-recording') {
-					handleStopRecording()
-				}
-			})
-			
-			return () => {
-				window.electronAPI.removeTrayActionListener()
-			}
-		}
-	}, [recording])
-
-	// Listen for recording data requests from main process
-	useEffect(() => {
-		if (window.electronAPI) {
-			window.electronAPI.onRequestRecordingData(() => {
-				if (recording) {
-					window.electronAPI.sendRecordingDataResponse({
-						recording: true,
-						recordingTime,
-						systemAudioLevel,
-						microphoneLevel
-					})
-				}
-			})
-		}
-	}, [recording, recordingTime, systemAudioLevel, microphoneLevel])
+	// Simplified - no more complex recording data handling needed
 
 	// Function to refresh microphone list
 	const refreshMicrophones = async () => {
@@ -563,14 +506,6 @@ export default function Recorder({
 			// Notify Electron process that recording has started
 			if (window.electronAPI) {
 				window.electronAPI.sendRecordingState(true)
-				// Conditionally show mini recorder window based on checkbox
-				window.electronAPI.setMiniRecorderVisible(openMiniRecorder)
-				window.electronAPI.sendRecordingDataUpdate({
-					recording: true,
-					recordingTime: 0,
-					systemAudioLevel: 0,
-					microphoneLevel: 0
-				})
 			}
 
 			// Start audio level monitoring with ALL system audio streams
@@ -604,12 +539,6 @@ export default function Recorder({
 		// Notify Electron process that recording has stopped
 		if (window.electronAPI) {
 			window.electronAPI.sendRecordingState(false)
-			window.electronAPI.sendRecordingDataUpdate({
-				recording: false,
-				recordingTime: 0,
-				systemAudioLevel: 0,
-				microphoneLevel: 0
-			})
 		}
 		
 		// IMMEDIATELY call onStopped callback to update App-level state
@@ -1223,37 +1152,7 @@ export default function Recorder({
 								</p>
 							</div>
 							
-							{/* Mini Recorder Checkbox */}
-							<div style={{ marginBottom: '20px' }}>
-								<label style={{
-									display: 'flex',
-									alignItems: 'center',
-									gap: '8px',
-									cursor: 'pointer',
-									fontSize: '14px',
-									color: '#374151'
-								}}>
-									<input
-										type="checkbox"
-										checked={openMiniRecorder}
-										onChange={(e) => setOpenMiniRecorder(e.target.checked)}
-										style={{
-											width: '16px',
-											height: '16px',
-											cursor: 'pointer'
-										}}
-									/>
-									<span>📱 Open mini recorder (floating window)</span>
-								</label>
-								<p style={{
-									margin: '4px 0 0 24px',
-									fontSize: '12px',
-									color: '#6b7280',
-									fontStyle: 'italic'
-								}}>
-									Shows a compact recording window with timer and controls
-								</p>
-							</div>
+
 							
 							<button
 								onClick={startRecordingWithSelectedMic}

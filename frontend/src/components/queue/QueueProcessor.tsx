@@ -6,7 +6,7 @@ import {
 	getQueueTaskResult,
 	getQueueStats,
 	type QueueStats 
-} from './api'
+} from '../../services'
 
 interface QueueProcessorProps {
 	online: boolean

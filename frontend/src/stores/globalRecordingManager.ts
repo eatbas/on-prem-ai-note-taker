@@ -1,5 +1,5 @@
 // Global recording manager to persist recording state across navigation
-import { addChunk } from './offline'
+import { addChunk } from '../services'
 
 interface GlobalRecordingState {
 	isRecording: boolean
@@ -140,6 +140,7 @@ class GlobalRecordingManager {
 		// Start recording timer
 		this.state.recordingInterval = window.setInterval(() => {
 			this.state.recordingTime += 1
+			console.log('⏱️ Global Recording Manager: Timer tick - recording time:', this.state.recordingTime)
 			// Notify listeners every second for real-time timer updates
 			this.notifyListeners()
 			// Save state every 10 seconds

@@ -46,7 +46,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	
 	// Import and add to queue (dynamic import to avoid circular dependencies)
 	try {
-		const { addJobToQueue } = await import('./jobQueueManager')
+		const { addJobToQueue } = await import('../stores/jobQueueManager')
 		addJobToQueue(jobId, 'pending', `Transcribing audio file`)
 	} catch (err) {
 		console.warn('Could not add job to queue:', err)
@@ -61,7 +61,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	if (!resp.ok) {
 		// Update job status to failed
 		try {
-			const { updateJobInQueue } = await import('./jobQueueManager')
+			const { updateJobInQueue } = await import('../stores/jobQueueManager')
 			updateJobInQueue(jobId, { status: 'error', message: `Failed to transcribe audio` })
 		} catch (err) {
 			console.warn('Could not update job status:', err)
@@ -73,7 +73,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	
 	// Update job status to completed
 	try {
-		const { updateJobInQueue } = await import('./jobQueueManager')
+		const { updateJobInQueue } = await import('../stores/jobQueueManager')
 		updateJobInQueue(jobId, { 
 			status: 'done', 
 			message: `Audio transcribed successfully`,
@@ -93,7 +93,7 @@ export async function summarize(text: string) {
 	
 	// Import and add to queue (dynamic import to avoid circular dependencies)
 	try {
-		const { addJobToQueue } = await import('./jobQueueManager')
+		const { addJobToQueue } = await import('../stores/jobQueueManager')
 		addJobToQueue(jobId, 'pending', `Generating summary from text`)
 	} catch (err) {
 		console.warn('Could not add job to queue:', err)
@@ -108,7 +108,7 @@ export async function summarize(text: string) {
 	if (!resp.ok) {
 		// Update job status to failed
 		try {
-			const { updateJobInQueue } = await import('./jobQueueManager')
+			const { updateJobInQueue } = await import('../stores/jobQueueManager')
 			updateJobInQueue(jobId, { status: 'error', message: `Failed to generate summary` })
 		} catch (err) {
 			console.warn('Could not update job status:', err)
@@ -120,7 +120,7 @@ export async function summarize(text: string) {
 	
 	// Update job status to completed
 	try {
-		const { updateJobInQueue } = await import('./jobQueueManager')
+		const { updateJobInQueue } = await import('../stores/jobQueueManager')
 		updateJobInQueue(jobId, { 
 			status: 'done', 
 			message: `Summary generated successfully`,
@@ -143,7 +143,7 @@ export async function chat(prompt: string, model?: string) {
 	
 	// Import and add to queue (dynamic import to avoid circular dependencies)
 	try {
-		const { addJobToQueue } = await import('./jobQueueManager')
+		const { addJobToQueue } = await import('../stores/jobQueueManager')
 		addJobToQueue(jobId, 'pending', `Processing AI chat request`)
 	} catch (err) {
 		console.warn('Could not add job to queue:', err)
@@ -161,7 +161,7 @@ export async function chat(prompt: string, model?: string) {
 			const errorText = await resp.text()
 			// Update job status to failed
 			try {
-				const { updateJobInQueue } = await import('./jobQueueManager')
+				const { updateJobInQueue } = await import('../stores/jobQueueManager')
 				updateJobInQueue(jobId, { status: 'error', message: `Chat failed: ${resp.status}` })
 			} catch (err) {
 				console.warn('Could not update job status:', err)
@@ -173,7 +173,7 @@ export async function chat(prompt: string, model?: string) {
 		
 		// Update job status to completed
 		try {
-			const { updateJobInQueue } = await import('./jobQueueManager')
+			const { updateJobInQueue } = await import('../stores/jobQueueManager')
 			updateJobInQueue(jobId, { 
 				status: 'done', 
 				message: `AI chat completed successfully`,
@@ -201,7 +201,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	
 	// Import and add to queue (dynamic import to avoid circular dependencies)
 	try {
-		const { addJobToQueue } = await import('./jobQueueManager')
+		const { addJobToQueue } = await import('../stores/jobQueueManager')
 		addJobToQueue(jobId, 'pending', `Transcribing and summarizing audio file`)
 	} catch (err) {
 		console.warn('Could not add job to queue:', err)
@@ -216,7 +216,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	if (!resp.ok) {
 		// Update job status to failed
 		try {
-			const { updateJobInQueue } = await import('./jobQueueManager')
+			const { updateJobInQueue } = await import('../stores/jobQueueManager')
 			updateJobInQueue(jobId, { status: 'error', message: `Failed to transcribe and summarize audio` })
 		} catch (err) {
 			console.warn('Could not update job status:', err)
@@ -241,7 +241,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	
 	// Update job status to completed
 	try {
-		const { updateJobInQueue } = await import('./jobQueueManager')
+		const { updateJobInQueue } = await import('../stores/jobQueueManager')
 		updateJobInQueue(jobId, { 
 			status: 'done', 
 			message: `Audio transcribed and summarized successfully`,
@@ -365,7 +365,7 @@ export async function autoProcessMeeting(
 	
 	// Import and add to queue (dynamic import to avoid circular dependencies)
 	try {
-		const { addJobToQueue } = await import('./jobQueueManager')
+		const { addJobToQueue } = await import('../stores/jobQueueManager')
 		addJobToQueue(jobId, 'pending', `Processing meeting: ${title}`)
 	} catch (err) {
 		console.warn('Could not add job to queue:', err)
@@ -380,7 +380,7 @@ export async function autoProcessMeeting(
 	if (!resp.ok) {
 		// Update job status to failed
 		try {
-			const { updateJobInQueue } = await import('./jobQueueManager')
+			const { updateJobInQueue } = await import('../stores/jobQueueManager')
 			updateJobInQueue(jobId, { status: 'error', message: `Failed to process meeting: ${title}` })
 		} catch (err) {
 			console.warn('Could not update job status:', err)
@@ -392,7 +392,7 @@ export async function autoProcessMeeting(
 	
 	// Update job status to completed
 	try {
-		const { updateJobInQueue } = await import('./jobQueueManager')
+		const { updateJobInQueue } = await import('../stores/jobQueueManager')
 		updateJobInQueue(jobId, { 
 			status: 'done', 
 			message: `Meeting processed successfully: ${title}`,

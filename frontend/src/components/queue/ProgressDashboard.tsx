@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { getProgressStats, getQueueStats, type ProgressStats, type QueueStats } from './api'
+import { getProgressStats, getQueueStats, type ProgressStats, type QueueStats } from '../../services'
 
 interface ProgressDashboardProps {
 	online: boolean

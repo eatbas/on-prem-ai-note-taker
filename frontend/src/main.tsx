@@ -1,7 +1,7 @@
 import React from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App'
-import { syncAllQueued, watchOnline } from './offline'
+import { syncAllQueued, watchOnline } from './services'
 
 const rootEl = document.getElementById('root')!
 createRoot(rootEl).render(

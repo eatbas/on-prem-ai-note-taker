@@ -1,10 +1,8 @@
 import { useEffect, useState, useRef } from 'react'
-import { db } from './db'
-import { syncMeeting, updateMeetingTags, assembleFileFromChunks, deleteMeetingLocally, deleteAudioChunksLocally } from './offline'
-import { updateMeeting, deleteMeeting } from './api'
-import TagsManager from './TagsManager'
-import { useToast } from './Toast'
-import { createRippleEffect } from './utils'
+import { db, syncMeeting, updateMeetingTags, assembleFileFromChunks, deleteMeetingLocally, deleteAudioChunksLocally, updateMeeting, deleteMeeting } from '../services'
+import { TagsManager } from '../components/common'
+import { useToast } from '../components/common'
+import { createRippleEffect } from '../utils'
 
 export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
 	const [meeting, setMeeting] = useState<any>(null)
