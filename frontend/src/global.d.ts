@@ -65,6 +65,18 @@ declare global {
 			// App closing stop recording functionality
 			onAppClosingStopRecording: (callback: () => void) => void
 			removeAppClosingStopRecordingListener: () => void
+
+			// Floating recorder controls
+			showFloatingRecorder: (data: any) => void
+			hideFloatingRecorder: () => void
+			updateFloatingRecorderState: (data: any) => void
+			openMicSelectorFromFloating: () => void
+			onStopRecordingFromFloating: (callback: () => void) => void
+			removeStopRecordingFromFloatingListener: () => void
+			onOpenMicSelector: (callback: () => void) => void
+			removeOpenMicSelectorListener: () => void
+			sendRecordingStarted: (data: any) => void
+			sendRecordingStopped: (data: any) => void
 		}
 		desktopCapture: {
 			getSources: (types: string[]) => Promise<Array<{ id: string; name: string }>>

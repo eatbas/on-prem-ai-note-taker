@@ -506,6 +506,8 @@ export default function Recorder({
 			// Notify Electron process that recording has started
 			if (window.electronAPI) {
 				window.electronAPI.sendRecordingState(true)
+				// Force show floating window immediately with zero time
+				window.electronAPI.sendRecordingStarted({ meetingId: createdId, recordingTime: 0 })
 			}
 
 			// Start audio level monitoring with ALL system audio streams

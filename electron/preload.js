@@ -28,6 +28,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
 		ipcRenderer.send('recording-state-changed', recording)
 	},
 	
+	// Send recording started event
+	sendRecordingStarted: (data) => {
+		ipcRenderer.send('recording-started', data)
+	},
+	
+	// Send recording stopped event
+	sendRecordingStopped: (data) => {
+		ipcRenderer.send('recording-stopped', data)
+	},
+	
 	// Listen for tray actions from main process
 	onTrayAction: (callback) => {
 		ipcRenderer.on('tray-action', (event, action) => callback(action))
@@ -38,33 +48,48 @@ contextBridge.exposeInMainWorld('electronAPI', {
 		ipcRenderer.removeAllListeners('tray-action')
 	},
 	
-	// New functions for standalone recording window
-	onRecordingDataUpdate: (callback) => {
-		ipcRenderer.on('recording-data-update', (event, data) => callback(data))
+	// Floating recorder controls
+	showFloatingRecorder: (data) => {
+		ipcRenderer.send('show-floating-recorder', data)
 	},
 	
-	stopRecording: () => {
-		ipcRenderer.send('stop-recording')
+	hideFloatingRecorder: () => {
+		ipcRenderer.send('hide-floating-recorder')
 	},
 	
-	// For main app to send recording data to standalone window
-	sendRecordingDataUpdate: (data) => {
-		ipcRenderer.send('recording-data-update', data)
+	updateFloatingRecorderState: (data) => {
+		ipcRenderer.send('update-floating-recorder-state', data)
+	},
+
+	// Ask renderer to open mic selector from floating window
+	openMicSelectorFromFloating: () => {
+		ipcRenderer.send('open-mic-selector-from-floating')
 	},
 	
-	// Listen for recording data requests from main process
-	onRequestRecordingData: (callback) => {
-		ipcRenderer.on('request-recording-data', (event) => callback())
+	// Subscribe to recording state updates (used by floating recorder window)
+	onUpdateRecordingState: (callback) => {
+		ipcRenderer.on('update-recording-state', (event, state) => callback(state))
+	},
+
+	// Renderer listens when floating window asks to stop
+	onStopRecordingFromFloating: (callback) => {
+		ipcRenderer.on('stop-recording-from-floating', () => callback())
+	},
+	removeStopRecordingFromFloatingListener: () => {
+		ipcRenderer.removeAllListeners('stop-recording-from-floating')
+	},
+
+	// Renderer listens when floating window asks to open mic selector
+	onOpenMicSelector: (callback) => {
+		ipcRenderer.on('open-mic-selector', () => callback())
+	},
+	removeOpenMicSelectorListener: () => {
+		ipcRenderer.removeAllListeners('open-mic-selector')
 	},
 	
-	// Send recording data response to main process
-	sendRecordingDataResponse: (data) => {
-		ipcRenderer.send('recording-data-response', data)
-	},
-	
-	// Control mini recorder window visibility
-	setMiniRecorderVisible: (visible) => {
-		ipcRenderer.send('set-mini-recorder-visible', visible)
+	// Send stop command from floating recorder to main process
+	stopRecordingFromFloating: () => {
+		ipcRenderer.send('stop-recording-from-floating')
 	},
 	
 	// Listen for app closing stop recording command

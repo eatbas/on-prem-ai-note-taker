@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Tray, nativeImage, ipcMain } = require('electron')
+const { app, BrowserWindow, Tray, nativeImage, ipcMain, screen } = require('electron')
 const path = require('path')
 const fs = require('fs')
 
@@ -14,10 +14,9 @@ process.on('unhandledRejection', (reason, promise) => {
 })
 
 let mainWindow
+let floatingRecorderWindow
 let tray
-let recorderWindow
 let isRecording = false
-let recordingDataTimer = null
 
 function createWindow() {
 	mainWindow = new BrowserWindow({
@@ -78,56 +77,7 @@ function createWindow() {
 	})
 }
 
-function createRecorderWindow() {
-	recorderWindow = new BrowserWindow({
-		width: 350,
-		height: 100,
-		frame: false,
-		resizable: false,
-		alwaysOnTop: true,
-		skipTaskbar: true,
-		transparent: true,
-		movable: true,
-		webPreferences: {
-			nodeIntegration: false,
-			contextIsolation: true,
-			preload: path.join(__dirname, 'preload.js'),
-			webSecurity: false // Allow loading local files
-		}
-	})
 
-	recorderWindow.loadFile(path.join(__dirname, 'recorder-window.html'))
-	
-	// Hide initially
-	recorderWindow.hide()
-	
-	// Position the window in the top-right corner initially
-	// Get screen size to ensure proper positioning
-	const { screen } = require('electron')
-	const primaryDisplay = screen.getPrimaryDisplay()
-	const { width, height } = primaryDisplay.workAreaSize
-	
-	// Position in top-right with some padding
-	const windowX = width - 370 // 350px width + 20px padding
-	const windowY = 20 // 20px from top
-	
-	recorderWindow.setPosition(windowX, windowY)
-	
-	// Make the window draggable by clicking anywhere on it
-	recorderWindow.setMovable(true)
-	
-	// Ensure window stays on screen
-	recorderWindow.on('moved', () => {
-		const [x, y] = recorderWindow.getPosition()
-		const [w, h] = recorderWindow.getSize()
-		
-		// Check if window is going off screen
-		if (x < 0) recorderWindow.setPosition(0, y)
-		if (y < 0) recorderWindow.setPosition(x, 0)
-		if (x + w > width) recorderWindow.setPosition(width - w, y)
-		if (y + h > height) recorderWindow.setPosition(x, height - h)
-	})
-}
 
 function createTray() {
 	try {
@@ -243,6 +193,85 @@ function updateTrayRecordingState(recording) {
 	}
 }
 
+function createFloatingRecorderWindow() {
+	// Get primary display bounds
+	const primaryDisplay = screen.getPrimaryDisplay()
+	const { width, height } = primaryDisplay.workAreaSize
+	
+	// Position the floating recorder in the top-right corner initially
+	const floatingWidth = 260
+	const floatingHeight = 64
+	const x = width - floatingWidth - 20
+	const y = 20
+	
+	floatingRecorderWindow = new BrowserWindow({
+		width: floatingWidth,
+		height: floatingHeight,
+		x: x,
+		y: y,
+		frame: false,
+		resizable: false,
+		movable: true,
+		alwaysOnTop: true,
+		skipTaskbar: true,
+		webPreferences: {
+			nodeIntegration: false,
+			contextIsolation: true,
+			preload: path.join(__dirname, 'preload.js'),
+			webSecurity: false
+		},
+		show: false, // Don't show until recording starts
+		transparent: true, // Allow for rounded corners
+		titleBarStyle: 'hidden',
+		titleBarOverlay: false
+	})
+
+	// Load the floating recorder HTML
+	const floatingRecorderPath = path.join(__dirname, 'floating-recorder.html')
+	floatingRecorderWindow.loadFile(floatingRecorderPath)
+	
+	// Handle window close
+	floatingRecorderWindow.on('closed', () => {
+		floatingRecorderWindow = null
+	})
+	
+	// Make window draggable
+	floatingRecorderWindow.setMovable(true)
+	
+	console.log('🎙️ Floating recorder window created')
+}
+
+function showFloatingRecorder() {
+	if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
+		floatingRecorderWindow.show()
+		console.log('🎙️ Floating recorder window shown')
+	}
+}
+
+function hideFloatingRecorder() {
+	if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
+		floatingRecorderWindow.hide()
+		console.log('🎙️ Floating recorder window hidden')
+	}
+}
+
+function updateFloatingRecorderState(recording, meetingId, recordingTime) {
+	if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
+		const state = {
+			isRecording: recording,
+			meetingId: meetingId,
+			recordingTime: recordingTime
+		}
+		floatingRecorderWindow.webContents.send('update-recording-state', state)
+		console.log('🎙️ Updated floating recorder state:', state)
+	}
+}
+
+function stopRecordingDataUpdates() {
+	// This function can be used to stop any ongoing recording data updates
+	console.log('🎙️ Stopping recording data updates')
+}
+
 app.whenReady().then(() => {
 	try {
 		console.log('🚀 App is ready, creating windows...')
@@ -252,7 +281,7 @@ app.whenReady().then(() => {
 		console.log('🌐 Development Mode: Always connects to VPS for AI services')
 		
 		createWindow()
-		createRecorderWindow()
+		createFloatingRecorderWindow()
 		createTray()
 		
 		console.log('All windows created successfully')
@@ -269,7 +298,7 @@ app.whenReady().then(() => {
 		app.on('activate', () => {
 			if (BrowserWindow.getAllWindows().length === 0) {
 				createWindow()
-				createRecorderWindow()
+				createFloatingRecorderWindow()
 				createTray()
 			}
 		})
@@ -288,6 +317,9 @@ app.on('before-quit', (event) => {
 		// Stop recording data updates
 		stopRecordingDataUpdates()
 		
+		// Stop the recording timer
+		stopRecordingTimer()
+		
 		// Send stop recording command to main window if it exists and is not destroyed
 		if (mainWindow && !mainWindow.isDestroyed()) {
 			try {
@@ -297,14 +329,8 @@ app.on('before-quit', (event) => {
 			}
 		}
 		
-		// Also try to send to recorder window if it exists
-		if (recorderWindow && !recorderWindow.isDestroyed()) {
-			try {
-				recorderWindow.webContents.send('app-closing-stop-recording')
-			} catch (error) {
-				console.log('Recorder window already destroyed, skipping stop recording command')
-			}
-		}
+		// Hide floating recorder window
+		hideFloatingRecorder()
 		
 		// Wait a bit for the recording to stop, then quit
 		setTimeout(() => {
@@ -327,50 +353,100 @@ ipcMain.on('recording-state-changed', (event, recording) => {
 		console.log('Recording state changed:', recording)
 		updateTrayRecordingState(recording)
 		
-		// Note: Mini recorder window visibility is now controlled separately
-		// via the set-mini-recorder-visible IPC handler
-		if (recording) {
-			// Start sending recording data updates
-			startRecordingDataUpdates()
-		} else {
-			// Hide recorder window when recording stops
-			if (recorderWindow) {
-				recorderWindow.hide()
-			}
-			// Stop sending recording data updates
-			stopRecordingDataUpdates()
+		// Update floating recorder window if it exists
+		if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
+			updateFloatingRecorderState(recording, null, 0)
 		}
 	} catch (error) {
 		console.error('Error updating tray recording state:', error)
 	}
 })
 
-// IPC handler for controlling mini recorder window visibility
-ipcMain.on('set-mini-recorder-visible', (event, visible) => {
+// IPC handlers for floating recorder
+ipcMain.on('show-floating-recorder', (event, data) => {
 	try {
-		console.log('Setting mini recorder visibility:', visible)
-		if (recorderWindow) {
-			if (visible) {
-				recorderWindow.show()
-			} else {
-				recorderWindow.hide()
-			}
-		}
+		console.log('Show floating recorder requested:', data)
+		showFloatingRecorder()
+		updateFloatingRecorderState(data.isRecording, data.meetingId, data.recordingTime)
 	} catch (error) {
-		console.error('Error setting mini recorder visibility:', error)
+		console.error('Error showing floating recorder:', error)
 	}
 })
 
-// IPC handlers for recording data updates
-ipcMain.on('recording-data-update', (event, data) => {
-	if (recorderWindow && !recorderWindow.isDestroyed() && data.recording) {
-		try {
-			recorderWindow.webContents.send('recording-data-update', data)
-		} catch (error) {
-			console.log('Recorder window destroyed, skipping recording data update')
+ipcMain.on('recording-started', (event, data) => {
+	try {
+		console.log('Recording started:', data)
+		isRecording = true
+		updateTrayRecordingState(true)
+		
+		// Show and update floating recorder
+		if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
+			showFloatingRecorder()
+			updateFloatingRecorderState(true, data.meetingId, 0)
 		}
+	} catch (error) {
+		console.error('Error handling recording started:', error)
 	}
 })
+
+ipcMain.on('recording-stopped', (event, data) => {
+	try {
+		console.log('Recording stopped:', data)
+		isRecording = false
+		updateTrayRecordingState(false)
+		
+		// Hide floating recorder
+		if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
+			hideFloatingRecorder()
+		}
+	} catch (error) {
+		console.error('Error handling recording stopped:', error)
+	}
+})
+
+ipcMain.on('hide-floating-recorder', (event) => {
+	try {
+		console.log('Hide floating recorder requested')
+		hideFloatingRecorder()
+	} catch (error) {
+		console.error('Error hiding floating recorder:', error)
+	}
+})
+
+ipcMain.on('update-floating-recorder-state', (event, data) => {
+	try {
+		console.log('Update floating recorder state requested:', data)
+		updateFloatingRecorderState(data.isRecording, data.meetingId, data.recordingTime)
+	} catch (error) {
+		console.error('Error updating floating recorder state:', error)
+	}
+})
+
+ipcMain.on('stop-recording-from-floating', (event) => {
+	try {
+		console.log('Stop recording requested from floating recorder')
+		if (mainWindow && !mainWindow.isDestroyed()) {
+			mainWindow.webContents.send('stop-recording-from-floating')
+		}
+	} catch (error) {
+		console.error('Error stopping recording from floating recorder:', error)
+	}
+})
+
+// Mic selection from floating window -> forward to renderer
+ipcMain.on('open-mic-selector-from-floating', () => {
+	try {
+		if (mainWindow && !mainWindow.isDestroyed()) {
+			mainWindow.webContents.send('open-mic-selector')
+		}
+	} catch (error) {
+		console.error('Error forwarding mic selector open:', error)
+	}
+})
+
+
+
+
 
 // IPC handlers for tray actions
 ipcMain.on('tray-action', (event, action) => {
@@ -389,65 +465,14 @@ ipcMain.on('tray-action', (event, action) => {
 	}
 })
 
-// IPC handler for stop recording from recorder window
-ipcMain.on('stop-recording', (event) => {
-	console.log('Stop recording requested from recorder window')
-	if (mainWindow && !mainWindow.isDestroyed()) {
-		try {
-			mainWindow.webContents.send('tray-action', 'stop-recording')
-		} catch (error) {
-			console.log('Main window destroyed, skipping stop recording command')
-		}
-	}
-})
 
-// IPC handler for recording data response from main window
-ipcMain.on('recording-data-response', (event, data) => {
-	if (recorderWindow && !recorderWindow.isDestroyed() && data.recording) {
-		try {
-			recorderWindow.webContents.send('recording-data-update', data)
-		} catch (error) {
-			console.log('Recorder window destroyed, skipping recording data update')
-		}
-	}
-})
 
-// Function to send recording data to standalone window
-function sendRecordingDataToStandalone(data) {
-	if (recorderWindow && !recorderWindow.isDestroyed() && data.recording) {
-		try {
-			recorderWindow.webContents.send('recording-data-update', data)
-		} catch (error) {
-			console.log('Recorder window destroyed, skipping recording data update')
-		}
-	}
-}
 
-// Start sending recording data updates
-function startRecordingDataUpdates() {
-	if (recordingDataTimer) {
-		clearInterval(recordingDataTimer)
-	}
-	
-	recordingDataTimer = setInterval(() => {
-		if (mainWindow && !mainWindow.isDestroyed() && recorderWindow && !recorderWindow.isDestroyed() && isRecording) {
-			try {
-				// Request recording data from main window
-				mainWindow.webContents.send('request-recording-data')
-			} catch (error) {
-				console.log('Window destroyed during recording data update, stopping timer')
-				stopRecordingDataUpdates()
-			}
-		}
-	}, 100) // Update 10 times per second
-}
 
-// Stop sending recording data updates
-function stopRecordingDataUpdates() {
-	if (recordingDataTimer) {
-		clearInterval(recordingDataTimer)
-		recordingDataTimer = null
-	}
-}
+
+
+
+
+
 
 

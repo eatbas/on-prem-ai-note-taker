@@ -539,9 +539,15 @@ export default function App() {
 			// Listen for app closing stop recording command
 			;(window as any).electronAPI.onAppClosingStopRecording(handleAppClosing)
 
+			// Listen for mic selector open (from floating window)
+			const openMic = () => setShowMicModal(true)
+			// Listen via preload API
+			;(window as any).electronAPI.onOpenMicSelector?.(openMic)
+
 			return () => {
 				// Clean up listener
 				;(window as any).electronAPI.removeAppClosingStopRecordingListener()
+				try { require('electron').ipcRenderer.removeAllListeners('open-mic-selector') } catch {}
 			}
 		}
 	}, [isRecording, recordingMeetingId])
@@ -575,6 +581,20 @@ export default function App() {
 		setRefreshSignal(Date.now())
 	}
 
+	// Handle stop click from floating recorder window
+	useEffect(() => {
+		const api = (window as any).electronAPI
+		if (!api) return
+		const handler = () => {
+			if (isRecording && recordingMeetingId) {
+				globalRecordingManager.saveCurrentState()
+				globalRecordingManager.stopRecording()
+			}
+		}
+		api.onStopRecordingFromFloating?.(handler)
+		return () => api.removeStopRecordingFromFloatingListener?.()
+	}, [isRecording, recordingMeetingId])
+
 	// Debug logging for FloatingRecorder rendering
 	console.log('🎙️ App: About to render FloatingRecorder with:', { isRecording, recordingTime, recordingMeetingId })
 	
@@ -598,6 +618,7 @@ export default function App() {
 			<FloatingRecorder
 				isRecording={isRecording}
 				recordingTime={recordingTime}
+				meetingId={recordingMeetingId}
 				onStopRecording={() => {
 					if (isRecording && recordingMeetingId) {
 						// Save current state before stopping
