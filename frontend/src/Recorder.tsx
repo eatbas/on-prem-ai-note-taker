@@ -879,458 +879,470 @@ export default function Recorder({
 		)
 	}
 
-	return (
+	// Recording Control Buttons Component
+	const RecordingButtons = () => (
 		<div style={{ 
 			display: 'flex', 
-			flexDirection: 'column', 
-			alignItems: 'center',
-			justifyContent: 'center',
-			textAlign: 'center',
-			minHeight: '200px'
+			gap: '8px', 
+			alignItems: 'center' 
 		}}>
-			{/* Main Content Area with Microphone and Status Side by Side */}
-			<div style={{
-				display: 'flex',
-				gap: '48px',
-				alignItems: 'flex-start',
-				marginBottom: '32px',
-				width: '100%',
-				maxWidth: '900px'
-			}}>
-				{/* Left Side - Empty for now */}
-				<div style={{ 
-					display: 'flex', 
-					flexDirection: 'column', 
-					alignItems: 'center',
-					flex: 1
-				}}>
-					{/* Content removed as requested */}
-				</div>
-			</div>
-
-			{/* Recording Controls */}
-			<div style={{ 
-				display: 'flex', 
-				gap: 16, 
-				marginBottom: 32, 
-				justifyContent: 'center',
-				alignItems: 'center' 
-			}}>
-				<button 
-					onClick={start} 
-					disabled={recording}
-					style={{
-						padding: '16px 32px',
-						backgroundColor: recording ? '#9ca3af' : '#3b82f6',
-						color: 'white',
-						border: 'none',
-						borderRadius: '12px',
-						fontSize: '18px',
-						fontWeight: 'bold',
-						cursor: recording ? 'not-allowed' : 'pointer',
-						transition: 'all 0.2s ease',
-						boxShadow: recording ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-						transform: recording ? 'scale(0.95)' : 'scale(1)',
-						opacity: recording ? 0.6 : 1
-					}}
-				>
-					🎙️ Start Recording
-				</button>
-				<button 
-					onClick={stop} 
-					disabled={!recording}
-					style={{
-						padding: '16px 32px',
-						backgroundColor: !recording ? '#9ca3af' : '#ef4444',
-						color: 'white',
-						border: 'none',
-						borderRadius: '12px',
-						fontSize: '18px',
-						fontWeight: 'bold',
-						cursor: !recording ? 'not-allowed' : 'pointer',
-						transition: 'all 0.2s ease',
-						boxShadow: !recording ? 'none' : '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
-						transform: !recording ? 'scale(0.95)' : 'scale(1)',
-						opacity: !recording ? 0.6 : 1
-					}}
-				>
-					⏹️ Stop Recording
-				</button>
-			</div>
-
-			{/* Recording Status - Removed as requested */}
-
-			{/* Microphone Selection Modal */}
-			{showMicModal && (
-				<div style={{
-					position: 'fixed',
-					top: 0,
-					left: 0,
-					right: 0,
-					bottom: 0,
-					backgroundColor: 'rgba(0, 0, 0, 0.5)',
+			<button 
+				onClick={start} 
+				disabled={recording}
+				style={{
+					padding: '8px 16px',
+					backgroundColor: recording ? '#9ca3af' : '#3b82f6',
+					color: 'white',
+					border: 'none',
+					borderRadius: '6px',
+					fontSize: '14px',
+					fontWeight: '600',
+					cursor: recording ? 'not-allowed' : 'pointer',
+					transition: 'all 0.2s ease',
+					boxShadow: recording ? 'none' : '0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+					transform: recording ? 'scale(0.95)' : 'scale(1)',
+					opacity: recording ? 0.6 : 1,
 					display: 'flex',
 					alignItems: 'center',
-					justifyContent: 'center',
-					zIndex: 1000
+					gap: '6px'
+				}}
+			>
+				🎙️ Start
+			</button>
+			<button 
+				onClick={stop} 
+				disabled={!recording}
+				style={{
+					padding: '8px 16px',
+					backgroundColor: !recording ? '#9ca3af' : '#ef4444',
+					color: 'white',
+					border: 'none',
+					borderRadius: '6px',
+					fontSize: '14px',
+					fontWeight: '600',
+					cursor: !recording ? 'not-allowed' : 'pointer',
+					transition: 'all 0.2s ease',
+					boxShadow: !recording ? 'none' : '0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+					transform: !recording ? 'scale(0.95)' : 'scale(1)',
+					opacity: !recording ? 0.6 : 1,
+					display: 'flex',
+					alignItems: 'center',
+					gap: '6px'
+				}}
+			>
+				⏹️ Stop
+			</button>
+		</div>
+	)
+
+	return (
+		<>
+			{/* Recording Buttons for Top Bar */}
+			<RecordingButtons />
+			
+			{/* Main Content Area - Only show when not in top bar context */}
+			<div style={{ 
+				display: 'flex', 
+				flexDirection: 'column', 
+				alignItems: 'center',
+				justifyContent: 'center',
+				textAlign: 'center',
+				minHeight: '50px'
+			}}>
+				{/* Main Content Area with Microphone and Status Side by Side */}
+				<div style={{
+					display: 'flex',
+					gap: '48px',
+					alignItems: 'flex-start',
+					marginBottom: '32px',
+					width: '100%',
+					maxWidth: '900px'
 				}}>
+					{/* Left Side - Empty for now */}
+					<div style={{ 
+						display: 'flex', 
+						flexDirection: 'column', 
+						alignItems: 'center',
+						flex: 1
+					}}>
+						{/* Content removed as requested */}
+					</div>
+				</div>
+
+				{/* Recording Status - Removed as requested */}
+
+				{/* Microphone Selection Modal */}
+				{showMicModal && (
 					<div style={{
-						backgroundColor: 'white',
-						padding: '24px',
-						borderRadius: '12px',
-						maxWidth: '400px',
-						width: '90%',
-						boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+						position: 'fixed',
+						top: 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						backgroundColor: 'rgba(0, 0, 0, 0.5)',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						zIndex: 1000
 					}}>
 						<div style={{
-							display: 'flex',
-							justifyContent: 'space-between',
-							alignItems: 'center',
-							marginBottom: '16px'
+							backgroundColor: 'white',
+							padding: '24px',
+							borderRadius: '12px',
+							maxWidth: '400px',
+							width: '90%',
+							boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
 						}}>
-							<h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
-								Select Microphone
-							</h3>
-							<button
-								onClick={() => setShowMicModal(false)}
-								style={{
-									background: 'none',
-									border: 'none',
-									fontSize: '20px',
-									cursor: 'pointer',
-									color: '#6b7280',
-									padding: '4px'
-								}}
-							>
-								✕
-							</button>
-						</div>
-						
-						<p style={{ 
-							margin: '0 0 16px 0', 
-							color: '#6b7280', 
-							fontSize: '14px' 
-						}}>
-							Choose your preferred microphone for recording:
-						</p>
-						
-						<div style={{ marginBottom: '20px' }}>
-							<div style={{ 
-								display: 'flex', 
-								justifyContent: 'space-between', 
+							<div style={{
+								display: 'flex',
+								justifyContent: 'space-between',
 								alignItems: 'center',
-								marginBottom: '12px'
+								marginBottom: '16px'
 							}}>
-								<label style={{ 
-									fontWeight: '500',
-									color: '#374151'
-								}}>
-									Choose Microphone:
-								</label>
+								<h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+									Select Microphone
+								</h3>
 								<button
-									onClick={refreshMicrophones}
+									onClick={() => setShowMicModal(false)}
 									style={{
 										background: 'none',
-										border: '1px solid #d1d5db',
-										borderRadius: '4px',
-										padding: '4px 8px',
-										fontSize: '12px',
+										border: 'none',
+										fontSize: '20px',
 										cursor: 'pointer',
-										color: '#6b7280'
+										color: '#6b7280',
+										padding: '4px'
 									}}
-									title="Refresh microphone list"
 								>
-									🔄 Refresh
+									✕
 								</button>
 							</div>
 							
-							{/* Microphone list with usage indicators */}
-							<div style={{ 
-								display: 'flex',
-								flexDirection: 'column',
-								gap: '8px',
-								marginBottom: '12px'
+							<p style={{ 
+								margin: '0 0 16px 0', 
+								color: '#6b7280', 
+								fontSize: '14px' 
 							}}>
-								{availableMics.map(mic => (
-									<div
-										key={mic.deviceId}
-										onClick={() => setSelectedMic(mic.deviceId)}
+								Choose your preferred microphone for recording:
+							</p>
+							
+							<div style={{ marginBottom: '20px' }}>
+								<div style={{ 
+									display: 'flex', 
+									justifyContent: 'space-between', 
+									alignItems: 'center',
+									marginBottom: '12px'
+								}}>
+									<label style={{ 
+										fontWeight: '500',
+										color: '#374151'
+									}}>
+										Choose Microphone:
+									</label>
+									<button
+										onClick={refreshMicrophones}
 										style={{
-											display: 'flex',
-											alignItems: 'center',
-											justifyContent: 'space-between',
-											padding: '12px',
-											border: selectedMic === mic.deviceId ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-											borderRadius: '8px',
+											background: 'none',
+											border: '1px solid #d1d5db',
+											borderRadius: '4px',
+											padding: '4px 8px',
+											fontSize: '12px',
 											cursor: 'pointer',
-											backgroundColor: selectedMic === mic.deviceId ? '#eff6ff' : '#ffffff',
-											transition: 'all 0.2s ease',
-											gap: '12px'
+											color: '#6b7280'
 										}}
+										title="Refresh microphone list"
 									>
-										<div style={{
-											display: 'flex',
-											alignItems: 'center',
-											gap: '8px',
-											flex: 1
-										}}>
+										🔄 Refresh
+									</button>
+								</div>
+								
+								{/* Microphone list with usage indicators */}
+								<div style={{ 
+									display: 'flex',
+									flexDirection: 'column',
+									gap: '8px',
+									marginBottom: '12px'
+								}}>
+									{availableMics.map(mic => (
+										<div
+											key={mic.deviceId}
+											onClick={() => setSelectedMic(mic.deviceId)}
+											style={{
+												display: 'flex',
+												alignItems: 'center',
+												justifyContent: 'space-between',
+												padding: '12px',
+												border: selectedMic === mic.deviceId ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+												borderRadius: '8px',
+												cursor: 'pointer',
+												backgroundColor: selectedMic === mic.deviceId ? '#eff6ff' : '#ffffff',
+												transition: 'all 0.2s ease',
+												gap: '12px'
+											}}
+										>
 											<div style={{
-												fontSize: '16px',
-												color: selectedMic === mic.deviceId ? '#3b82f6' : '#6b7280'
-											}}>
-												{selectedMic === mic.deviceId ? '●' : '○'}
-											</div>
-											<div style={{
-												fontSize: '14px',
-												fontWeight: selectedMic === mic.deviceId ? '600' : '400',
-												color: selectedMic === mic.deviceId ? '#1e293b' : '#374151',
+												display: 'flex',
+												alignItems: 'center',
+												gap: '8px',
 												flex: 1
 											}}>
-												{mic.label}
+												<div style={{
+													fontSize: '16px',
+													color: selectedMic === mic.deviceId ? '#3b82f6' : '#6b7280'
+												}}>
+													{selectedMic === mic.deviceId ? '●' : '○'}
+												</div>
+												<div style={{
+													fontSize: '14px',
+													fontWeight: selectedMic === mic.deviceId ? '600' : '400',
+													color: selectedMic === mic.deviceId ? '#1e293b' : '#374151',
+													flex: 1
+												}}>
+													{mic.label}
+												</div>
+											</div>
+											<div style={{ minWidth: '80px' }}>
+												<MicrophoneUsageIndicator deviceId={mic.deviceId} size="small" />
 											</div>
 										</div>
-										<div style={{ minWidth: '80px' }}>
-											<MicrophoneUsageIndicator deviceId={mic.deviceId} size="small" />
-										</div>
+									))}
+								</div>
+								
+								{/* Status indicator */}
+								{isMonitoringMics && (
+									<div style={{
+										display: 'flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+										gap: '6px',
+										padding: '8px',
+										backgroundColor: '#f0f9ff',
+										border: '1px solid #bae6fd',
+										borderRadius: '6px',
+										fontSize: '12px',
+										color: '#0369a1'
+									}}>
+										<div style={{
+											width: '8px',
+											height: '8px',
+											borderRadius: '50%',
+											backgroundColor: '#22c55e',
+											animation: 'pulse 2s infinite'
+										}} />
+										Monitoring microphone activity levels
 									</div>
-								))}
+								)}
 							</div>
 							
-							{/* Status indicator */}
-							{isMonitoringMics && (
+							{/* Language Selection */}
+							<div style={{ marginBottom: '20px' }}>
+								<label style={{
+									display: 'block',
+									marginBottom: '8px',
+									fontWeight: '500',
+									color: '#374151'
+								}}>
+									🌍 Meeting Language:
+								</label>
 								<div style={{
 									display: 'flex',
-									alignItems: 'center',
-									justifyContent: 'center',
-									gap: '6px',
-									padding: '8px',
-									backgroundColor: '#f0f9ff',
-									border: '1px solid #bae6fd',
-									borderRadius: '6px',
-									fontSize: '12px',
-									color: '#0369a1'
+									gap: '8px',
+									justifyContent: 'center'
 								}}>
-									<div style={{
-										width: '8px',
-										height: '8px',
-										borderRadius: '50%',
-										backgroundColor: '#22c55e',
-										animation: 'pulse 2s infinite'
-									}} />
-									Monitoring microphone activity levels
+									{[
+										{ value: 'tr', label: 'Türkçe' },
+										{ value: 'en', label: 'English' },
+										{ value: 'auto', label: 'Auto' }
+									].map((option) => (
+										<button
+											key={option.value}
+											onClick={() => setLanguage(option.value as 'auto' | 'tr' | 'en')}
+											style={{
+												padding: '8px 16px',
+												backgroundColor: language === option.value ? '#3b82f6' : '#f3f4f6',
+												color: language === option.value ? 'white' : '#374151',
+												border: '1px solid #d1d5db',
+												borderRadius: '6px',
+												fontSize: '14px',
+												fontWeight: '500',
+												cursor: 'pointer',
+												transition: 'all 0.2s ease'
+											}}
+											onMouseEnter={(e) => {
+												if (language !== option.value) {
+													e.currentTarget.style.backgroundColor = '#e5e7eb'
+												}
+											}}
+											onMouseLeave={(e) => {
+												if (language !== option.value) {
+													e.currentTarget.style.backgroundColor = '#f3f4f6'
+												}
+											}}
+										>
+											{option.label}
+										</button>
+									))}
 								</div>
-							)}
-						</div>
-						
-						{/* Language Selection */}
-						<div style={{ marginBottom: '20px' }}>
-							<label style={{
-								display: 'block',
-								marginBottom: '8px',
-								fontWeight: '500',
-								color: '#374151'
-							}}>
-								🌍 Meeting Language:
-							</label>
-							<div style={{
-								display: 'flex',
-								gap: '8px',
-								justifyContent: 'center'
-							}}>
-								{[
-									{ value: 'tr', label: 'Türkçe' },
-									{ value: 'en', label: 'English' },
-									{ value: 'auto', label: 'Auto' }
-								].map((option) => (
-									<button
-										key={option.value}
-										onClick={() => setLanguage(option.value as 'auto' | 'tr' | 'en')}
-										style={{
-											padding: '8px 16px',
-											backgroundColor: language === option.value ? '#3b82f6' : '#f3f4f6',
-											color: language === option.value ? 'white' : '#374151',
-											border: '1px solid #d1d5db',
-											borderRadius: '6px',
-											fontSize: '14px',
-											fontWeight: '500',
-											cursor: 'pointer',
-											transition: 'all 0.2s ease'
-										}}
-										onMouseEnter={(e) => {
-											if (language !== option.value) {
-												e.currentTarget.style.backgroundColor = '#e5e7eb'
-											}
-										}}
-										onMouseLeave={(e) => {
-											if (language !== option.value) {
-												e.currentTarget.style.backgroundColor = '#f3f4f6'
-											}
-										}}
-									>
-										{option.label}
-									</button>
-								))}
+								<p style={{
+									margin: '4px 0 0 0',
+									fontSize: '12px',
+									color: '#6b7280',
+									fontStyle: 'italic',
+									textAlign: 'center'
+								}}>
+									Select the primary language for this meeting
+								</p>
 							</div>
-							<p style={{
-								margin: '4px 0 0 0',
-								fontSize: '12px',
-								color: '#6b7280',
-								fontStyle: 'italic',
-								textAlign: 'center'
-							}}>
-								Select the primary language for this meeting
-							</p>
+							
+							{/* Mini Recorder Checkbox */}
+							<div style={{ marginBottom: '20px' }}>
+								<label style={{
+									display: 'flex',
+									alignItems: 'center',
+									gap: '8px',
+									cursor: 'pointer',
+									fontSize: '14px',
+									color: '#374151'
+								}}>
+									<input
+										type="checkbox"
+										checked={openMiniRecorder}
+										onChange={(e) => setOpenMiniRecorder(e.target.checked)}
+										style={{
+											width: '16px',
+											height: '16px',
+											cursor: 'pointer'
+										}}
+									/>
+									<span>📱 Open mini recorder (floating window)</span>
+								</label>
+								<p style={{
+									margin: '4px 0 0 24px',
+									fontSize: '12px',
+									color: '#6b7280',
+									fontStyle: 'italic'
+								}}>
+									Shows a compact recording window with timer and controls
+								</p>
+							</div>
+							
+							<button
+								onClick={startRecordingWithSelectedMic}
+								disabled={!selectedMic}
+								style={{
+									width: '100%',
+									padding: '12px 24px',
+									backgroundColor: selectedMic ? '#8b5cf6' : '#9ca3af',
+									color: 'white',
+									border: 'none',
+									borderRadius: '8px',
+									fontSize: '16px',
+									fontWeight: '600',
+									cursor: selectedMic ? 'pointer' : 'not-allowed',
+									transition: 'background-color 0.2s ease'
+								}}
+								onMouseEnter={(e) => {
+									if (selectedMic) {
+										e.currentTarget.style.backgroundColor = '#7c3aed'
+									}
+								}}
+								onMouseLeave={(e) => {
+									if (selectedMic) {
+										e.currentTarget.style.backgroundColor = '#8b5cf6'
+									}
+								}}
+							>
+								🎙️ Start Recording
+							</button>
 						</div>
-						
-						{/* Mini Recorder Checkbox */}
-						<div style={{ marginBottom: '20px' }}>
-							<label style={{
-								display: 'flex',
-								alignItems: 'center',
-								gap: '8px',
-								cursor: 'pointer',
-								fontSize: '14px',
-								color: '#374151'
-							}}>
-								<input
-									type="checkbox"
-									checked={openMiniRecorder}
-									onChange={(e) => setOpenMiniRecorder(e.target.checked)}
-									style={{
-										width: '16px',
-										height: '16px',
-										cursor: 'pointer'
-									}}
-								/>
-								<span>📱 Open mini recorder (floating window)</span>
-							</label>
-							<p style={{
-								margin: '4px 0 0 24px',
-								fontSize: '12px',
-								color: '#6b7280',
-								fontStyle: 'italic'
-							}}>
-								Shows a compact recording window with timer and controls
-							</p>
-						</div>
-						
-						<button
-							onClick={startRecordingWithSelectedMic}
-							disabled={!selectedMic}
-							style={{
-								width: '100%',
-								padding: '12px 24px',
-								backgroundColor: selectedMic ? '#8b5cf6' : '#9ca3af',
-								color: 'white',
-								border: 'none',
-								borderRadius: '8px',
-								fontSize: '16px',
-								fontWeight: '600',
-								cursor: selectedMic ? 'pointer' : 'not-allowed',
-								transition: 'background-color 0.2s ease'
-							}}
-							onMouseEnter={(e) => {
-								if (selectedMic) {
-									e.currentTarget.style.backgroundColor = '#7c3aed'
-								}
-							}}
-							onMouseLeave={(e) => {
-								if (selectedMic) {
-									e.currentTarget.style.backgroundColor = '#8b5cf6'
-								}
-							}}
-						>
-							🎙️ Start Recording
-						</button>
 					</div>
-				</div>
-			)}
+				)}
 
-			{/* Sync Status Indicators */}
-			{syncStatus !== 'idle' && (
-				<div style={{ 
-					marginBottom: 16, 
-					padding: '12px 16px', 
-					borderRadius: '8px',
-					display: 'flex',
-					alignItems: 'center',
-					justifyContent: 'center',
-					gap: '12px',
-					backgroundColor: syncStatus === 'syncing' ? '#fef3c7' : 
-									syncStatus === 'success' ? '#dcfce7' : '#fee2e2',
-					border: syncStatus === 'syncing' ? '1px solid #f59e0b' : 
-							syncStatus === 'success' ? '1px solid #22c55e' : '1px solid #ef4444'
-				}}>
+				{/* Sync Status Indicators */}
+				{syncStatus !== 'idle' && (
 					<div style={{ 
-						width: '12px', 
-						height: '12px', 
-						borderRadius: '50%',
-						backgroundColor: syncStatus === 'syncing' ? '#f59e0b' : 
-										syncStatus === 'success' ? '#22c55e' : '#ef4444',
-						animation: syncStatus === 'syncing' ? 'pulse 1.5s infinite' : 'none'
-					}}></div>
-					<span style={{ 
-						fontWeight: 'bold',
-						color: syncStatus === 'syncing' ? '#92400e' : 
-							   syncStatus === 'success' ? '#166534' : '#991b1b'
-					}}>
-											{syncStatus === 'syncing' && `🔄 Processing meeting with AI...${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}`}
-					{syncStatus === 'success' && '✅ Meeting processed successfully with AI transcription and summary!'}
-					{syncStatus === 'failed' && `❌ Auto-processing failed${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}. You can manually retry.`}
-					</span>
-				</div>
-			)}
-
-			{/* Upload Progress Bar */}
-			{recording && totalChunks > 0 && (
-				<div style={{ 
-					marginBottom: 16, 
-					padding: '12px 16px', 
-					backgroundColor: '#f8fafc', 
-					border: '1px solid #e2e8f0',
-					borderRadius: '8px',
-					width: '100%',
-					maxWidth: '400px'
-				}}>
-					<div style={{ 
-						display: 'flex', 
-						justifyContent: 'space-between', 
-						marginBottom: '8px',
-						fontSize: '14px',
-						color: '#64748b'
-					}}>
-						<span>📁 Saving audio chunks...</span>
-						<span>{uploadProgress} / {totalChunks}</span>
-					</div>
-					<div style={{ 
-						width: '100%', 
-						height: '8px', 
-						backgroundColor: '#e2e8f0', 
-						borderRadius: '4px',
-						overflow: 'hidden'
+						marginBottom: 16, 
+						padding: '12px 16px', 
+						borderRadius: '8px',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						gap: '12px',
+						backgroundColor: syncStatus === 'syncing' ? '#fef3c7' : 
+											syncStatus === 'success' ? '#dcfce7' : '#fee2e2',
+						border: syncStatus === 'syncing' ? '1px solid #f59e0b' : 
+								syncStatus === 'success' ? '1px solid #22c55e' : '1px solid #ef4444'
 					}}>
 						<div style={{ 
-							width: `${(uploadProgress / totalChunks) * 100}%`, 
-							height: '100%', 
-							backgroundColor: '#3b82f6',
-							transition: 'width 0.3s ease'
+							width: '12px', 
+							height: '12px', 
+							borderRadius: '50%',
+							backgroundColor: syncStatus === 'syncing' ? '#f59e0b' : 
+												syncStatus === 'success' ? '#22c55e' : '#ef4444',
+							animation: syncStatus === 'syncing' ? 'pulse 1.5s infinite' : 'none'
 						}}></div>
+						<span style={{ 
+							fontWeight: 'bold',
+							color: syncStatus === 'syncing' ? '#92400e' : 
+								   syncStatus === 'success' ? '#166534' : '#991b1b'
+						}}>
+							{syncStatus === 'syncing' && `🔄 Processing meeting with AI...${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}`}
+							{syncStatus === 'success' && '✅ Meeting processed successfully with AI transcription and summary!'}
+							{syncStatus === 'failed' && `❌ Auto-processing failed${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}. You can manually retry.`}
+						</span>
 					</div>
-				</div>
-			)}
-			
-			{error && (
-				<div style={{ 
-					color: 'white', 
-					marginTop: 16, 
-					padding: '12px 16px',
-					backgroundColor: '#ef4444',
-					borderRadius: '8px',
-					border: '1px solid #dc2626'
-				}}>
-					⚠️ {error}
-				</div>
-			)}
-		</div>
+				)}
+
+				{/* Upload Progress Bar */}
+				{recording && totalChunks > 0 && (
+					<div style={{ 
+						marginBottom: 16, 
+						padding: '12px 16px', 
+						backgroundColor: '#f8fafc', 
+						border: '1px solid #e2e8f0',
+						borderRadius: '8px',
+						width: '100%',
+						maxWidth: '400px'
+					}}>
+						<div style={{ 
+							display: 'flex', 
+							justifyContent: 'space-between', 
+							marginBottom: '8px',
+							fontSize: '14px',
+							color: '#64748b'
+						}}>
+							<span>📁 Saving audio chunks...</span>
+							<span>{uploadProgress} / {totalChunks}</span>
+						</div>
+						<div style={{ 
+							width: '100%', 
+							height: '8px', 
+							backgroundColor: '#e2e8f0', 
+							borderRadius: '4px',
+							overflow: 'hidden'
+						}}>
+							<div style={{ 
+								width: `${(uploadProgress / totalChunks) * 100}%`, 
+								height: '100%', 
+								backgroundColor: '#3b82f6',
+								transition: 'width 0.3s ease'
+							}}></div>
+						</div>
+					</div>
+				)}
+				
+				{error && (
+					<div style={{ 
+						color: 'white', 
+						marginTop: 16, 
+						padding: '12px 16px',
+						backgroundColor: '#ef4444',
+						borderRadius: '8px',
+						border: '1px solid #dc2626'
+					}}>
+						⚠️ {error}
+					</div>
+				)}
+			</div>
+		</>
 	)
 }

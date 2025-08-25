@@ -72,16 +72,16 @@ function AppShell({
 				zIndex: 1000,
 				backgroundColor: 'white',
 				borderBottom: '1px solid #e2e8f0',
-				padding: '16px',
-				marginBottom: '24px',
+				padding: '4px 12px',
+				marginBottom: '8px',
 				boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)',
-				borderRadius: '12px',
+				borderRadius: '6px',
 				maxWidth: 1200,
-				margin: '0 auto 24px auto'
+				margin: '0 auto 8px auto'
 			}}>
 				<div style={{ 
 					display: 'flex', 
-					gap: 12, 
+					gap: 8, 
 					alignItems: 'center', 
 					maxWidth: '1200px',
 					margin: '0 auto',
@@ -94,23 +94,23 @@ function AppShell({
 						onChange={e => setText(e.target.value)}
 						style={{ 
 							flex: 1, 
-							padding: '8px 12px',
+							padding: '4px 8px',
 							border: '1px solid #d1d5db',
-							borderRadius: '6px',
+							borderRadius: '4px',
 							fontSize: '14px',
-							maxWidth: '400px',
-							minWidth: '300px'
+							maxWidth: '350px',
+							minWidth: '250px'
 						}}
 					/>
 					<select 
 						value={tag} 
 						onChange={e => setTag(e.target.value)} 
 						style={{ 
-							padding: '8px 12px',
+							padding: '4px 8px',
 							border: '1px solid #d1d5db',
-							borderRadius: '6px',
+							borderRadius: '4px',
 							fontSize: '14px',
-							minWidth: '120px'
+							minWidth: '100px'
 						}}
 					>
 						<option value="">All tags</option>
@@ -124,7 +124,7 @@ function AppShell({
 					{/* Status Indicators */}
 					<div style={{
 						display: 'flex',
-						gap: '8px',
+						gap: '6px',
 						alignItems: 'center'
 					}}>
 						<span style={{ 
@@ -132,7 +132,7 @@ function AppShell({
 							fontWeight: '500',
 							display: 'flex',
 							alignItems: 'center',
-							gap: '8px'
+							gap: '6px'
 						}}>
 							{online ? '🟢' : '🔴'} Online
 						</span>
@@ -143,7 +143,7 @@ function AppShell({
 								fontWeight: '500',
 								display: 'flex',
 								alignItems: 'center',
-								gap: '8px'
+								gap: '6px'
 							}}
 						>
 							{vpsUp === null ? '⏳' : vpsUp ? '🟢' : '🔴'} VPS
@@ -153,7 +153,7 @@ function AppShell({
 					{/* Recording Control Buttons */}
 					<div style={{
 						display: 'flex',
-						gap: '8px',
+						gap: '6px',
 						alignItems: 'center'
 					}}>
 						<Recorder 
