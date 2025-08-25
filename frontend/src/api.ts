@@ -221,7 +221,20 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 		} catch (err) {
 			console.warn('Could not update job status:', err)
 		}
-		throw new Error(`Transcribe+Summarize failed: ${resp.status}`)
+		
+		// Provide more specific error messages based on HTTP status
+		let errorMessage = `Transcribe+Summarize failed: ${resp.status}`
+		if (resp.status === 0 || resp.status === 500) {
+			errorMessage = 'Server error: The AI backend may be having issues. Please try again later.'
+		} else if (resp.status === 401) {
+			errorMessage = 'Authentication failed. Please check your VPS credentials.'
+		} else if (resp.status === 413) {
+			errorMessage = 'File too large. Try recording shorter sessions.'
+		} else if (resp.status === 503) {
+			errorMessage = 'VPS service temporarily unavailable. Please try again later.'
+		}
+		
+		throw new Error(errorMessage)
 	}
 	
 	const result = await resp.json()
@@ -279,6 +292,15 @@ export async function updateMeeting(meetingId: string, title: string) {
 		headers: { ...getAuthHeader() },
 	})
 	if (!resp.ok) throw new Error(`Update meeting failed: ${resp.status}`)
+	return resp.json()
+}
+
+export async function deleteMeeting(meetingId: string): Promise<{ message: string }> {
+	const resp = await fetch(`${apiBase}/meetings/${meetingId}`, {
+		method: 'DELETE',
+		headers: { ...getAuthHeader() },
+	})
+	if (!resp.ok) throw new Error(`Delete meeting failed: ${resp.status}`)
 	return resp.json()
 }
 

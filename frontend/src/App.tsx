@@ -8,6 +8,7 @@ import AdminDashboard from './AdminDashboard'
 import { watchOnline } from './offline'
 import { getVpsHealth } from './api'
 import { useToast } from './Toast'
+import { globalRecordingManager } from './globalRecordingManager'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
@@ -16,7 +17,9 @@ function AppShell({
 	tag, setTag, 
 	online, vpsUp, setVpsUp,
 	availableTags, setAvailableTags,
-	refreshSignal, setRefreshSignal 
+	refreshSignal, setRefreshSignal,
+	isRecording, recordingMeetingId,
+	onRecordingCreated, onRecordingStopped
 }: {
 	text: string
 	setText: (text: string) => void
@@ -29,6 +32,10 @@ function AppShell({
 	setAvailableTags: (tags: [string, number][]) => void
 	refreshSignal: number
 	setRefreshSignal: (signal: number) => void
+	isRecording: boolean
+	recordingMeetingId: string | null
+	onRecordingCreated: (meetingId: string) => void
+	onRecordingStopped: (meetingId: string) => void
 }) {
 	const navigate = useNavigate()
 	const { ToastContainer } = useToast()
@@ -143,47 +150,46 @@ function AppShell({
 						</span>
 					</div>
 
-					{/* Action Buttons */}
+					{/* Recording Control Buttons */}
 					<div style={{
 						display: 'flex',
 						gap: '8px',
 						alignItems: 'center'
 					}}>
-						<button 
-							onClick={() => window.location.reload()}
-							style={{
-								padding: '8px 16px',
-								border: '1px solid #d1d5db',
-								backgroundColor: 'white',
-								borderRadius: '6px',
+						{isRecording && recordingMeetingId && (
+							<div style={{
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								padding: '8px 12px',
+								backgroundColor: '#dcfce7',
+								border: '2px solid #22c55e',
+								borderRadius: '8px',
 								fontSize: '14px',
-								cursor: 'pointer',
-								transition: 'background-color 0.2s ease',
-								whiteSpace: 'nowrap'
-							}}
-						>
-							🔄 Refresh
-						</button>
-						<button 
-							onClick={async () => {
-								if (window.confirm('Are you sure you want to reset all local data? This cannot be undone.')) {
-									// Reset local data logic here
-									window.location.reload()
-								}
-							}}
-							style={{
-								padding: '8px 16px',
-								border: '1px solid #d1d5db',
-								backgroundColor: 'white',
-								borderRadius: '6px',
-								fontSize: '14px',
-								cursor: 'pointer',
-								transition: 'background-color 0.2s ease',
-								whiteSpace: 'nowrap'
-							}}
-						>
-							Reset Local Data
-						</button>
+								fontWeight: '600',
+								color: '#166534'
+							}}>
+								<div style={{
+									width: '8px',
+									height: '8px',
+									backgroundColor: '#ef4444',
+									borderRadius: '50%',
+									animation: 'pulse 1.5s infinite'
+								}} />
+								🎙️ Recording...
+							</div>
+						)}
+						
+						<Recorder 
+							onCreated={onRecordingCreated}
+							onStopped={onRecordingStopped}
+							text={text}
+							setText={setText}
+							tag={tag}
+							setTag={setTag}
+							online={online}
+							vpsUp={vpsUp}
+						/>
 					</div>
 				</div>
 			</div>
@@ -260,18 +266,6 @@ function AppShell({
 					</div>
 				</header>
 				
-				{/* Stay on dashboard when recording starts; meeting can be opened from the list */}
-				<Recorder 
-					onCreated={() => { /* no navigation */ }} 
-					onStopped={() => setRefreshSignal(Date.now())}
-					text={text}
-					setText={setText}
-					tag={tag}
-					setTag={setTag}
-					online={online}
-					vpsUp={vpsUp}
-				/>
-				
 				<div style={{ 
 					margin: '32px 0',
 					height: '1px',
@@ -288,6 +282,8 @@ function AppShell({
 					online={online}
 					vpsUp={vpsUp}
 					onTagsChange={setAvailableTags}
+					isRecording={isRecording}
+					recordingMeetingId={recordingMeetingId}
 				/>
 			</div>
 		</div>
@@ -298,7 +294,8 @@ function MeetingRoute({
 	text, setText, 
 	tag, setTag, 
 	online, vpsUp, 
-	availableTags 
+	availableTags,
+	isRecording, recordingMeetingId
 }: {
 	text: string
 	setText: (text: string) => void
@@ -307,6 +304,8 @@ function MeetingRoute({
 	online: boolean
 	vpsUp: boolean | null
 	availableTags: [string, number][]
+	isRecording: boolean
+	recordingMeetingId: string | null
 }) {
 	const params = useParams()
 	const navigate = useNavigate()
@@ -408,47 +407,36 @@ function MeetingRoute({
 						</span>
 					</div>
 
-					{/* Action Buttons */}
+					{/* Recording Control Buttons */}
 					<div style={{
 						display: 'flex',
 						gap: '8px',
 						alignItems: 'center'
 					}}>
-						<button 
-							onClick={() => window.location.reload()}
-							style={{
-								padding: '8px 16px',
-								border: '1px solid #d1d5db',
-								backgroundColor: 'white',
-								borderRadius: '6px',
+						{isRecording && recordingMeetingId && (
+							<div style={{
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								padding: '8px 12px',
+								backgroundColor: '#dcfce7',
+								border: '2px solid #22c55e',
+								borderRadius: '8px',
 								fontSize: '14px',
-								cursor: 'pointer',
-								transition: 'background-color 0.2s ease',
-								whiteSpace: 'nowrap'
-							}}
-						>
-							🔄 Refresh
-						</button>
-						<button 
-							onClick={async () => {
-								if (window.confirm('Are you sure you want to reset all local data? This cannot be undone.')) {
-									// Reset local data logic here
-									window.location.reload()
-								}
-							}}
-							style={{
-								padding: '8px 16px',
-								border: '1px solid #d1d5db',
-								backgroundColor: 'white',
-								borderRadius: '6px',
-								fontSize: '14px',
-								cursor: 'pointer',
-								transition: 'background-color 0.2s ease',
-								whiteSpace: 'nowrap'
-							}}
-						>
-							Reset Local Data
-						</button>
+								fontWeight: '600',
+								color: '#166534'
+							}}>
+								<div style={{
+									width: '8px',
+									height: '8px',
+									backgroundColor: '#ef4444',
+									borderRadius: '50%',
+									animation: 'pulse 1.5s infinite'
+								}} />
+								🎙️ Recording...
+							</div>
+						)}
+						
 					</div>
 				</div>
 			</div>
@@ -487,7 +475,56 @@ function MeetingRoute({
 						← Back to Dashboard
 					</button>
 				</nav>
-				<MeetingView meetingId={id} />
+				
+				{/* Recording status indicator */}
+				{isRecording && recordingMeetingId && (
+					<div style={{
+						padding: '12px 16px',
+						backgroundColor: '#dcfce7',
+						border: '2px solid #22c55e',
+						borderRadius: '8px',
+						marginBottom: '16px',
+						display: 'flex',
+						alignItems: 'center',
+						gap: '12px'
+					}}>
+						<div style={{
+							width: '12px',
+							height: '12px',
+							backgroundColor: '#ef4444',
+							borderRadius: '50%',
+							animation: 'pulse 1.5s infinite'
+						}} />
+						<div style={{ flex: 1 }}>
+							<div style={{ fontWeight: '600', color: '#166534', fontSize: '14px' }}>
+								🎙️ Recording in Progress
+							</div>
+							<div style={{ color: '#166534', fontSize: '12px' }}>
+								Meeting ID: {recordingMeetingId?.slice(0, 8)}... • Return to dashboard to stop recording
+							</div>
+						</div>
+						<button
+							onClick={() => navigate('/')}
+							style={{
+								padding: '8px 12px',
+								backgroundColor: '#22c55e',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								fontSize: '12px',
+								fontWeight: '600',
+								cursor: 'pointer'
+							}}
+						>
+							Go to Dashboard
+						</button>
+					</div>
+				)}
+				
+				<MeetingView 
+					meetingId={id} 
+					onBack={() => navigate('/')}
+				/>
 			</div>
 		</div>
 	)
@@ -501,22 +538,128 @@ export default function App() {
 	const [online, setOnline] = useState(true)
 	const [vpsUp, setVpsUp] = useState<boolean | null>(null)
 	const [availableTags, setAvailableTags] = useState<[string, number][]>([])
+	
+	// Global recording state
+	const [isRecording, setIsRecording] = useState(false)
+	const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null)
 
 	// Debug logging for status
 	useEffect(() => {
-		console.log('🔍 App Debug Status:', { online, vpsUp, isElectron })
-	}, [online, vpsUp])
+		console.log('🔍 App Debug Status:', { online, vpsUp, isElectron, isRecording, recordingMeetingId })
+	}, [online, vpsUp, isRecording, recordingMeetingId])
 
 	useEffect(() => {
 		const stop = watchOnline(setOnline)
 		return stop
 	}, [])
 
+	// Sync App-level recording state with global recording manager
+	useEffect(() => {
+		const unsubscribe = globalRecordingManager.subscribe((globalState) => {
+			console.log('🔄 App: Global recording state changed:', globalState)
+			// Always keep App state in sync with global state
+			setIsRecording(globalState.isRecording)
+			setRecordingMeetingId(globalState.meetingId)
+		})
+
+		// Initialize with current global state
+		const currentState = globalRecordingManager.getState()
+		setIsRecording(currentState.isRecording)
+		setRecordingMeetingId(currentState.meetingId)
+
+		return unsubscribe
+	}, [])
+
+	// Warn user before leaving/refreshing during recording
+	useEffect(() => {
+		const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+			if (isRecording) {
+				e.preventDefault()
+				e.returnValue = 'Recording is in progress. Are you sure you want to leave? Your recording may be lost.'
+				return 'Recording is in progress. Are you sure you want to leave? Your recording may be lost.'
+			}
+		}
+
+		window.addEventListener('beforeunload', handleBeforeUnload)
+		return () => window.removeEventListener('beforeunload', handleBeforeUnload)
+	}, [isRecording])
+
+	// Recording handlers
+	const handleRecordingCreated = (meetingId: string) => {
+		console.log('🎙️ Recording started for meeting:', meetingId)
+		setIsRecording(true)
+		setRecordingMeetingId(meetingId)
+		// Don't refresh dashboard immediately - wait for recording to complete
+	}
+
+	const handleRecordingStopped = (meetingId: string) => {
+		console.log('⏹️ Recording stopped for meeting:', meetingId)
+		setIsRecording(false)
+		setRecordingMeetingId(null)
+		// Now refresh dashboard to show the completed meeting
+		setRefreshSignal(Date.now())
+	}
+
 	return (
 		<Router>
-			<Routes>
-				<Route path="/" element={
-					<AppShell 
+			{/* Hidden Recorder component to manage global recording state */}
+			<div style={{ display: 'none' }}>
+				<Recorder 
+					onCreated={handleRecordingCreated}
+					onStopped={handleRecordingStopped}
+					text={text}
+					setText={setText}
+					tag={tag}
+					setTag={setTag}
+					online={online}
+					vpsUp={vpsUp}
+				/>
+			</div>
+			
+			{/* Global Recording Notification - Appears on all pages */}
+			{isRecording && recordingMeetingId && (
+				<div style={{
+					position: 'fixed',
+					top: 0,
+					left: 0,
+					right: 0,
+					zIndex: 9999,
+					background: 'linear-gradient(135deg, #22c55e, #16a34a)',
+					color: 'white',
+					padding: '12px 20px',
+					textAlign: 'center',
+					boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+					fontSize: '14px',
+					fontWeight: '600'
+				}}>
+					<div style={{
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						gap: '12px'
+					}}>
+						<div style={{
+							width: '8px',
+							height: '8px',
+							backgroundColor: '#ef4444',
+							borderRadius: '50%',
+							animation: 'pulse 1.5s infinite'
+						}} />
+						🎙️ Recording in Progress • Meeting: {recordingMeetingId.slice(0, 8)}...
+						<span style={{ opacity: 0.9, fontSize: '12px' }}>
+							(Recording will continue across all pages)
+						</span>
+					</div>
+				</div>
+			)}
+			
+			<div style={{ 
+				paddingTop: isRecording && recordingMeetingId ? '50px' : '0',
+				transition: 'padding-top 0.3s ease'
+			}}>
+				<Routes>
+					<Route path="/" element={
+						<AppShell 
 						text={text}
 						setText={setText}
 						tag={tag}
@@ -528,6 +671,10 @@ export default function App() {
 						setAvailableTags={setAvailableTags}
 						refreshSignal={refreshSignal}
 						setRefreshSignal={setRefreshSignal}
+						isRecording={isRecording}
+						recordingMeetingId={recordingMeetingId}
+						onRecordingCreated={handleRecordingCreated}
+						onRecordingStopped={handleRecordingStopped}
 					/>
 				} />
 				<Route path="/meeting/:meetingId" element={
@@ -539,11 +686,14 @@ export default function App() {
 						online={online}
 						vpsUp={vpsUp}
 						availableTags={availableTags}
+						isRecording={isRecording}
+						recordingMeetingId={recordingMeetingId}
 					/>
 				} />
 				<Route path="/admin" element={<AdminDashboard />} />
 				
 			</Routes>
+			</div>
 		</Router>
 	)
 }

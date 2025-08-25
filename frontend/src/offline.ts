@@ -30,8 +30,19 @@ export async function addChunk(meetingId: string, blob: Blob, index: number): Pr
 	await db.chunks.add(chunk)
 }
 
-export async function listMeetings(query?: { tag?: string; text?: string }): Promise<any[]> {
+export async function listMeetings(query?: { tag?: string; text?: string; excludeRecordingInProgress?: boolean }): Promise<any[]> {
 	let meetings = await db.meetings.orderBy('updatedAt').reverse().toArray()
+	
+	// Filter out meetings that are currently being recorded if requested
+	if (query?.excludeRecordingInProgress) {
+		// Import global recording manager to check active recording
+		const { globalRecordingManager } = await import('./globalRecordingManager')
+		const currentRecording = globalRecordingManager.getState()
+		if (currentRecording.isRecording && currentRecording.meetingId) {
+			meetings = meetings.filter(m => m.id !== currentRecording.meetingId)
+		}
+	}
+	
 	if (query?.tag) meetings = meetings.filter(m => m.tags.includes(query.tag!))
 	if (query?.text) {
 		const t = query.text.toLowerCase()
@@ -205,6 +216,32 @@ export async function autoProcessMeetingRecording(
 		}
 		throw e
 	}
+}
+
+export async function deleteMeetingLocally(meetingId: string): Promise<void> {
+	// Delete meeting record
+	await db.meetings.delete(meetingId)
+	
+	// Delete all chunks for this meeting
+	const chunks = await db.chunks.where({ meetingId }).toArray()
+	for (const chunk of chunks) {
+		await db.chunks.delete(chunk.id)
+	}
+	
+	// Delete notes for this meeting
+	await db.notes.delete(meetingId)
+	
+	console.log(`Successfully deleted local meeting data for ${meetingId}`)
+}
+
+export async function deleteAudioChunksLocally(meetingId: string): Promise<void> {
+	// Delete all chunks for this meeting but keep meeting record and notes
+	const chunks = await db.chunks.where({ meetingId }).toArray()
+	for (const chunk of chunks) {
+		await db.chunks.delete(chunk.id)
+	}
+	
+	console.log(`Successfully deleted local audio chunks for ${meetingId}`)
 }
 
 

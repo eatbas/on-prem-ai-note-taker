@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
-import { listMeetings, syncMeeting, watchOnline } from './offline'
-import { getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult } from './api'
+import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally } from './offline'
+import { getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting } from './api'
 import { db } from './db'
 import AskLlama from './AskLlama'
 import JobQueue from './JobQueue'
@@ -16,7 +16,9 @@ export default function Dashboard({
 	setTag,
 	online,
 	vpsUp,
-	onTagsChange
+	onTagsChange,
+	isRecording,
+	recordingMeetingId
 }: { 
 	onOpen: (meetingId: string) => void; 
 	refreshSignal?: number;
@@ -27,6 +29,8 @@ export default function Dashboard({
 	online: boolean;
 	vpsUp: boolean | null;
 	onTagsChange?: (tags: [string, number][]) => void;
+	isRecording?: boolean;
+	recordingMeetingId?: string | null;
 }) {
 	const [meetings, setMeetings] = useState<any[]>([])
 	const [loading, setLoading] = useState(false)
@@ -43,19 +47,131 @@ export default function Dashboard({
 	const [showVpsDiagnostics, setShowVpsDiagnostics] = useState(false)
 	const [quickTestResult, setQuickTestResult] = useState<any>(null)
 	const [showQuickTest, setShowQuickTest] = useState(false)
+	
+	// Context menu state
+	const [contextMenu, setContextMenu] = useState<{
+		visible: boolean;
+		x: number;
+		y: number;
+		meetingId: string;
+		meetingTitle: string;
+	} | null>(null)
+
+	// Context menu functions
+	const handleContextMenu = (e: React.MouseEvent, meetingId: string, meetingTitle: string) => {
+		e.preventDefault()
+		e.stopPropagation()
+		setContextMenu({
+			visible: true,
+			x: e.clientX,
+			y: e.clientY,
+			meetingId,
+			meetingTitle
+		})
+	}
+
+	const closeContextMenu = () => {
+		setContextMenu(null)
+	}
+
+	// Click outside to close context menu
+	useEffect(() => {
+		const handleClickOutside = () => {
+			if (contextMenu?.visible) {
+				closeContextMenu()
+			}
+		}
+		
+		document.addEventListener('click', handleClickOutside)
+		return () => document.removeEventListener('click', handleClickOutside)
+	}, [contextMenu?.visible])
+
+	// Context menu actions
+	const handleRenameMeeting = async (meetingId: string) => {
+		const meeting = meetings.find(m => m.id === meetingId)
+		if (!meeting) return
+		
+		const newTitle = window.prompt('Enter new meeting title:', meeting.title)
+		if (newTitle && newTitle.trim() && newTitle.trim() !== meeting.title) {
+			try {
+				await updateMeeting(meetingId, newTitle.trim())
+				// Update local database as well
+				await db.meetings.update(meetingId, { title: newTitle.trim(), updatedAt: Date.now() })
+				showToast('Meeting renamed successfully! ✏️', 'success')
+				refresh() // Refresh the list
+			} catch (err) {
+				console.error('Failed to rename meeting:', err)
+				showToast('Failed to rename meeting. Please try again.', 'error')
+			}
+		}
+		closeContextMenu()
+	}
+
+	const handleDeleteAudio = async (meetingId: string) => {
+		if (!window.confirm('Are you sure you want to delete the audio for this meeting? The meeting notes, summary, and transcript will be preserved.')) {
+			closeContextMenu()
+			return
+		}
+
+		try {
+			await deleteAudioChunksLocally(meetingId)
+			showToast('Audio deleted successfully! 🗑️', 'success')
+			refresh() // Refresh the list
+		} catch (err) {
+			console.error('Failed to delete audio:', err)
+			showToast('Failed to delete audio. Please try again.', 'error')
+		}
+		closeContextMenu()
+	}
+
+	const handleDeleteMeeting = async (meetingId: string) => {
+		const meeting = meetings.find(m => m.id === meetingId)
+		if (!meeting) return
+
+		if (!window.confirm(`Are you sure you want to permanently delete "${meeting.title}"? This will remove all data including audio, transcript, summary, and notes both locally and from the server.`)) {
+			closeContextMenu()
+			return
+		}
+
+		try {
+			// Delete from VPS if the meeting was sent
+			if (meeting.status === 'sent') {
+				try {
+					await deleteMeeting(meetingId)
+					showToast('Meeting deleted from server ✅', 'info')
+				} catch (vpsError) {
+					console.warn('Failed to delete from VPS, proceeding with local deletion:', vpsError)
+					showToast('⚠️ Could not delete from server, but deleting locally', 'info')
+				}
+			}
+			
+			// Delete locally
+			await deleteMeetingLocally(meetingId)
+			showToast('Meeting deleted completely! 🗑️', 'success')
+			refresh() // Refresh the list
+		} catch (err) {
+			console.error('Failed to delete meeting:', err)
+			showToast('Failed to delete meeting. Please try again.', 'error')
+		}
+		closeContextMenu()
+	}
 
 	async function refresh() {
+		console.log('🔄 Dashboard refresh started')
 		setLoading(true)
 		setError(null)
 		try {
 			if (online) {
 				// Always load local meetings first so user sees something immediately
-				const localMeetings = await listMeetings({ text, tag })
+				const localMeetings = await listMeetings({ text, tag, excludeRecordingInProgress: true })
+				console.log('📁 Loaded local meetings:', localMeetings.length)
 				setMeetings(localMeetings)
 				
 				// Try to fetch from backend and merge
 				try {
+					console.log('🌐 Attempting to fetch from VPS backend...')
 					const backendMeetings = await getMeetings()
+					console.log('☁️ Loaded VPS meetings:', backendMeetings.length)
 					const byId = new Map<string, any>()
 					// Start with local meetings to preserve any unsent ones
 					for (const m of localMeetings) byId.set(m.id, m)
@@ -73,28 +189,32 @@ export default function Dashboard({
 							title: existing?.title || m.title
 						})
 					}
-					setMeetings(Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0)))
+					const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
+					console.log('🔄 Merged meetings:', mergedMeetings.length)
+					setMeetings(mergedMeetings)
 				} catch (backendErr) {
 					// Backend failed, but we still have local data
-					console.warn('Backend fetch failed, using local data:', backendErr)
+					console.warn('❌ Backend fetch failed, using local data:', backendErr)
 					setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
 				}
 			} else {
 				// Use local data when offline
-				setMeetings(await listMeetings({ text, tag }))
+				console.log('📱 Offline mode - using local data only')
+				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: true }))
 			}
 		} catch (err) {
-			console.error('Failed to load meetings:', err)
+			console.error('❌ Failed to load meetings:', err)
 			setError(`Failed to load meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
 			// Try to load any local data as last resort
 			try {
-				setMeetings(await listMeetings({ text, tag }))
+				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: true }))
 			} catch (localErr) {
-				console.error('Even local data failed:', localErr)
+				console.error('❌ Even local data failed:', localErr)
 				setMeetings([])
 			}
 		} finally {
 			setLoading(false)
+			console.log('✅ Dashboard refresh completed')
 		}
 	}
 
@@ -198,6 +318,7 @@ export default function Dashboard({
 	// Re-run refresh when parent bumps refreshSignal (e.g., on recording stop)
 	useEffect(() => {
 		if (typeof refreshSignal !== 'undefined') {
+			console.log('🔄 Dashboard refresh triggered by signal:', refreshSignal)
 			refresh()
 			// Go to first page when new meetings are added
 			setCurrentPage(1)
@@ -466,6 +587,46 @@ export default function Dashboard({
 					border: '1px solid #e2e8f0'
 				}}>
 					<div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
+						<button
+							onClick={(e) => {
+								createRippleEffect(e)
+								refresh()
+							}}
+							disabled={loading}
+							style={{
+								padding: '8px 16px',
+								backgroundColor: loading ? '#9ca3af' : '#f59e0b',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: loading ? 'not-allowed' : 'pointer',
+								fontSize: '14px',
+								fontWeight: '500',
+								transition: 'all 0.2s ease',
+								transform: 'scale(1)'
+							}}
+							onMouseDown={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(0.95)'
+									e.currentTarget.style.backgroundColor = '#d97706'
+								}
+							}}
+							onMouseUp={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#f59e0b'
+								}
+							}}
+							onMouseLeave={(e) => {
+								if (!loading) {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#f59e0b'
+								}
+							}}
+						>
+							{loading ? '🔄 Refreshing...' : '🔄 Manual Refresh'}
+						</button>
+						
 						<button
 							onClick={(e) => {
 								createRippleEffect(e)
@@ -775,11 +936,42 @@ export default function Dashboard({
 						</div>
 					)}
 
+					{/* Recording in progress indicator */}
+					{isRecording && recordingMeetingId && (
+						<div style={{
+							padding: '16px',
+							backgroundColor: '#dcfce7',
+							border: '2px solid #22c55e',
+							borderRadius: '8px',
+							marginBottom: '16px',
+							display: 'flex',
+							alignItems: 'center',
+							gap: '12px'
+						}}>
+							<div style={{
+								width: '12px',
+								height: '12px',
+								backgroundColor: '#ef4444',
+								borderRadius: '50%',
+								animation: 'pulse 1.5s infinite'
+							}} />
+							<div>
+								<div style={{ fontWeight: '600', color: '#166534', fontSize: '16px' }}>
+									🎙️ Recording in Progress
+								</div>
+								<div style={{ color: '#166534', fontSize: '14px' }}>
+									Meeting ID: {recordingMeetingId?.slice(0, 8)}... • Click to view when recording completes
+								</div>
+							</div>
+						</div>
+					)}
+
 					{/* Local meetings list */}
 					<ul style={{ listStyle: 'none', padding: 0 }}>
 						{currentMeetings.map(m => (
 							<li key={m.id} 
 								onClick={() => onOpen(m.id)}
+								onContextMenu={(e) => handleContextMenu(e, m.id, m.title)}
 								style={{ 
 									display: 'flex', 
 									gap: 12, 
@@ -1240,6 +1432,7 @@ export default function Dashboard({
 							{vpsMeetings.map(m => (
 								<li key={m.id} 
 									onClick={() => onOpen(m.id)}
+									onContextMenu={(e) => handleContextMenu(e, m.id, m.title)}
 									style={{ 
 										display: 'flex', 
 										gap: 12, 
@@ -1431,6 +1624,94 @@ export default function Dashboard({
 							</button>
 						</div>
 					)}
+				</div>
+			)}
+
+			{/* Context Menu */}
+			{contextMenu?.visible && (
+				<div
+					style={{
+						position: 'fixed',
+						top: contextMenu.y,
+						left: contextMenu.x,
+						backgroundColor: 'white',
+						border: '1px solid #e5e7eb',
+						borderRadius: '8px',
+						boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+						zIndex: 1000,
+						minWidth: '180px',
+						overflow: 'hidden'
+					}}
+					onClick={(e) => e.stopPropagation()}
+				>
+					<div style={{
+						padding: '8px 0',
+						fontSize: '14px'
+					}}>
+						<div
+							onClick={() => handleRenameMeeting(contextMenu.meetingId)}
+							style={{
+								padding: '12px 16px',
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								transition: 'background-color 0.15s ease'
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.backgroundColor = '#f3f4f6'
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.backgroundColor = 'transparent'
+							}}
+						>
+							<span style={{ fontSize: '16px' }}>✏️</span>
+							<span>Rename</span>
+						</div>
+						
+						<div
+							onClick={() => handleDeleteAudio(contextMenu.meetingId)}
+							style={{
+								padding: '12px 16px',
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								transition: 'background-color 0.15s ease'
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.backgroundColor = '#fef3c7'
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.backgroundColor = 'transparent'
+							}}
+						>
+							<span style={{ fontSize: '16px' }}>🎵</span>
+							<span>Delete Audio</span>
+						</div>
+						
+						<div
+							onClick={() => handleDeleteMeeting(contextMenu.meetingId)}
+							style={{
+								padding: '12px 16px',
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								transition: 'background-color 0.15s ease',
+								borderTop: '1px solid #f3f4f6'
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.backgroundColor = '#fee2e2'
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.backgroundColor = 'transparent'
+							}}
+						>
+							<span style={{ fontSize: '16px' }}>🗑️</span>
+							<span style={{ color: '#dc2626' }}>Delete Meeting</span>
+						</div>
+					</div>
 				</div>
 			)}
 		</div>

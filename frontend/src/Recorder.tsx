@@ -1,6 +1,26 @@
 import { useEffect, useRef, useState } from 'react'
 import { addChunk, createMeeting, syncMeeting, autoProcessMeetingRecording } from './offline'
 import { db } from './db'
+import { globalRecordingManager, GlobalRecordingState } from './globalRecordingManager'
+
+// Add CSS animations for the component
+const pulseAnimation = `
+@keyframes pulse {
+	0%, 100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.5;
+	}
+}
+`
+
+// Inject the CSS animation
+if (typeof document !== 'undefined') {
+	const style = document.createElement('style')
+	style.textContent = pulseAnimation
+	document.head.appendChild(style)
+}
 
 export default function Recorder({ 
 	onCreated, 
@@ -22,8 +42,6 @@ export default function Recorder({
 	vpsUp: boolean | null;
 }) {
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-	const [recording, setRecording] = useState(false)
-	const [meetingId, setMeetingId] = useState<string | null>(null)
 	const [error, setError] = useState<string | null>(null)
 	const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle')
 	const [retryCount, setRetryCount] = useState(0)
@@ -32,17 +50,53 @@ export default function Recorder({
 	const [showMicModal, setShowMicModal] = useState(false)
 	const [systemAudioLevel, setSystemAudioLevel] = useState(0)
 	const [microphoneLevel, setMicrophoneLevel] = useState(0)
-	const chunkIndexRef = useRef(0)
-	const [recordingTime, setRecordingTime] = useState(0)
+	
+	// Use global recording state
+	const [globalRecordingState, setGlobalRecordingState] = useState<GlobalRecordingState>(globalRecordingManager.getState())
+	
+	// Derived state from global manager
+	const recording = globalRecordingState.isRecording
+	const meetingId = globalRecordingState.meetingId
+	const recordingTime = globalRecordingState.recordingTime
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
 	const [selectedMic, setSelectedMic] = useState<string>('')
 	const [language, setLanguage] = useState<'auto' | 'tr' | 'en'>('tr')
 	const [openMiniRecorder, setOpenMiniRecorder] = useState(true)
-	const recordingIntervalRef = useRef<number | null>(null)
+
 	const audioContextRef = useRef<AudioContext | null>(null)
 	const analyserRef = useRef<AnalyserNode | null>(null)
 	const microphoneAnalyserRef = useRef<AnalyserNode | null>(null)
 	const animationFrameRef = useRef<number | null>(null)
+	
+	// Microphone usage monitoring
+	const [micUsageLevels, setMicUsageLevels] = useState<Record<string, number>>({})
+	const [isMonitoringMics, setIsMonitoringMics] = useState(false)
+	const micMonitorContextsRef = useRef<Record<string, AudioContext>>({})
+	const micMonitorAnalysersRef = useRef<Record<string, AnalyserNode>>({})
+	const micMonitorStreamsRef = useRef<Record<string, MediaStream>>({})
+	const micMonitorAnimationRef = useRef<number | null>(null)
+
+	// Subscribe to global recording manager
+	useEffect(() => {
+		const unsubscribe = globalRecordingManager.subscribe((state) => {
+			setGlobalRecordingState(state)
+		})
+		
+		// Initialize with current state
+		setGlobalRecordingState(globalRecordingManager.getState())
+		
+		// Check for interrupted recording on component mount
+		if (globalRecordingManager.isRecordingInterrupted()) {
+			const info = globalRecordingManager.getInterruptedRecordingInfo()
+			if (info) {
+				const message = `⚠️ Recording was interrupted by page refresh!\n\nMeeting: ${info.meetingId.slice(0, 8)}...\nRecorded time: ${Math.floor(info.recordingTime / 60)}:${(info.recordingTime % 60).toString().padStart(2, '0')}\n\nYou may need to restart recording to continue.`
+				alert(message)
+				console.warn('🎙️ Recording interrupted by page refresh:', info)
+			}
+		}
+		
+		return unsubscribe
+	}, [])
 
 	// Electron API integration
 	useEffect(() => {
@@ -174,8 +228,135 @@ export default function Recorder({
 				kind: mic.kind
 			})))
 			
+			// Start monitoring microphone usage levels if modal is open
+			if (showMicModal) {
+				startMicrophoneUsageMonitoring(cleanDevices)
+			}
+			
 		} catch (err) {
 			console.error('Failed to refresh microphones:', err)
+		}
+	}
+
+	// Start monitoring microphone usage levels
+	const startMicrophoneUsageMonitoring = async (mics: MediaDeviceInfo[]) => {
+		if (isMonitoringMics) return
+		
+		setIsMonitoringMics(true)
+		console.log('Starting microphone usage monitoring for', mics.length, 'microphones')
+		
+		try {
+			// Stop any existing monitoring first
+			stopMicrophoneUsageMonitoring()
+			
+			// Try to get audio streams for each microphone to monitor their levels
+			for (const mic of mics) {
+				try {
+					const stream = await navigator.mediaDevices.getUserMedia({
+						audio: {
+							deviceId: { exact: mic.deviceId },
+							echoCancellation: false,
+							noiseSuppression: false,
+							autoGainControl: false
+						}
+					})
+					
+					const audioContext = new AudioContext()
+					const analyser = audioContext.createAnalyser()
+					const source = audioContext.createMediaStreamSource(stream)
+					
+					analyser.fftSize = 256
+					analyser.smoothingTimeConstant = 0.3
+					analyser.minDecibels = -90
+					analyser.maxDecibels = -10
+					
+					source.connect(analyser)
+					
+					// Store references for cleanup
+					micMonitorContextsRef.current[mic.deviceId] = audioContext
+					micMonitorAnalysersRef.current[mic.deviceId] = analyser
+					micMonitorStreamsRef.current[mic.deviceId] = stream
+					
+					console.log(`Started monitoring mic: ${mic.label}`)
+				} catch (err) {
+					console.warn(`Failed to monitor mic ${mic.label}:`, err)
+				}
+			}
+			
+			// Start the monitoring loop
+			updateMicrophoneUsageLevels()
+			
+		} catch (err) {
+			console.error('Failed to start microphone usage monitoring:', err)
+			setIsMonitoringMics(false)
+		}
+	}
+
+	// Stop monitoring microphone usage levels
+	const stopMicrophoneUsageMonitoring = () => {
+		if (!isMonitoringMics) return
+		
+		console.log('Stopping microphone usage monitoring')
+		
+		// Cancel animation frame
+		if (micMonitorAnimationRef.current) {
+			cancelAnimationFrame(micMonitorAnimationRef.current)
+			micMonitorAnimationRef.current = null
+		}
+		
+		// Clean up all audio contexts and streams
+		Object.values(micMonitorContextsRef.current).forEach(context => {
+			try {
+				context.close()
+			} catch (err) {
+				console.warn('Error closing audio context:', err)
+			}
+		})
+		
+		Object.values(micMonitorStreamsRef.current).forEach(stream => {
+			try {
+				stream.getTracks().forEach(track => track.stop())
+			} catch (err) {
+				console.warn('Error stopping stream:', err)
+			}
+		})
+		
+		// Clear references
+		micMonitorContextsRef.current = {}
+		micMonitorAnalysersRef.current = {}
+		micMonitorStreamsRef.current = {}
+		
+		// Reset state
+		setMicUsageLevels({})
+		setIsMonitoringMics(false)
+	}
+
+	// Update microphone usage levels
+	const updateMicrophoneUsageLevels = () => {
+		const newLevels: Record<string, number> = {}
+		
+		Object.entries(micMonitorAnalysersRef.current).forEach(([deviceId, analyser]) => {
+			try {
+				const dataArray = new Uint8Array(analyser.frequencyBinCount)
+				analyser.getByteFrequencyData(dataArray)
+				
+				// Calculate RMS (Root Mean Square) for better level representation
+				const sum = dataArray.reduce((acc, value) => acc + value * value, 0)
+				const rms = Math.sqrt(sum / dataArray.length)
+				const normalizedLevel = rms / 255
+				
+				newLevels[deviceId] = normalizedLevel
+			} catch (err) {
+				console.warn(`Error reading mic level for device ${deviceId}:`, err)
+				newLevels[deviceId] = 0
+			}
+		})
+		
+		setMicUsageLevels(newLevels)
+		
+		// Continue monitoring if still active
+		if (isMonitoringMics) {
+			micMonitorAnimationRef.current = requestAnimationFrame(updateMicrophoneUsageLevels)
 		}
 	}
 
@@ -191,16 +372,40 @@ export default function Recorder({
 		}
 	}, [selectedMic])
 
+	// Start/stop microphone monitoring when modal opens/closes
+	useEffect(() => {
+		if (showMicModal && availableMics.length > 0 && !recording) {
+			// Only start mic monitoring if not recording (to avoid conflicts)
+			startMicrophoneUsageMonitoring(availableMics)
+		} else if (!showMicModal || recording) {
+			stopMicrophoneUsageMonitoring()
+		}
+	}, [showMicModal, availableMics, recording])
+
+	// Cleanup microphone monitoring on unmount
 	useEffect(() => {
 		return () => {
-			if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') {
-				mediaRecorderRef.current.stop()
-			}
-			if (recordingIntervalRef.current) {
-				clearInterval(recordingIntervalRef.current)
-			}
+			stopMicrophoneUsageMonitoring()
 		}
 	}, [])
+
+	// Cleanup - Don't stop recording on unmount, let it persist globally
+	useEffect(() => {
+		return () => {
+			// Only clean up microphone monitoring, not recording
+			const currentState = globalRecordingManager.getState()
+			console.log('🧹 Recorder component unmounting - recording will persist globally. Current state:', {
+				isRecording: currentState.isRecording,
+				meetingId: currentState.meetingId,
+				recordingTime: currentState.recordingTime
+			})
+			
+			// Stop microphone usage monitoring to free up resources
+			if (isMonitoringMics) {
+				stopMicrophoneUsageMonitoring()
+			}
+		}
+	}, [isMonitoringMics])
 
 	async function start() {
 		try {
@@ -230,7 +435,6 @@ export default function Recorder({
 	async function startRecordingWithSelectedMic() {
 		try {
 			setError(null)
-			setRecordingTime(0)
 
 			// Automatically select the first available microphone if none is selected
 			if (!selectedMic && availableMics.length > 0) {
@@ -314,22 +518,16 @@ export default function Recorder({
 			const human = now.toLocaleString()
 			const meeting = await createMeeting(`Meeting ${human}`, [], language)
 			const createdId = meeting.id
-			setMeetingId(createdId)
+			
+			// Call onCreated callback
 			onCreated(createdId)
-			chunkIndexRef.current = 0
-
-			rec.ondataavailable = async (e: BlobEvent) => {
-				if (e.data && e.data.size > 0) {
-					await addChunk(createdId, e.data, chunkIndexRef.current++)
-					// Update upload progress
-					setTotalChunks(chunkIndexRef.current)
-					setUploadProgress(chunkIndexRef.current)
-				}
-			}
 
 			rec.start(5000) // 5s chunks
 			mediaRecorderRef.current = rec
-			setRecording(true)
+			
+			// Use global recording manager instead of local state
+			globalRecordingManager.startRecording(createdId, rec)
+			
 			setShowMicModal(false)
 
 			// Notify Electron process that recording has started
@@ -347,11 +545,18 @@ export default function Recorder({
 
 			// Start audio level monitoring with ALL system audio streams
 			startAudioLevelMonitoring(systemAudioStreams, micStream)
-
-			// Start recording timer
-			recordingIntervalRef.current = window.setInterval(() => {
-				setRecordingTime(prev => prev + 1)
-			}, 1000)
+			
+			// Also update the microphone usage monitoring to show the recording mic is active
+			if (selectedMic) {
+				// Force update the mic usage levels to show activity
+				setTimeout(() => {
+					console.log('🎤 Updating mic usage monitoring for recording microphone')
+					setMicUsageLevels(prev => ({
+						...prev,
+						[selectedMic]: microphoneLevel > 0 ? microphoneLevel : 0.1 // Show at least some activity during recording
+					}))
+				}, 1000)
+			}
 
 		} catch (err) {
 			console.error('Failed to start recording:', err)
@@ -360,17 +565,8 @@ export default function Recorder({
 	}
 
 	function stop() {
-		if (mediaRecorderRef.current) {
-			mediaRecorderRef.current.stop()
-			// Stop all tracks to release audio devices
-			mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop())
-		}
-		
-		// Stop recording timer
-		if (recordingIntervalRef.current) {
-			clearInterval(recordingIntervalRef.current)
-			recordingIntervalRef.current = null
-		}
+		// Use global recording manager to stop recording
+		const stoppedMeetingId = globalRecordingManager.stopRecording()
 		
 		// Stop audio level monitoring
 		stopAudioLevelMonitoring()
@@ -386,14 +582,19 @@ export default function Recorder({
 			})
 		}
 		
-		setRecording(false)
+		// IMMEDIATELY call onStopped callback to update App-level state
+		if (onStopped && stoppedMeetingId) {
+			console.log('🔄 Calling onStopped callback with meetingId:', stoppedMeetingId)
+			onStopped(stoppedMeetingId)
+		}
+		
 		// Ask for meeting name and persist duration locally
-		if (meetingId) {
+		if (stoppedMeetingId) {
 			const title = (window.prompt('Name this meeting', 'New meeting') || '').trim()
 			if (title) {
 				// Update meeting title and duration locally
 				// @ts-ignore - duration is optional
-				db.meetings.update(meetingId, { title, updatedAt: Date.now(), duration: recordingTime })
+				db.meetings.update(stoppedMeetingId, { title, updatedAt: Date.now(), duration: recordingTime })
 			}
 			
 			// Automatically process the meeting after recording ends
@@ -401,7 +602,7 @@ export default function Recorder({
 				try {
 					console.log('Auto-processing meeting after recording ended...')
 					setSyncStatus('syncing')
-					await autoProcessMeetingRecording(meetingId, title)
+					await autoProcessMeetingRecording(stoppedMeetingId, title)
 					console.log('Meeting auto-processed successfully!')
 					setSyncStatus('success')
 					setRetryCount(0) // Reset retry count on success
@@ -419,7 +620,7 @@ export default function Recorder({
 							setRetryCount(prev => prev + 1)
 							setSyncStatus('syncing')
 							// Recursive retry
-							retryAutoProcess(meetingId, title, retryCount + 1)
+							retryAutoProcess(stoppedMeetingId, title, retryCount + 1)
 						}, delay)
 					} else {
 						console.log('Max retries reached, giving up auto-processing')
@@ -431,10 +632,7 @@ export default function Recorder({
 					}
 				}
 			}, 1000) // Small delay to ensure all data is saved
-			
-			if (onStopped) onStopped(meetingId)
 		}
-		setRecordingTime(0)
 	}
 
 	// Helper function for retrying auto-processing with exponential backoff
@@ -599,6 +797,88 @@ export default function Recorder({
 		setMicrophoneLevel(0)
 	}
 
+	// Component to show microphone usage indicator
+	const MicrophoneUsageIndicator = ({ deviceId, size = 'small' }: { deviceId: string; size?: 'small' | 'large' }) => {
+		const level = micUsageLevels[deviceId] || 0
+		const isActive = level > 0.02 // Consider active if above 2% threshold
+		const barHeight = size === 'large' ? 20 : 16
+		const barWidth = size === 'large' ? 100 : 60
+		
+		return (
+			<div style={{
+				display: 'flex',
+				alignItems: 'center',
+				gap: '8px',
+				fontSize: size === 'large' ? '14px' : '12px'
+			}}>
+				<div style={{
+					display: 'flex',
+					alignItems: 'center',
+					gap: '4px'
+				}}>
+					<div style={{ 
+						fontSize: size === 'large' ? '16px' : '12px',
+						color: isActive ? '#22c55e' : '#9ca3af'
+					}}>
+						{isActive ? '🎤' : '🔇'}
+					</div>
+					<div style={{
+						width: barWidth,
+						height: barHeight,
+						backgroundColor: '#f3f4f6',
+						borderRadius: '4px',
+						border: '1px solid #e5e7eb',
+						position: 'relative',
+						overflow: 'hidden'
+					}}>
+						{/* Background bars for visual segments */}
+						{[...Array(5)].map((_, i) => (
+							<div
+								key={i}
+								style={{
+									position: 'absolute',
+									left: `${i * 20}%`,
+									top: 0,
+									width: '18%',
+									height: '100%',
+									borderRight: i < 4 ? '1px solid #e5e7eb' : 'none'
+								}}
+							/>
+						))}
+						
+						{/* Active level indicator */}
+						<div
+							style={{
+								position: 'absolute',
+								left: 0,
+								top: 0,
+								height: '100%',
+								width: `${Math.min(level * 100, 100)}%`,
+								background: level > 0.7 ? 
+									'linear-gradient(90deg, #22c55e 0%, #f59e0b 70%, #ef4444 100%)' :
+									level > 0.3 ? 
+									'linear-gradient(90deg, #22c55e 0%, #f59e0b 100%)' :
+									'#22c55e',
+								transition: 'width 0.1s ease-out',
+								borderRadius: '3px'
+							}}
+						/>
+					</div>
+					{size === 'large' && (
+						<span style={{
+							fontSize: '11px',
+							color: isActive ? '#22c55e' : '#9ca3af',
+							fontWeight: isActive ? '600' : '400',
+							minWidth: '35px'
+						}}>
+							{isActive ? `${Math.round(level * 100)}%` : 'Silent'}
+						</span>
+					)}
+				</div>
+			</div>
+		)
+	}
+
 	return (
 		<div style={{ 
 			display: 'flex', 
@@ -657,7 +937,8 @@ export default function Recorder({
 									border: '1px solid #d1d5db',
 									backgroundColor: 'white',
 									fontSize: '14px',
-									minWidth: '200px'
+									minWidth: '200px',
+									marginBottom: '12px'
 								}}
 							>
 								{availableMics.map(mic => {
@@ -669,15 +950,68 @@ export default function Recorder({
 									)
 								})}
 							</select>
-							{/* Show current microphone info */}
+							
+							{/* Show current microphone usage */}
 							{selectedMic && (
 								<div style={{ 
-									marginTop: '8px', 
-									fontSize: '12px', 
-									color: '#6b7280',
-									textAlign: 'center'
+									display: 'flex',
+									flexDirection: 'column',
+									alignItems: 'center',
+									gap: '8px',
+									padding: '12px',
+									backgroundColor: recording ? '#dcfce7' : '#f8fafc',
+									border: recording ? '2px solid #22c55e' : '1px solid #e2e8f0',
+									borderRadius: '8px',
+									minWidth: '250px'
 								}}>
-									🎤 Using: {availableMics.find(mic => mic.deviceId === selectedMic)?.label || 'Selected microphone'}
+									<div style={{ 
+										fontSize: '12px', 
+										fontWeight: '600',
+										color: recording ? '#166534' : '#1e293b',
+										textAlign: 'center'
+									}}>
+										{recording ? '🎙️ RECORDING' : '🎤'} {availableMics.find(mic => mic.deviceId === selectedMic)?.label || 'Selected microphone'}
+									</div>
+									
+									{recording ? (
+										// Show live recording indicator
+										<div style={{
+											display: 'flex',
+											alignItems: 'center',
+											gap: '8px'
+										}}>
+											<div style={{
+												width: '12px',
+												height: '12px',
+												backgroundColor: '#ef4444',
+												borderRadius: '50%',
+												animation: 'pulse 1.5s infinite'
+											}} />
+											<div style={{
+												padding: '8px 16px',
+												backgroundColor: '#22c55e',
+												color: 'white',
+												borderRadius: '20px',
+												fontSize: '12px',
+												fontWeight: '600'
+											}}>
+												LIVE • {formatTime(recordingTime)}
+											</div>
+										</div>
+									) : (
+										<MicrophoneUsageIndicator deviceId={selectedMic} size="large" />
+									)}
+									
+									{!recording && isMonitoringMics && (
+										<div style={{
+											fontSize: '11px',
+											color: '#64748b',
+											textAlign: 'center',
+											fontStyle: 'italic'
+										}}>
+											Real-time audio level monitoring active
+										</div>
+									)}
 								</div>
 							)}
 						</div>
@@ -820,13 +1154,13 @@ export default function Recorder({
 								display: 'flex', 
 								justifyContent: 'space-between', 
 								alignItems: 'center',
-								marginBottom: '8px'
+								marginBottom: '12px'
 							}}>
 								<label style={{ 
 									fontWeight: '500',
 									color: '#374151'
 								}}>
-									Microphone:
+									Choose Microphone:
 								</label>
 								<button
 									onClick={refreshMicrophones}
@@ -844,26 +1178,83 @@ export default function Recorder({
 									🔄 Refresh
 								</button>
 							</div>
-							<select 
-								value={selectedMic} 
-								onChange={(e) => setSelectedMic(e.target.value)}
-								style={{ 
-									width: '100%',
-									padding: '12px',
-									border: '1px solid #d1d5db',
+							
+							{/* Microphone list with usage indicators */}
+							<div style={{ 
+								display: 'flex',
+								flexDirection: 'column',
+								gap: '8px',
+								marginBottom: '12px'
+							}}>
+								{availableMics.map(mic => (
+									<div
+										key={mic.deviceId}
+										onClick={() => setSelectedMic(mic.deviceId)}
+										style={{
+											display: 'flex',
+											alignItems: 'center',
+											justifyContent: 'space-between',
+											padding: '12px',
+											border: selectedMic === mic.deviceId ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+											borderRadius: '8px',
+											cursor: 'pointer',
+											backgroundColor: selectedMic === mic.deviceId ? '#eff6ff' : '#ffffff',
+											transition: 'all 0.2s ease',
+											gap: '12px'
+										}}
+									>
+										<div style={{
+											display: 'flex',
+											alignItems: 'center',
+											gap: '8px',
+											flex: 1
+										}}>
+											<div style={{
+												fontSize: '16px',
+												color: selectedMic === mic.deviceId ? '#3b82f6' : '#6b7280'
+											}}>
+												{selectedMic === mic.deviceId ? '●' : '○'}
+											</div>
+											<div style={{
+												fontSize: '14px',
+												fontWeight: selectedMic === mic.deviceId ? '600' : '400',
+												color: selectedMic === mic.deviceId ? '#1e293b' : '#374151',
+												flex: 1
+											}}>
+												{mic.label}
+											</div>
+										</div>
+										<div style={{ minWidth: '80px' }}>
+											<MicrophoneUsageIndicator deviceId={mic.deviceId} size="small" />
+										</div>
+									</div>
+								))}
+							</div>
+							
+							{/* Status indicator */}
+							{isMonitoringMics && (
+								<div style={{
+									display: 'flex',
+									alignItems: 'center',
+									justifyContent: 'center',
+									gap: '6px',
+									padding: '8px',
+									backgroundColor: '#f0f9ff',
+									border: '1px solid #bae6fd',
 									borderRadius: '6px',
-									fontSize: '14px'
-								}}
-							>
-								{availableMics.map(mic => {
-									// Show the real device name exactly as it comes from the system
-									return (
-										<option key={mic.deviceId} value={mic.deviceId}>
-											{mic.label}
-										</option>
-									)
-								})}
-							</select>
+									fontSize: '12px',
+									color: '#0369a1'
+								}}>
+									<div style={{
+										width: '8px',
+										height: '8px',
+										borderRadius: '50%',
+										backgroundColor: '#22c55e',
+										animation: 'pulse 2s infinite'
+									}} />
+									Monitoring microphone activity levels
+								</div>
+							)}
 						</div>
 						
 						{/* Language Selection */}

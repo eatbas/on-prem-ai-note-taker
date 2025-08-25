@@ -235,7 +235,7 @@ async def delete_meeting(
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> Dict[str, str]:
-    """Delete a meeting and all associated data"""
+    """Delete a meeting and all associated data including audio files"""
     user = get_or_create_user(db)
     
     meeting = db.query(Meeting).filter(
@@ -245,6 +245,17 @@ async def delete_meeting(
     
     if not meeting:
         raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Delete audio file if it exists
+    if meeting.file_path:
+        try:
+            import os
+            if os.path.exists(meeting.file_path):
+                os.remove(meeting.file_path)
+                logger.info(f"Deleted audio file: {meeting.file_path}")
+        except Exception as e:
+            logger.warning(f"Failed to delete audio file {meeting.file_path}: {e}")
+            # Continue with meeting deletion even if file deletion fails
     
     # Delete the meeting (cascading will handle related records)
     db.delete(meeting)

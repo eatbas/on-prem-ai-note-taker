@@ -1,21 +1,39 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { db } from './db'
-import { syncMeeting, updateMeetingTags } from './offline'
-import { updateMeeting } from './api'
+import { syncMeeting, updateMeetingTags, assembleFileFromChunks, deleteMeetingLocally, deleteAudioChunksLocally } from './offline'
+import { updateMeeting, deleteMeeting } from './api'
 import TagsManager from './TagsManager'
 import { useToast } from './Toast'
 import { createRippleEffect } from './utils'
 
-export default function MeetingView({ meetingId }: { meetingId: string }) {
+export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
 	const [meeting, setMeeting] = useState<any>(null)
 	const [note, setNote] = useState<any>(null)
 	const [sending, setSending] = useState(false)
     const [tagsInput, setTagsInput] = useState('')
     const [search, setSearch] = useState('')
-    const [activeTab, setActiveTab] = useState<'summary' | 'transcript'>('summary')
+    const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'audio'>('summary')
     const [uploadProgress, setUploadProgress] = useState(0)
     const [totalChunks, setTotalChunks] = useState(0)
     const { showToast, ToastContainer } = useToast()
+
+    // Audio playback state
+    const [audioUrl, setAudioUrl] = useState<string | null>(null)
+    const [isLoadingAudio, setIsLoadingAudio] = useState(false)
+    const [audioError, setAudioError] = useState<string | null>(null)
+    const audioRef = useRef<HTMLAudioElement>(null)
+
+    // Delete state
+    const [showDeleteModal, setShowDeleteModal] = useState(false)
+    const [deleteOperation, setDeleteOperation] = useState<'audio' | 'meeting' | null>(null)
+    const [isDeleting, setIsDeleting] = useState(false)
+    
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<{
+        visible: boolean;
+        x: number;
+        y: number;
+    } | null>(null)
 
 	useEffect(() => {
 		async function load() {
@@ -37,6 +55,65 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 		const interval = setInterval(load, 2000) // Refresh every 2 seconds
 		return () => clearInterval(interval)
 	}, [meetingId])
+
+	// Context menu functions
+	const handleContextMenu = (e: React.MouseEvent) => {
+		e.preventDefault()
+		e.stopPropagation()
+		setContextMenu({
+			visible: true,
+			x: e.clientX,
+			y: e.clientY
+		})
+	}
+
+	const closeContextMenu = () => {
+		setContextMenu(null)
+	}
+
+	// Click outside to close context menu
+	useEffect(() => {
+		const handleClickOutside = () => {
+			if (contextMenu?.visible) {
+				closeContextMenu()
+			}
+		}
+		
+		document.addEventListener('click', handleClickOutside)
+		return () => document.removeEventListener('click', handleClickOutside)
+	}, [contextMenu?.visible])
+
+	// Context menu actions
+	const handleContextMenuRename = async () => {
+		if (!meeting) return
+		
+		const newTitle = window.prompt('Enter new meeting title:', meeting.title)
+		if (newTitle && newTitle.trim() && newTitle.trim() !== meeting.title) {
+			try {
+				await updateMeeting(meetingId, newTitle.trim())
+				// Update local database as well
+				await db.meetings.update(meetingId, { title: newTitle.trim(), updatedAt: Date.now() })
+				setMeeting(await db.meetings.get(meetingId))
+				showToast('Meeting renamed successfully! ✏️', 'success')
+			} catch (err) {
+				console.error('Failed to rename meeting:', err)
+				showToast('Failed to rename meeting. Please try again.', 'error')
+			}
+		}
+		closeContextMenu()
+	}
+
+	const handleContextMenuDeleteAudio = () => {
+		setDeleteOperation('audio')
+		setShowDeleteModal(true)
+		closeContextMenu()
+	}
+
+	const handleContextMenuDeleteMeeting = () => {
+		setDeleteOperation('meeting')
+		setShowDeleteModal(true)
+		closeContextMenu()
+	}
 
 	async function sendNow() {
 		setSending(true)
@@ -79,6 +156,100 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
         }
     }
 
+    // Load audio for playback
+    async function loadAudio() {
+        setIsLoadingAudio(true)
+        setAudioError(null)
+        
+        try {
+            const chunks = await db.chunks.where({ meetingId }).sortBy('index')
+            if (chunks.length === 0) {
+                setAudioError('No audio data found for this meeting')
+                return
+            }
+            
+            const file = await assembleFileFromChunks(meetingId)
+            const url = URL.createObjectURL(file)
+            setAudioUrl(url)
+        } catch (error) {
+            console.error('Failed to load audio:', error)
+            setAudioError('Failed to load audio. The recording might be corrupted.')
+        } finally {
+            setIsLoadingAudio(false)
+        }
+    }
+
+    // Delete functions
+    async function handleDeleteAudio() {
+        setIsDeleting(true)
+        try {
+            await deleteAudioChunksLocally(meetingId)
+            
+            // Also revoke audio URL if it exists
+            if (audioUrl) {
+                URL.revokeObjectURL(audioUrl)
+                setAudioUrl(null)
+            }
+            
+            showToast('Audio deleted successfully! 🗑️', 'success')
+            setShowDeleteModal(false)
+            setDeleteOperation(null)
+        } catch (error) {
+            console.error('Failed to delete audio:', error)
+            showToast('Failed to delete audio. Please try again.', 'error')
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
+    async function handleDeleteMeeting() {
+        setIsDeleting(true)
+        try {
+            // Delete from VPS if the meeting was sent
+            if (meeting?.status === 'sent') {
+                try {
+                    await deleteMeeting(meetingId)
+                    showToast('Meeting deleted from server ✅', 'info')
+                } catch (vpsError) {
+                    console.warn('Failed to delete from VPS, proceeding with local deletion:', vpsError)
+                    showToast('⚠️ Could not delete from server, but deleting locally', 'info')
+                }
+            }
+            
+            // Delete locally
+            await deleteMeetingLocally(meetingId)
+            
+            // Revoke audio URL if it exists
+            if (audioUrl) {
+                URL.revokeObjectURL(audioUrl)
+                setAudioUrl(null)
+            }
+            
+            showToast('Meeting deleted completely! 🗑️', 'success')
+            setShowDeleteModal(false)
+            setDeleteOperation(null)
+            
+            // Navigate back after successful deletion
+            if (onBack) {
+                setTimeout(onBack, 1000) // Give user time to see the success message
+            }
+        } catch (error) {
+            console.error('Failed to delete meeting:', error)
+            showToast('Failed to delete meeting. Please try again.', 'error')
+        } finally {
+            setIsDeleting(false)
+        }
+    }
+
+    // Cleanup audio URL on unmount
+    useEffect(() => {
+        return () => {
+            if (audioUrl) {
+                URL.revokeObjectURL(audioUrl)
+            }
+        }
+    }, [audioUrl])
+
     // Filter content based on search
     function filterContent(content: string): string {
         if (!search.trim()) return content
@@ -91,7 +262,10 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 	if (!meeting) return <div>Loading…</div>
 
 	return (
-		<div style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16 }}>
+		<div 
+			style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16 }}
+			onContextMenu={handleContextMenu}
+		>
 			{/* Toast Container */}
 			<ToastContainer />
 			
@@ -106,46 +280,92 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 			<div>
 				<div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
 					<InlineTitle id={meetingId} title={meeting.title} onSaved={async () => setMeeting(await db.meetings.get(meetingId))} />
-					<button 
-						onClick={(e) => {
-							createRippleEffect(e)
-							sendNow()
-						}} 
-						disabled={sending || meeting.status === 'sent'}
-						style={{
-							padding: '12px 24px',
-							backgroundColor: sending ? '#9ca3af' : meeting.status === 'sent' ? '#10b981' : '#3b82f6',
-							color: 'white',
-							border: 'none',
-							borderRadius: '6px',
-							cursor: (sending || meeting.status === 'sent') ? 'not-allowed' : 'pointer',
-							fontWeight: '600',
-							fontSize: '14px',
-							transition: 'all 0.2s ease',
-							transform: 'scale(1)',
-							minWidth: '140px'
-						}}
-						onMouseDown={(e) => {
-							if (!sending && meeting.status !== 'sent') {
-								e.currentTarget.style.transform = 'scale(0.95)'
-								e.currentTarget.style.backgroundColor = '#2563eb'
-							}
-						}}
-						onMouseUp={(e) => {
-							if (!sending && meeting.status !== 'sent') {
-								e.currentTarget.style.transform = 'scale(1)'
-								e.currentTarget.style.backgroundColor = '#3b82f6'
-							}
-						}}
-						onMouseLeave={(e) => {
-							if (!sending && meeting.status !== 'sent') {
-								e.currentTarget.style.transform = 'scale(1)'
-								e.currentTarget.style.backgroundColor = '#3b82f6'
-							}
-						}}
-					>
-						{sending ? '⏳ Sending...' : meeting.status === 'sent' ? '✅ Sent' : '📤 Send/Resend'}
-					</button>
+					<div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+						<button 
+							onClick={(e) => {
+								createRippleEffect(e)
+								sendNow()
+							}} 
+							disabled={sending || meeting.status === 'sent'}
+							style={{
+								padding: '12px 24px',
+								backgroundColor: sending ? '#9ca3af' : meeting.status === 'sent' ? '#10b981' : '#3b82f6',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: (sending || meeting.status === 'sent') ? 'not-allowed' : 'pointer',
+								fontWeight: '600',
+								fontSize: '14px',
+								transition: 'all 0.2s ease',
+								transform: 'scale(1)',
+								minWidth: '140px'
+							}}
+							onMouseDown={(e) => {
+								if (!sending && meeting.status !== 'sent') {
+									e.currentTarget.style.transform = 'scale(0.95)'
+									e.currentTarget.style.backgroundColor = '#2563eb'
+								}
+							}}
+							onMouseUp={(e) => {
+								if (!sending && meeting.status !== 'sent') {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#3b82f6'
+								}
+							}}
+							onMouseLeave={(e) => {
+								if (!sending && meeting.status !== 'sent') {
+									e.currentTarget.style.transform = 'scale(1)'
+									e.currentTarget.style.backgroundColor = '#3b82f6'
+								}
+							}}
+						>
+							{sending ? '⏳ Sending...' : meeting.status === 'sent' ? '✅ Sent' : '📤 Send/Resend'}
+						</button>
+						
+						{/* Delete Audio Button */}
+						<button 
+							onClick={() => {
+								setDeleteOperation('audio')
+								setShowDeleteModal(true)
+							}}
+							style={{
+								padding: '12px 16px',
+								backgroundColor: '#f59e0b',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: 'pointer',
+								fontWeight: '600',
+								fontSize: '14px',
+								transition: 'all 0.2s ease'
+							}}
+							title="Delete audio only (keep meeting data)"
+						>
+							🎵 Delete Audio
+						</button>
+						
+						{/* Delete Meeting Button */}
+						<button 
+							onClick={() => {
+								setDeleteOperation('meeting')
+								setShowDeleteModal(true)
+							}}
+							style={{
+								padding: '12px 16px',
+								backgroundColor: '#ef4444',
+								color: 'white',
+								border: 'none',
+								borderRadius: '6px',
+								cursor: 'pointer',
+								fontWeight: '600',
+								fontSize: '14px',
+								transition: 'all 0.2s ease'
+							}}
+							title="Delete entire meeting (both local and VPS)"
+						>
+							🗑️ Delete Meeting
+						</button>
+					</div>
 				</div>
 				<div style={{ marginBottom: 12, color: '#64748b' }}>
 					📅 {new Date(meeting.createdAt).toLocaleString()} {meeting.duration && `• ⏱️ ${Math.round(meeting.duration/60)} min`}
@@ -263,6 +483,37 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 					>
 						🎧 Transcript
 					</button>
+					<button
+						onClick={() => {
+							setActiveTab('audio')
+							if (!audioUrl && !isLoadingAudio) {
+								loadAudio()
+							}
+						}}
+						style={{
+							padding: '12px 24px',
+							border: 'none',
+							backgroundColor: 'transparent',
+							borderBottom: activeTab === 'audio' ? '2px solid #3b82f6' : '2px solid transparent',
+							color: activeTab === 'audio' ? '#3b82f6' : '#64748b',
+							fontWeight: activeTab === 'audio' ? '600' : '400',
+							cursor: 'pointer',
+							fontSize: '16px',
+							transition: 'all 0.2s ease',
+							transform: 'scale(1)'
+						}}
+						onMouseDown={(e) => {
+							e.currentTarget.style.transform = 'scale(0.98)'
+						}}
+						onMouseUp={(e) => {
+							e.currentTarget.style.transform = 'scale(1)'
+						}}
+						onMouseLeave={(e) => {
+							e.currentTarget.style.transform = 'scale(1)'
+						}}
+					>
+						🔊 Audio
+					</button>
 				</div>
 
 				{/* Tab Content */}
@@ -377,6 +628,83 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 						</div>
 					</div>
 				)}
+
+				{activeTab === 'audio' && (
+					<div>
+						<div style={{ 
+							background: 'white', 
+							border: '1px solid #e2e8f0', 
+							borderRadius: 8, 
+							padding: 16, 
+							minHeight: 300 
+						}}>
+							{isLoadingAudio ? (
+								<div style={{ textAlign: 'center', padding: '40px 20px' }}>
+									<div style={{ fontSize: '24px', marginBottom: '16px' }}>🔄</div>
+									<div style={{ color: '#64748b' }}>Loading audio...</div>
+								</div>
+							) : audioError ? (
+								<div style={{ textAlign: 'center', padding: '40px 20px' }}>
+									<div style={{ fontSize: '24px', marginBottom: '16px' }}>⚠️</div>
+									<div style={{ color: '#ef4444', marginBottom: '16px' }}>{audioError}</div>
+									<button 
+										onClick={loadAudio}
+										style={{
+											padding: '8px 16px',
+											backgroundColor: '#3b82f6',
+											color: 'white',
+											border: 'none',
+											borderRadius: '6px',
+											cursor: 'pointer'
+										}}
+									>
+										Try Again
+									</button>
+								</div>
+							) : audioUrl ? (
+								<div style={{ textAlign: 'center' }}>
+									<div style={{ fontSize: '24px', marginBottom: '16px' }}>🎵</div>
+									<div style={{ marginBottom: '16px', color: '#64748b' }}>
+										Recording from {new Date(meeting.createdAt).toLocaleString()}
+									</div>
+									<audio 
+										ref={audioRef}
+										controls 
+										style={{ width: '100%', maxWidth: '500px' }}
+										preload="metadata"
+									>
+										<source src={audioUrl} type="audio/webm" />
+										Your browser does not support the audio element.
+									</audio>
+									<div style={{ marginTop: '16px', fontSize: '14px', color: '#64748b' }}>
+										💡 You can play, pause, and seek through your meeting recording
+									</div>
+								</div>
+							) : (
+								<div style={{ textAlign: 'center', padding: '40px 20px' }}>
+									<div style={{ fontSize: '24px', marginBottom: '16px' }}>🎤</div>
+									<div style={{ color: '#64748b', marginBottom: '16px' }}>
+										No audio available. Click below to load your recording.
+									</div>
+									<button 
+										onClick={loadAudio}
+										style={{
+											padding: '12px 24px',
+											backgroundColor: '#3b82f6',
+											color: 'white',
+											border: 'none',
+											borderRadius: '6px',
+											cursor: 'pointer',
+											fontWeight: '600'
+										}}
+									>
+										🔊 Load Audio
+									</button>
+								</div>
+							)}
+						</div>
+					</div>
+				)}
 				<div style={{ marginTop: 16 }}>
 					<h3>Tags</h3>
 					<input 
@@ -425,7 +753,191 @@ export default function MeetingView({ meetingId }: { meetingId: string }) {
 						💾 Save Tags
 					</button>
 				</div>
+
+				{/* Delete Confirmation Modal */}
+				{showDeleteModal && (
+					<div style={{
+						position: 'fixed',
+						top: 0,
+						left: 0,
+						right: 0,
+						bottom: 0,
+						backgroundColor: 'rgba(0, 0, 0, 0.5)',
+						display: 'flex',
+						alignItems: 'center',
+						justifyContent: 'center',
+						zIndex: 1000
+					}}>
+						<div style={{
+							backgroundColor: 'white',
+							padding: '24px',
+							borderRadius: '12px',
+							maxWidth: '400px',
+							width: '90%',
+							boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)'
+						}}>
+							<div style={{
+								display: 'flex',
+								alignItems: 'center',
+								marginBottom: '16px'
+							}}>
+								<div style={{ fontSize: '24px', marginRight: '12px' }}>
+									{deleteOperation === 'audio' ? '🎵' : '🗑️'}
+								</div>
+								<h3 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
+									{deleteOperation === 'audio' ? 'Delete Audio' : 'Delete Meeting'}
+								</h3>
+							</div>
+							
+							<p style={{ 
+								margin: '0 0 20px 0', 
+								color: '#6b7280', 
+								fontSize: '14px',
+								lineHeight: '1.5'
+							}}>
+								{deleteOperation === 'audio' 
+									? 'This will permanently delete the audio recording for this meeting. The meeting notes, summary, and transcript will be preserved.'
+									: 'This will permanently delete the entire meeting, including audio, transcript, summary, and all associated data both locally and from the server.'
+								}
+							</p>
+							
+							<div style={{ 
+								display: 'flex', 
+								justifyContent: 'flex-end', 
+								gap: '12px' 
+							}}>
+								<button
+									onClick={() => {
+										setShowDeleteModal(false)
+										setDeleteOperation(null)
+									}}
+									disabled={isDeleting}
+									style={{
+										padding: '8px 16px',
+										backgroundColor: '#f3f4f6',
+										color: '#374151',
+										border: '1px solid #d1d5db',
+										borderRadius: '6px',
+										cursor: isDeleting ? 'not-allowed' : 'pointer',
+										fontSize: '14px',
+										fontWeight: '500'
+									}}
+								>
+									Cancel
+								</button>
+								<button
+									onClick={deleteOperation === 'audio' ? handleDeleteAudio : handleDeleteMeeting}
+									disabled={isDeleting}
+									style={{
+										padding: '8px 16px',
+										backgroundColor: deleteOperation === 'audio' ? '#f59e0b' : '#ef4444',
+										color: 'white',
+										border: 'none',
+										borderRadius: '6px',
+										cursor: isDeleting ? 'not-allowed' : 'pointer',
+										fontSize: '14px',
+										fontWeight: '600',
+										opacity: isDeleting ? 0.6 : 1
+									}}
+								>
+									{isDeleting 
+										? (deleteOperation === 'audio' ? 'Deleting Audio...' : 'Deleting Meeting...') 
+										: (deleteOperation === 'audio' ? 'Delete Audio' : 'Delete Meeting')
+									}
+								</button>
+							</div>
+						</div>
+					</div>
+				)}
 			</div>
+
+			{/* Context Menu */}
+			{contextMenu?.visible && (
+				<div
+					style={{
+						position: 'fixed',
+						top: contextMenu.y,
+						left: contextMenu.x,
+						backgroundColor: 'white',
+						border: '1px solid #e5e7eb',
+						borderRadius: '8px',
+						boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+						zIndex: 1000,
+						minWidth: '180px',
+						overflow: 'hidden'
+					}}
+					onClick={(e) => e.stopPropagation()}
+				>
+					<div style={{
+						padding: '8px 0',
+						fontSize: '14px'
+					}}>
+						<div
+							onClick={handleContextMenuRename}
+							style={{
+								padding: '12px 16px',
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								transition: 'background-color 0.15s ease'
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.backgroundColor = '#f3f4f6'
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.backgroundColor = 'transparent'
+							}}
+						>
+							<span style={{ fontSize: '16px' }}>✏️</span>
+							<span>Rename Meeting</span>
+						</div>
+						
+						<div
+							onClick={handleContextMenuDeleteAudio}
+							style={{
+								padding: '12px 16px',
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								transition: 'background-color 0.15s ease'
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.backgroundColor = '#fef3c7'
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.backgroundColor = 'transparent'
+							}}
+						>
+							<span style={{ fontSize: '16px' }}>🎵</span>
+							<span>Delete Audio</span>
+						</div>
+						
+						<div
+							onClick={handleContextMenuDeleteMeeting}
+							style={{
+								padding: '12px 16px',
+								cursor: 'pointer',
+								display: 'flex',
+								alignItems: 'center',
+								gap: '8px',
+								transition: 'background-color 0.15s ease',
+								borderTop: '1px solid #f3f4f6'
+							}}
+							onMouseEnter={(e) => {
+								e.currentTarget.style.backgroundColor = '#fee2e2'
+							}}
+							onMouseLeave={(e) => {
+								e.currentTarget.style.backgroundColor = 'transparent'
+							}}
+						>
+							<span style={{ fontSize: '16px' }}>🗑️</span>
+							<span style={{ color: '#dc2626' }}>Delete Meeting</span>
+						</div>
+					</div>
+				</div>
+			)}
 		</div>
 	)
 }
