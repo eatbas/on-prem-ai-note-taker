@@ -15,15 +15,7 @@ export default function FloatingRecorder({
 }: FloatingRecorderProps) {
 	const isElectron = typeof window !== 'undefined' && (window as any).electronAPI
 
-	// Notify main when recording starts/stops
-	useEffect(() => {
-		if (!isElectron) return
-		if (isRecording) {
-			;(window as any).electronAPI.sendRecordingStarted({ meetingId, recordingTime })
-		} else {
-			;(window as any).electronAPI.sendRecordingStopped({ meetingId, recordingTime })
-		}
-	}, [isRecording])
+    // Floating widget does NOT initiate start/stop; renderer (Recorder) does.
 
 	// Send timer updates every second to main so floating window stays in sync
 	useEffect(() => {

@@ -63,6 +63,13 @@ export default function Recorder({
 	const [selectedMic, setSelectedMic] = useState<string>('')
 	const [language, setLanguage] = useState<'auto' | 'tr' | 'en'>('tr')
 
+	// Listen for global event from floating window to open mic selector
+	useEffect(() => {
+		const handler = () => setShowMicModal(true)
+		window.addEventListener('open-mic-selector', handler)
+		return () => window.removeEventListener('open-mic-selector', handler)
+	}, [])
+
 
 	const audioContextRef = useRef<AudioContext | null>(null)
 	const analyserRef = useRef<AnalyserNode | null>(null)
@@ -506,8 +513,9 @@ export default function Recorder({
 			// Notify Electron process that recording has started
 			if (window.electronAPI) {
 				window.electronAPI.sendRecordingState(true)
-				// Force show floating window immediately with zero time
-				window.electronAPI.sendRecordingStarted({ meetingId: createdId, recordingTime: 0 })
+				// Respect user preference for showing floating widget
+				const showFloating = (document.getElementById('pref-show-floating') as HTMLInputElement | null)?.checked ?? true
+				window.electronAPI.sendRecordingStarted({ meetingId: createdId, recordingTime: 0, showFloating })
 			}
 
 			// Start audio level monitoring with ALL system audio streams
@@ -844,7 +852,7 @@ export default function Recorder({
 	const RecordingButtons = () => (
 		<div style={{ 
 			display: 'flex', 
-			gap: '8px', 
+			gap: '12px', 
 			alignItems: 'center' 
 		}}>
 			<button 
@@ -1154,7 +1162,11 @@ export default function Recorder({
 								</p>
 							</div>
 							
-
+							{/* Preference: Show Floating Recorder */}
+							<label htmlFor="pref-show-floating" style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: '8px 0 16px 0', fontSize: '14px', color: '#374151' }}>
+								<input id="pref-show-floating" type="checkbox" defaultChecked />
+								<span>Show floating recorder while recording</span>
+							</label>
 							
 							<button
 								onClick={startRecordingWithSelectedMic}

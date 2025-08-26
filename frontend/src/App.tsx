@@ -540,14 +540,17 @@ export default function App() {
 			;(window as any).electronAPI.onAppClosingStopRecording(handleAppClosing)
 
 			// Listen for mic selector open (from floating window)
-			const openMic = () => setShowMicModal(true)
+			const openMic = () => {
+				// Dispatch a global event that Recorder listens to
+				window.dispatchEvent(new Event('open-mic-selector'))
+			}
 			// Listen via preload API
 			;(window as any).electronAPI.onOpenMicSelector?.(openMic)
 
 			return () => {
-				// Clean up listener
+				// Clean up listeners
 				;(window as any).electronAPI.removeAppClosingStopRecordingListener()
-				try { require('electron').ipcRenderer.removeAllListeners('open-mic-selector') } catch {}
+				;(window as any).electronAPI.removeOpenMicSelectorListener?.()
 			}
 		}
 	}, [isRecording, recordingMeetingId])

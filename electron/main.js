@@ -357,6 +357,11 @@ ipcMain.on('recording-state-changed', (event, recording) => {
 		if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
 			updateFloatingRecorderState(recording, null, 0)
 		}
+
+		// Ensure floating recorder hides when recording stops
+		if (!recording) {
+			hideFloatingRecorder()
+		}
 	} catch (error) {
 		console.error('Error updating tray recording state:', error)
 	}
@@ -379,10 +384,12 @@ ipcMain.on('recording-started', (event, data) => {
 		isRecording = true
 		updateTrayRecordingState(true)
 		
-		// Show and update floating recorder
-		if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
-			showFloatingRecorder()
-			updateFloatingRecorderState(true, data.meetingId, 0)
+		// Show and update floating recorder (respect preference)
+		if (data?.showFloating !== false) {
+			if (floatingRecorderWindow && !floatingRecorderWindow.isDestroyed()) {
+				showFloatingRecorder()
+				updateFloatingRecorderState(true, data.meetingId, 0)
+			}
 		}
 	} catch (error) {
 		console.error('Error handling recording started:', error)
