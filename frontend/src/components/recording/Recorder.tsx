@@ -168,6 +168,11 @@ export default function Recorder({
 			console.log('🎙️ Sending recording state to Electron:', recording)
 			window.electronAPI.sendRecordingState(recording)
 		}
+		// Ensure audio monitoring stops promptly when recording flag turns off
+		if (!recording) {
+			stopAudioLevelMonitoring()
+			stopMixingAndStreams()
+		}
 	}, [recording])
 
 	// Simplified - no more complex recording data handling needed
@@ -387,7 +392,7 @@ export default function Recorder({
 		return () => {
 			// Only clean up microphone monitoring, not recording
 			const currentState = globalRecordingManager.getState()
-			console.log('�� Recorder component unmounting - recording will persist globally. Current state:', {
+			console.log('📦 Recorder component unmounting - recording will persist globally. Current state:', {
 				isRecording: currentState.isRecording,
 				meetingId: currentState.meetingId,
 				recordingTime: currentState.recordingTime
@@ -397,6 +402,9 @@ export default function Recorder({
 			if (isMonitoringMics) {
 				stopMicrophoneUsageMonitoring()
 			}
+			// Also stop any audio level monitoring/mixing graphs that might still be active
+			stopAudioLevelMonitoring()
+			stopMixingAndStreams()
 		}
 	}, [isMonitoringMics])
 

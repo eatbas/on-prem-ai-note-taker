@@ -51,14 +51,18 @@ logger = logging.getLogger("on_prem_note_taker")
 
 
 # Configure CORS
+# If wildcard is requested, use regex so it works with allow_credentials=True
+allow_origin_regex = None
 if settings.allowed_origins == ["*"]:
-    allow_origins = ["*"]
+    allow_origins = []  # required when using allow_origin_regex
+    allow_origin_regex = ".*"
 else:
     allow_origins = settings.allowed_origins
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allow_origins,
+    allow_origin_regex=allow_origin_regex,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
