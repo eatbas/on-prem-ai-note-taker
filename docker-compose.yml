@@ -56,7 +56,7 @@ services:
       OLLAMA_MEMORY_LIMIT_GB: ${OLLAMA_MEMORY_LIMIT_GB:-18}
       BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-myca}
       BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-wj2YyxrJ4cqcXgCA}
-      REDIS_URL: redis://redis:6385  # Fixed: Docker service name for internal communication
+      REDIS_URL: redis://redis:6379  # Fixed: use internal Redis port
       QUEUE_MAX_WORKERS: ${QUEUE_MAX_WORKERS:-2}
       USE_QUEUE_SYSTEM: ${USE_QUEUE_SYSTEM:-true}
       MAX_CONCURRENCY: ${MAX_CONCURRENCY:-2}
