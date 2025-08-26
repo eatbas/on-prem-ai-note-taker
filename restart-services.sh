@@ -141,8 +141,9 @@ stop_services() {
     echo "🛑 Stopping all services..."
     echo "==========================="
     
-    # Force stop and remove all containers
-    docker compose down --remove-orphans --volumes || true
+    # Force stop and remove all containers (PRESERVE VOLUMES!)
+    # WARNING: Never use --volumes flag here as it deletes Ollama models!
+    docker compose down --remove-orphans || true
     
     # Force remove any remaining containers
     echo "🧹 Force removing any remaining containers..."
