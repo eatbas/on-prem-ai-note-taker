@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/common'
+import { db } from '../services'
 import { ProgressDashboard, JobQueue } from '../components/queue'
 import { getVpsHealth } from '../services'
 
@@ -684,13 +685,37 @@ export default function AdminDashboard() {
                             🔍 Check Backend Status
                         </button>
                         <button
-                            onClick={() => {
-                                // Move local data clearing here for admin
+                            onClick={async () => {
                                 // eslint-disable-next-line no-alert
-                                if (confirm('This clears ALL local browser data for this app on this device. Continue?')) {
+                                if (confirm('This clears ALL local app data on this device (IndexedDB, localStorage, sessionStorage). Continue?')) {
                                     try {
-                                        localStorage.clear()
-                                        sessionStorage.clear()
+                                        // Clear IndexedDB (Dexie)
+                                        try {
+                                            await db.delete()
+                                        } catch (dbError) {
+                                            // Fallback: clear individual tables
+                                            try {
+                                                await (db as any).meetings?.clear?.()
+                                                await (db as any).chunks?.clear?.()
+                                                await (db as any).notes?.clear?.()
+                                            } catch {}
+                                        }
+
+                                        // Re-open DB to ensure a fresh instance for next use
+                                        try {
+                                            await db.open()
+                                        } catch {}
+
+                                        // Clear storages
+                                        try { localStorage.clear() } catch {}
+                                        try { sessionStorage.clear() } catch {}
+
+                                        // Clear any recording states if available
+                                        try {
+                                            // @ts-ignore
+                                            (window as any).globalRecordingManager?.clearInterruptedState?.()
+                                        } catch {}
+
                                         // eslint-disable-next-line no-alert
                                         alert('Local data cleared. Reloading...')
                                     } finally {

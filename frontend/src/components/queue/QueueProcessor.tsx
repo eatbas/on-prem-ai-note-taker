@@ -29,7 +29,7 @@ export default function QueueProcessor({ online, vpsUp }: QueueProcessorProps) {
 	const [queueStats, setQueueStats] = useState<QueueStats | null>(null)
 	const [selectedFile, setSelectedFile] = useState<File | null>(null)
 	const [textInput, setTextInput] = useState('')
-	const [language, setLanguage] = useState('auto')
+	const [language, setLanguage] = useState<'tr' | 'en'>('tr')
 	const [submitting, setSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
@@ -221,14 +221,13 @@ export default function QueueProcessor({ online, vpsUp }: QueueProcessorProps) {
 					/>
 					<select
 						value={language}
-						onChange={(e) => setLanguage(e.target.value)}
+						onChange={(e) => setLanguage(e.target.value as 'tr' | 'en')}
 						style={{ 
 							padding: '6px 8px',
 							border: '1px solid #d1d5db',
 							borderRadius: '4px'
 						}}
 					>
-						<option value="auto">Auto</option>
 						<option value="en">English</option>
 						<option value="tr">Turkish</option>
 					</select>

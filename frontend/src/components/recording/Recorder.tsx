@@ -29,7 +29,8 @@ export default function Recorder({
 	tag,
 	setTag,
 	online,
-	vpsUp
+	vpsUp,
+	showStopButton = true
 }: { 
 	onCreated: (meetingId: string) => void; 
 	onStopped?: (meetingId: string) => void;
@@ -39,6 +40,7 @@ export default function Recorder({
 	setTag: (tag: string) => void;
 	online: boolean;
 	vpsUp: boolean | null;
+	showStopButton?: boolean;
 }) {
 	const mediaRecorderRef = useRef<MediaRecorder | null>(null)
 	const [error, setError] = useState<string | null>(null)
@@ -61,7 +63,7 @@ export default function Recorder({
 	const recordingTime = globalRecordingState.recordingTime
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
 	const [selectedMic, setSelectedMic] = useState<string>('')
-	const [language, setLanguage] = useState<'auto' | 'tr' | 'en'>('tr')
+	const [language, setLanguage] = useState<'tr' | 'en'>('tr')
 
 	// Listen for global event from floating window to open mic selector
 	useEffect(() => {
@@ -75,6 +77,13 @@ export default function Recorder({
 	const analyserRef = useRef<AnalyserNode | null>(null)
 	const microphoneAnalyserRef = useRef<AnalyserNode | null>(null)
 	const animationFrameRef = useRef<number | null>(null)
+
+	// Mixing graph refs (to merge mic + system audio into a single track)
+	const mixingAudioContextRef = useRef<AudioContext | null>(null)
+	const mixDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null)
+	const mixSourceNodesRef = useRef<MediaStreamAudioSourceNode[]>([])
+	const mixGainNodesRef = useRef<GainNode[]>([])
+	const activeStreamsRef = useRef<MediaStream[]>([])
 	
 	// Microphone usage monitoring
 	const [micUsageLevels, setMicUsageLevels] = useState<Record<string, number>>({})
@@ -179,27 +188,31 @@ export default function Recorder({
 				kind: device.kind
 			})))
 			
-			// More aggressive filtering to remove duplicates and show only real devices
-			const cleanDevices = audioInputs.filter(device => {
-				const label = device.label.toLowerCase()
-				
-				// Remove devices with problematic prefixes
-				if (label.includes('default -') || label.includes('communications -')) {
-					return false
-				}
-				
-				// Keep only Intel microphone and clean AirPods
-				const isIntelMic = label.includes('intel') || label.includes('array')
-				const isCleanAirPods = label.includes('airpods') && !label.includes('default') && !label.includes('communications')
-				
-				return isIntelMic || isCleanAirPods
+			// Show all real devices (not brand-limited). Hide only the Communications duplicates.
+			// Deduplicate by label+groupId to avoid multiple entries of the same physical mic.
+			const dedupMap = new Map<string, MediaDeviceInfo>()
+			for (const device of audioInputs) {
+				const labelLower = device.label.toLowerCase()
+				// Skip the special "Communications" alias often shown on Windows
+				if (labelLower.startsWith('communications')) continue
+				const key = `${device.label}|${device.groupId || ''}`
+				if (!dedupMap.has(key)) dedupMap.set(key, device)
+			}
+			const cleanDevices = Array.from(dedupMap.values())
+			// Sort: default first if present, then by label
+			cleanDevices.sort((a, b) => {
+				const aDef = /default/i.test(a.label) ? -1 : 0
+				const bDef = /default/i.test(b.label) ? -1 : 0
+				if (aDef !== bDef) return aDef - bDef
+				return a.label.localeCompare(b.label)
 			})
 			
 			setAvailableMics(cleanDevices)
 			
-			// Set default microphone if available
+			// Set default microphone if available (prefer device labeled as Default)
 			if (cleanDevices.length > 0 && !selectedMic) {
-				setSelectedMic(cleanDevices[0].deviceId)
+				const preferred = cleanDevices.find(d => /default/i.test(d.label)) || cleanDevices[0]
+				setSelectedMic(preferred.deviceId)
 			}
 			
 			console.log('Clean microphones:', cleanDevices.map(mic => ({
@@ -430,21 +443,30 @@ export default function Recorder({
 				// Get ALL available system audio sources (desktop capture)
 				if (typeof window !== 'undefined' && (window as any).desktopCapture) {
 					try {
-						const sources = await (window as any).desktopCapture.getSources(['audio'])
-						console.log('Available audio sources:', sources)
+						const sources = await (window as any).desktopCapture.getSources(['screen', 'window'])
+						console.log('Available desktop sources for audio capture:', sources)
 						
-						// Capture from ALL audio sources, not just the first one
+						// Capture from ALL screen/window sources, not just the first one
 						for (const source of sources) {
 							try {
-								const audioStream = await navigator.mediaDevices.getUserMedia({
-									audio: {
+								// In Chromium/Electron, requesting audio-only desktop can fail unless a desktop video track is also requested.
+								const desktopStream = await (navigator.mediaDevices as any).getUserMedia({
+									video: {
 										mandatory: {
 											chromeMediaSource: 'desktop',
 											chromeMediaSourceId: source.id
 										}
-									} as any
+									},
+									audio: {
+										mandatory: {
+											chromeMediaSource: 'desktop'
+										}
+									}
 								})
-								systemAudioStreams.push(audioStream)
+								// Extract only audio tracks; stop the video track to conserve resources
+								const audioOnly = new MediaStream(desktopStream.getAudioTracks())
+								desktopStream.getVideoTracks().forEach((t: MediaStreamTrack) => t.stop())
+								systemAudioStreams.push(audioOnly)
 								console.log(`Successfully captured audio from: ${source.name || source.id}`)
 							} catch (err) {
 								console.log(`Failed to capture audio from source ${source.name || source.id}:`, err)
@@ -454,10 +476,24 @@ export default function Recorder({
 						if (systemAudioStreams.length > 0) {
 							console.log(`Successfully captured audio from ${systemAudioStreams.length} system audio sources`)
 						} else {
-							console.log('No system audio sources could be captured')
+							console.log('No system audio sources could be captured via desktopCapturer')
 						}
 					} catch (err) {
 						console.log('System audio capture not available, continuing with microphone only:', err)
+					}
+				}
+
+				// Browser fallback (and additional attempt in Electron): try getDisplayMedia with audio
+				if (systemAudioStreams.length === 0 && (navigator.mediaDevices as any).getDisplayMedia) {
+					try {
+						const displayStream = await (navigator.mediaDevices as any).getDisplayMedia({ video: true, audio: true })
+						if (displayStream && displayStream.getAudioTracks().length > 0) {
+							const audioOnly = new MediaStream(displayStream.getAudioTracks())
+							systemAudioStreams.push(audioOnly)
+							console.log('Captured system audio via getDisplayMedia fallback')
+						}
+					} catch (err) {
+						console.log('getDisplayMedia system audio capture failed or was denied by the user:', err)
 					}
 				}
 
@@ -465,27 +501,49 @@ export default function Recorder({
 				const micToUse = selectedMic || (availableMics.length > 0 ? availableMics[0].deviceId : undefined)
 				micStream = await navigator.mediaDevices.getUserMedia({
 					audio: {
-						deviceId: micToUse ? { exact: micToUse } : undefined
+						// If the selected device is the special 'default' id, let the browser pick
+						deviceId: micToUse && micToUse !== 'default' ? { exact: micToUse } : undefined
 					}
 				})
 
-				// Combine ALL streams: microphone + all system audio sources
-				const allTracks: MediaStreamTrack[] = []
+				// Build a WebAudio mixing graph to merge all sources into a single track
+				// Cleanup any previous mixing session
+				if (mixingAudioContextRef.current) {
+					try { mixingAudioContextRef.current.close() } catch {}
+				}
+				mixSourceNodesRef.current = []
+				mixGainNodesRef.current = []
+				activeStreamsRef.current = []
 				
-				// Add microphone tracks
-				allTracks.push(...micStream.getAudioTracks())
+				const ctx = new AudioContext()
+				mixingAudioContextRef.current = ctx
+				const dest = ctx.createMediaStreamDestination()
+				mixDestinationRef.current = dest
 				
-				// Add ALL system audio tracks
-				systemAudioStreams.forEach(stream => {
-					allTracks.push(...stream.getAudioTracks())
-				})
+				// Helper to add a stream into the mix
+				const addStreamToMix = (stream: MediaStream, gainValue: number) => {
+					try {
+						const source = ctx.createMediaStreamSource(stream)
+						const gain = ctx.createGain()
+						gain.gain.value = gainValue
+						source.connect(gain)
+						gain.connect(dest)
+						mixSourceNodesRef.current.push(source)
+						mixGainNodesRef.current.push(gain)
+						activeStreamsRef.current.push(stream)
+					} catch (e) {
+						console.warn('Failed to add stream to mix:', e)
+					}
+				}
 				
-				// Create combined stream with all audio sources
-				combinedStream = new MediaStream(allTracks)
+				// Add mic with normal gain
+				addStreamToMix(micStream, 1.0)
+				// Add each system audio stream (slightly reduced to avoid clipping)
+				systemAudioStreams.forEach(s => addStreamToMix(s, 0.9))
 				
-				console.log(`Combined stream created with ${allTracks.length} audio tracks:`)
-				console.log(`- Microphone tracks: ${micStream.getAudioTracks().length}`)
-				console.log(`- System audio tracks: ${systemAudioStreams.reduce((total, stream) => total + stream.getAudioTracks().length, 0)}`)
+				combinedStream = dest.stream
+				
+				console.log(`Mixing graph created. Sources ->  mic: ${micStream.getAudioTracks().length}, system: ${systemAudioStreams.reduce((total, s) => total + s.getAudioTracks().length, 0)}`)
 
 			} catch (err) {
 				console.error('Failed to get audio streams:', err)
@@ -545,6 +603,8 @@ export default function Recorder({
 		
 		// Stop audio level monitoring
 		stopAudioLevelMonitoring()
+		// Stop mixing graph and any active streams
+		stopMixingAndStreams()
 		
 		// Notify Electron process that recording has stopped
 		if (window.electronAPI) {
@@ -552,8 +612,9 @@ export default function Recorder({
 		}
 		
 		// IMMEDIATELY call onStopped callback to update App-level state
+		// This ensures the recording state is properly cleared
 		if (onStopped && stoppedMeetingId) {
-			console.log('🔄 Calling onStopped callback with meetingId:', stoppedMeetingId)
+			console.log('🔄 Calling onStopped callback immediately to update App state')
 			onStopped(stoppedMeetingId)
 		}
 		
@@ -577,6 +638,12 @@ export default function Recorder({
 					setRetryCount(0) // Reset retry count on success
 					// Reset success status after 3 seconds
 					setTimeout(() => setSyncStatus('idle'), 3000)
+					
+					// Now call onStopped to refresh dashboard with complete meeting data
+					if (onStopped) {
+						console.log('🔄 Calling onStopped callback after successful meeting processing')
+						onStopped(stoppedMeetingId)
+					}
 				} catch (error) {
 					console.error('Auto-processing failed:', error)
 					setSyncStatus('failed')
@@ -766,6 +833,32 @@ export default function Recorder({
 		setMicrophoneLevel(0)
 	}
 
+	// Cleanup mixing graph and tracks
+	function stopMixingAndStreams() {
+		try {
+			mixGainNodesRef.current.forEach(g => g.disconnect())
+			mixSourceNodesRef.current.forEach(s => s.disconnect())
+		} catch {}
+		mixGainNodesRef.current = []
+		mixSourceNodesRef.current = []
+		try {
+			activeStreamsRef.current.forEach(stream => {
+				stream.getTracks().forEach(track => {
+					try { track.stop() } catch {}
+				})
+			})
+		} catch {}
+		activeStreamsRef.current = []
+		if (mixDestinationRef.current) {
+			try { mixDestinationRef.current.disconnect() } catch {}
+			mixDestinationRef.current = null
+		}
+		if (mixingAudioContextRef.current) {
+			try { mixingAudioContextRef.current.close() } catch {}
+			mixingAudioContextRef.current = null
+		}
+	}
+
 	// Component to show microphone usage indicator
 	const MicrophoneUsageIndicator = ({ deviceId, size = 'small' }: { deviceId: string; size?: 'small' | 'large' }) => {
 		const level = micUsageLevels[deviceId] || 0
@@ -878,29 +971,31 @@ export default function Recorder({
 			>
 				🎙️ Start
 			</button>
-			<button 
-				onClick={stop} 
-				disabled={!recording}
-				style={{
-					padding: '8px 16px',
-					backgroundColor: !recording ? '#9ca3af' : '#ef4444',
-					color: 'white',
-					border: 'none',
-					borderRadius: '6px',
-					fontSize: '14px',
-					fontWeight: '600',
-					cursor: !recording ? 'not-allowed' : 'pointer',
-					transition: 'all 0.2s ease',
-					boxShadow: !recording ? 'none' : '0 2px 4px -1px rgba(0, 0, 0, 0.1)',
-					transform: !recording ? 'scale(0.95)' : 'scale(1)',
-					opacity: !recording ? 0.6 : 1,
-					display: 'flex',
-					alignItems: 'center',
-					gap: '6px'
-				}}
-			>
-				⏹️ Stop
-			</button>
+			{showStopButton && (
+				<button 
+					onClick={stop} 
+					disabled={!recording}
+					style={{
+						padding: '8px 16px',
+						backgroundColor: !recording ? '#9ca3af' : '#ef4444',
+						color: 'white',
+						border: 'none',
+						borderRadius: '6px',
+						fontSize: '14px',
+						fontWeight: '600',
+						cursor: !recording ? 'not-allowed' : 'pointer',
+						transition: 'all 0.2s ease',
+						boxShadow: !recording ? 'none' : '0 2px 4px -1px rgba(0, 0, 0, 0.1)',
+						transform: !recording ? 'scale(0.95)' : 'scale(1)',
+						opacity: !recording ? 0.6 : 1,
+						display: 'flex',
+						alignItems: 'center',
+						gap: '6px'
+					}}
+				>
+					⏹️ Stop
+				</button>
+			)}
 		</div>
 	)
 
@@ -1119,12 +1214,11 @@ export default function Recorder({
 								}}>
 									{[
 										{ value: 'tr', label: 'Türkçe' },
-										{ value: 'en', label: 'English' },
-										{ value: 'auto', label: 'Auto' }
+										{ value: 'en', label: 'English' }
 									].map((option) => (
 										<button
 											key={option.value}
-											onClick={() => setLanguage(option.value as 'auto' | 'tr' | 'en')}
+											onClick={() => setLanguage(option.value as 'tr' | 'en')}
 											style={{
 												padding: '8px 16px',
 												backgroundColor: language === option.value ? '#3b82f6' : '#f3f4f6',
@@ -1167,7 +1261,17 @@ export default function Recorder({
 								<input id="pref-show-floating" type="checkbox" defaultChecked />
 								<span>Show floating recorder while recording</span>
 							</label>
-							
+							<div style={{
+								margin: '8px 0 16px 0',
+								padding: '10px 12px',
+								border: '1px solid #e5e7eb',
+								borderRadius: '8px',
+								backgroundColor: '#f8fafc',
+								fontSize: '12px',
+								color: '#374151'
+							}}>
+								<strong>Tip:</strong> To record computer audio and other speakers, enable "Share system audio" when the screen/window selection prompt appears. If the option is missing on Windows, enable "Stereo Mix" in Sound settings or use a virtual audio device (e.g., VB-CABLE).
+							</div>
 							<button
 								onClick={startRecordingWithSelectedMic}
 								disabled={!selectedMic}

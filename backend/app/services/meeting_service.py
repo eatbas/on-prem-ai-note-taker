@@ -15,6 +15,7 @@ from ..core.config import settings
 from ..database import get_or_create_user, Meeting, Transcription, Summary
 from ..core.utils import get_whisper_model, validate_language
 from ..clients.ollama_client import OllamaClient
+from ..core.prompts import get_single_summary_prompt
 from ..workers.chunked_service import chunked_service
 from ..workers.progress import job_store, Phase
 
@@ -128,8 +129,23 @@ class MeetingService:
                 if hasattr(info, "duration") and info.duration:
                     meeting.duration = info.duration
                 
-                # Generate summary using Ollama
-                summary = self.ollama_client.summarize(transcript_text)
+                # Determine language to use for prompt
+                lang_code = (
+                    validated_language if validated_language in ("tr", "en")
+                    else (getattr(info, "language", None) if getattr(info, "language", None) in ("tr", "en") else "en")
+                )
+
+                # Generate summary using language-specific prompt
+                prompt = get_single_summary_prompt(lang_code).format(transcript=transcript_text)
+                summary = self.ollama_client.generate(
+                    prompt,
+                    options={
+                        "temperature": 0.2,
+                        "top_p": 0.8,
+                        "top_k": 10,
+                        "num_predict": 300,
+                    },
+                )
                 
                 # Save summary
                 summary_obj = Summary(

@@ -14,6 +14,7 @@ from ..schemas.summarization import SummarizeRequest, SummarizeResponse
 from ..core.config import settings
 from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language
+from ..core.prompts import get_single_summary_prompt
 from ..clients.ollama_client import OllamaClient
 
 router = APIRouter(prefix="/api", tags=["transcription"])
@@ -134,8 +135,25 @@ async def transcribe(
 
 @router.post("/summarize", response_model=SummarizeResponse)
 def summarize(req: SummarizeRequest) -> SummarizeResponse:
-    """Generate summary from text"""
-    summary_text = _ollama_client.summarize(req.text, model=req.model)
+    """Generate summary from text with language-aware prompt"""
+    # Determine language code
+    try:
+        validated_language = validate_language(req.language)
+    except Exception:
+        validated_language = "auto"
+    lang_code = validated_language if validated_language in ("tr", "en") else "en"
+
+    prompt = get_single_summary_prompt(lang_code).format(transcript=req.text)
+    summary_text = _ollama_client.generate(
+        prompt,
+        model=req.model,
+        options={
+            "temperature": 0.2,
+            "top_p": 0.8,
+            "top_k": 10,
+            "num_predict": 300,
+        },
+    )
     return SummarizeResponse(summary=summary_text)
 
 
@@ -185,8 +203,27 @@ async def transcribe_and_summarize(
         if transcript.duration:
             meeting.duration = transcript.duration
         
-        # Summarize
-        summary = _ollama_client.summarize(transcript.text)
+        # Choose language for summary prompt
+        try:
+            validated_language = validate_language(language)
+        except HTTPException:
+            validated_language = "auto"
+        lang_code = (
+            validated_language if validated_language in ("tr", "en")
+            else (transcript.language if transcript.language in ("tr", "en") else "en")
+        )
+
+        # Summarize with language-specific prompt
+        prompt = get_single_summary_prompt(lang_code).format(transcript=transcript.text)
+        summary = _ollama_client.generate(
+            prompt,
+            options={
+                "temperature": 0.2,
+                "top_p": 0.8,
+                "top_k": 10,
+                "num_predict": 300,
+            },
+        )
         
         # Save summary to database
         summary_obj = Summary(

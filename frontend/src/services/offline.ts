@@ -5,7 +5,7 @@ export function generateId(prefix = 'id'): string {
 	return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`
 }
 
-export async function createMeeting(title: string, tags: string[] = [], language: 'auto' | 'tr' | 'en' = 'auto'): Promise<Meeting> {
+export async function createMeeting(title: string, tags: string[] = [], language: 'tr' | 'en' = 'tr'): Promise<Meeting> {
 	const meeting: Meeting = {
 		id: generateId('meeting'),
 		title,

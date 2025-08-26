@@ -7,7 +7,7 @@ export type Meeting = {
 	updatedAt: number
 	tags: string[]
 	status: 'local' | 'queued' | 'sent'
-	language?: 'auto' | 'tr' | 'en'  // Meeting language for transcription
+	language?: 'tr' | 'en'  // Meeting language for transcription
 	// Optional metadata for display
 	duration?: number
 }

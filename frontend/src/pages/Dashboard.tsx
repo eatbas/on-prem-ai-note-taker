@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../services'
+import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, deleteMeeting, db } from '../services'
 import AskLlama from './AskLlama'
 
 import { useToast } from '../components/common'
@@ -319,60 +319,6 @@ export default function Dashboard({
 			} else {
 				showToast(`❌ Backend check failed: ${errorMessage}`, 'error')
 			}
-		} finally {
-			setLoading(false)
-		}
-	}
-
-	async function runFullVpsDiagnostics() {
-		try {
-			setLoading(true)
-			showToast('🔍 Running comprehensive VPS diagnostics...', 'info')
-			
-			const results = await runVpsDiagnostics()
-			
-			// Show summary toast
-			const successCount = results.filter(r => r.status === 'success').length
-			const errorCount = results.filter(r => r.status === 'error').length
-			
-			if (errorCount === 0) {
-				showToast(`✅ All VPS tests passed! (${successCount} successful)`, 'success')
-			} else {
-				showToast(`❌ VPS diagnostics found ${errorCount} issues. Check details below.`, 'error')
-			}
-			
-			// Store results for display
-			setVpsDiagnosticResults(results)
-			setShowVpsDiagnostics(true)
-			
-		} catch (err) {
-			console.error('VPS diagnostics failed:', err)
-			showToast(`❌ Diagnostics failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
-		} finally {
-			setLoading(false)
-		}
-	}
-
-	async function quickVpsConnectionTest() {
-		try {
-			setLoading(true)
-			showToast('🧪 Running quick VPS connection test...', 'info')
-			
-			const result = await quickVpsTest()
-			
-			if (result.success) {
-				showToast(result.message, 'success')
-			} else {
-				showToast(result.message, 'error')
-			}
-			
-			// Store result for display
-			setQuickTestResult(result)
-			setShowQuickTest(true)
-			
-		} catch (err) {
-			console.error('Quick VPS test failed:', err)
-			showToast(`❌ Quick test failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
 		} finally {
 			setLoading(false)
 		}

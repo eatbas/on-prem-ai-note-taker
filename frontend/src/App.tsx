@@ -65,7 +65,7 @@ function AppShell({
 			{/* Sticky Search and Controls Bar - At the very top */}
 			<div style={{ 
 				position: 'sticky',
-				top: 0,
+				top: (isRecording && recordingMeetingId) ? 60 : 0,
 				zIndex: 1000,
 				backgroundColor: 'white',
 				borderBottom: '1px solid #e2e8f0',
@@ -161,7 +161,31 @@ function AppShell({
 							setTag={setTag}
 							online={online}
 							vpsUp={vpsUp}
+							showStopButton={false}
 						/>
+						{isRecording && recordingMeetingId && (
+							<button
+								onClick={() => {
+									const stoppedId = globalRecordingManager.stopRecording()
+									if (stoppedId) {
+										onRecordingStopped(stoppedId)
+									}
+								}}
+								style={{
+									padding: '8px 16px',
+									backgroundColor: '#ef4444',
+									color: 'white',
+									border: 'none',
+									borderRadius: '6px',
+									fontSize: '14px',
+									fontWeight: '600',
+									cursor: 'pointer',
+									transition: 'all 0.2s ease'
+								}}
+							>
+								⏹️ Stop
+							</button>
+						)}
 					</div>
 				</div>
 			</div>
@@ -580,12 +604,8 @@ export default function App() {
 		console.log('⏹️ Recording stopped for meeting:', meetingId)
 		setIsRecording(false)
 		setRecordingMeetingId(null)
-		// Don't refresh dashboard immediately - wait for meeting processing to complete
-		// The meeting processing happens asynchronously, so we'll refresh after a delay
-		setTimeout(() => {
-			console.log('🔄 Refreshing dashboard after meeting processing delay')
-			setRefreshSignal(Date.now())
-		}, 2000) // 2 second delay to allow meeting processing to complete
+		// Now refresh dashboard to show the completed meeting
+		setRefreshSignal(Date.now())
 	}
 
 	// Handle stop click from floating recorder window

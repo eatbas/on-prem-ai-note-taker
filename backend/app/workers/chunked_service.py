@@ -316,9 +316,17 @@ class ChunkedTranscriptionService:
                     message=f"Summarizing chunk {i + 1}/{len(chunks)}"
                 )
                 
-                # Generate chunk summary
+                # Generate chunk summary using language-specific prompt
                 chunk_prompt = get_chunk_prompt(language).format(chunk=chunk)
-                chunk_summary = self.ollama_client.summarize(chunk_prompt)
+                chunk_summary = self.ollama_client.generate(
+                    chunk_prompt,
+                    options={
+                        "temperature": 0.2,
+                        "top_p": 0.8,
+                        "top_k": 10,
+                        "num_predict": 300,
+                    },
+                )
                 chunk_summaries.append(chunk_summary)
                 
                 # Small delay to prevent overwhelming the model
@@ -341,7 +349,15 @@ class ChunkedTranscriptionService:
                 lang=language
             )
             
-            final_summary = self.ollama_client.summarize(merge_prompt)
+            final_summary = self.ollama_client.generate(
+                merge_prompt,
+                options={
+                    "temperature": 0.2,
+                    "top_p": 0.8,
+                    "top_k": 10,
+                    "num_predict": 400,
+                },
+            )
             
             return final_summary
             

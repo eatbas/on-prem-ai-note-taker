@@ -10,6 +10,7 @@ from ..database import Job
 from .job_manager import JobProgressTracker, JobPhase
 from ..core.config import settings
 from ..clients.ollama_client import OllamaClient
+from ..core.prompts import get_single_summary_prompt
 from ..core.utils import get_whisper_model, validate_language
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,25 @@ async def handle_summarization_task(data: Dict[str, Any]) -> Dict[str, Any]:
     text = data.get("text", "")
     model = data.get("model")
     
-    summary = _ollama_client.summarize(text, model=model)
+    # Optional language inside data
+    language = data.get("language") if isinstance(data, dict) else None
+    try:
+        from ..core.utils import validate_language as _validate_language
+        validated_language = _validate_language(language)
+    except Exception:
+        validated_language = "auto"
+    lang_code = validated_language if validated_language in ("tr", "en") else "en"
+    prompt = get_single_summary_prompt(lang_code).format(transcript=text)
+    summary = _ollama_client.generate(
+        prompt,
+        model=model,
+        options={
+            "temperature": 0.2,
+            "top_p": 0.8,
+            "top_k": 10,
+            "num_predict": 300,
+        },
+    )
     return {"summary": summary}
 
 
@@ -139,7 +158,18 @@ async def handle_summarization_job(job: Job, progress_tracker: JobProgressTracke
     
     progress_tracker.update_progress(50, JobPhase.SUMMARIZING, 0, "Generating summary")
     
-    summary = _ollama_client.summarize(text, model=model)
+    # Use English by default here (no language provided in job schema)
+    prompt = get_single_summary_prompt("en").format(transcript=text)
+    summary = _ollama_client.generate(
+        prompt,
+        model=model,
+        options={
+            "temperature": 0.2,
+            "top_p": 0.8,
+            "top_k": 10,
+            "num_predict": 300,
+        },
+    )
     
     progress_tracker.update_progress(100, JobPhase.FINALIZING, 100, "Summary completed")
     

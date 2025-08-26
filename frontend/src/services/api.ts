@@ -543,14 +543,21 @@ export async function getProgressStats(): Promise<ProgressStats> {
 }
 
 // ===== 🎬 ENHANCED MEETING WORKFLOW =====
-export async function startMeeting(title: string): Promise<{ meeting_id: string; message: string }> {
-	const form = new FormData()
-	form.append('title', title)
+export async function startMeeting(
+	title: string,
+	language: 'tr' | 'en',
+	tags?: string[]
+): Promise<{ meeting_id: string; job_id: string; message: string; language: string }> {
+	const payload = {
+		title,
+		language,
+		tags: tags || []
+	}
 
 	const resp = await fetch(`${apiBase}/meetings/start`, {
 		method: 'POST',
-		body: form,
-		headers: { 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+		headers: { 'Content-Type': 'application/json', 'X-User-Id': getUserId() || '', ...getAuthHeader() },
+		body: JSON.stringify(payload),
 	})
 	if (!resp.ok) throw new Error(`Start meeting failed: ${resp.status}`)
 	return resp.json()

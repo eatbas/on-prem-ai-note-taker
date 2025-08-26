@@ -7,7 +7,7 @@ interface ToastProps {
 	duration?: number
 }
 
-export default function Toast({ message, type, onClose, duration = 5000 }: ToastProps) {
+export default function Toast({ message, type, onClose, duration = 2000 }: ToastProps) {
 	const [isVisible, setIsVisible] = useState(true)
 
 	useEffect(() => {
@@ -22,8 +22,8 @@ export default function Toast({ message, type, onClose, duration = 5000 }: Toast
 	const getToastStyles = () => {
 		const baseStyles = {
 			position: 'fixed' as const,
-			top: '20px',
-			right: '20px',
+			bottom: '20px',
+			left: '20px',
 			padding: '16px 20px',
 			borderRadius: '8px',
 			color: 'white',
@@ -31,7 +31,7 @@ export default function Toast({ message, type, onClose, duration = 5000 }: Toast
 			zIndex: 10000,
 			maxWidth: '400px',
 			boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-			transform: isVisible ? 'translateX(0)' : 'translateX(100%)',
+			transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
 			opacity: isVisible ? 1 : 0,
 			transition: 'all 0.3s ease',
 			display: 'flex',
