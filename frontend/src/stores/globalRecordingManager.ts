@@ -159,9 +159,15 @@ class GlobalRecordingManager {
 		console.log('⏹️ Global Recording Manager: Stopping recording')
 		
 		if (this.state.mediaRecorder && this.state.mediaRecorder.state !== 'inactive') {
-			this.state.mediaRecorder.stop()
-			// Stop all tracks to release audio devices
-			this.state.mediaRecorder.stream.getTracks().forEach(track => track.stop())
+			const recorder = this.state.mediaRecorder
+			const stream = recorder.stream
+			// Ensure the final dataavailable fires before releasing tracks
+			try { recorder.requestData() } catch {}
+			// Release tracks only after recorder has fully stopped
+			recorder.addEventListener('stop', () => {
+				try { stream.getTracks().forEach(track => track.stop()) } catch {}
+			}, { once: true })
+			recorder.stop()
 		}
 
 		if (this.state.recordingInterval) {

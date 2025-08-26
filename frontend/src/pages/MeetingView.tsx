@@ -15,6 +15,10 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     const [totalChunks, setTotalChunks] = useState(0)
     const { showToast, ToastContainer } = useToast()
     const [isRemote, setIsRemote] = useState(false)
+    // Audio details
+    const [audioTotalBytes, setAudioTotalBytes] = useState(0)
+    const [audioDurationSec, setAudioDurationSec] = useState<number | null>(null)
+    const chunkMs = Number((import.meta as any).env?.VITE_AUDIO_CHUNK_MS ?? 30000)
 
     // Audio playback state
     const [audioUrl, setAudioUrl] = useState<string | null>(null)
@@ -43,11 +47,13 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
 			setNote(await db.notes.get(meetingId))
             setTagsInput((m?.tags || []).join(', '))
             
-            // Load chunk information for progress tracking
-            if (m?.status === 'local' || m?.status === 'queued') {
+            // Load chunk information for progress tracking and details
+            if (m?.status === 'local' || m?.status === 'queued' || m?.status === 'sent') {
                 const chunks = await db.chunks.where({ meetingId }).toArray()
                 setTotalChunks(chunks.length)
                 setUploadProgress(chunks.length)
+                const totalBytes = chunks.reduce((sum, c) => sum + (c.blob ? c.blob.size : 0), 0)
+                setAudioTotalBytes(totalBytes)
             }
 		}
 
@@ -79,6 +85,8 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
                 setMeeting(mapRemoteMeeting(remote))
                 setNote({ id: remote.id, summary: remote.summary || '', transcript: remote.transcription || '' })
                 setTagsInput(((remote.tags as string[] | undefined) || []).join(', '))
+                setTotalChunks(0)
+                setAudioTotalBytes(0)
             } catch (err) {
                 console.error('Failed to load meeting from VPS:', err)
                 showToast('Failed to load meeting from VPS. Please check your connection.', 'error')
@@ -310,20 +318,11 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
 
     return (
         <div 
-            style={{ display: 'grid', gridTemplateColumns: '240px 1fr', gap: 16 }}
+            style={{ display: 'block' }}
             onContextMenu={handleContextMenu}
         >
             {/* Toast Container */}
             <ToastContainer />
-            
-            <aside style={{ borderRight: '1px solid #e2e8f0', paddingRight: 12 }}>
-                <div style={{ fontWeight: 700, marginBottom: 12 }}>Navigation</div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <a href="#/" style={{ textDecoration: 'none' }}>🏠 Home</a>
-                    <a href="#/" style={{ textDecoration: 'none' }}>🗂️ Meetings</a>
-                    <a href="#/" style={{ textDecoration: 'none' }}>🔍 Search</a>
-                </div>
-            </aside>
             <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                     <InlineTitle id={meetingId} title={meeting.title} onSaved={async () => {
@@ -432,7 +431,24 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
                     </div>
                 </div>
                 <div style={{ marginBottom: 12, color: '#64748b' }}>
-                    📅 {new Date(meeting.createdAt).toLocaleString()} {meeting.duration && `• ⏱️ ${Math.round(meeting.duration/60)} min`}
+                    📅 {new Date(meeting.createdAt).toLocaleString()} {typeof meeting.duration === 'number' || audioDurationSec || totalChunks ? `• ⏱️ ${formatDuration((audioDurationSec ?? (typeof meeting.duration === 'number' ? meeting.duration : (totalChunks * (chunkMs / 1000)))))}` : ''}
+                </div>
+
+                {/* Audio details panel */}
+                <div style={{
+                    marginBottom: 16,
+                    padding: '12px 16px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: 8,
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                    gap: 12
+                }}>
+                    <div><strong>Language:</strong> <span style={{ color: '#334155' }}>{meeting.language?.toUpperCase?.() || 'AUTO'}</span></div>
+                    <div><strong>Chunks:</strong> <span style={{ color: '#334155' }}>{totalChunks}</span></div>
+                    <div><strong>Chunk size:</strong> <span style={{ color: '#334155' }}>{Math.round(chunkMs/1000)}s</span></div>
+                    <div><strong>Total size:</strong> <span style={{ color: '#334155' }}>{(audioTotalBytes / (1024*1024)).toFixed(2)} MB</span></div>
                 </div>
 
                 {/* Tags Manager */}

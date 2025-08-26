@@ -84,7 +84,17 @@ class OllamaClient:
 				data=json.dumps(payload),
 				timeout=self.timeout_seconds,
 			)
-			resp.raise_for_status()
+			# Raise for HTTP errors but try to include ollama error body in logs
+			try:
+				resp.raise_for_status()
+			except requests.HTTPError as http_err:
+				try:
+					msg = resp.text
+					logger.error(f"Ollama HTTP {resp.status_code}: {msg}")
+				except Exception:
+					pass
+				raise
+
 			data = resp.json()
 			
 			response_text = data.get("response", "")
