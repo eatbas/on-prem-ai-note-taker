@@ -83,20 +83,23 @@ async def transcribe(
         duration_out: Optional[float] = None
 
         try:
-            # VPS-optimized transcription with better VAD settings
+            # Transcription with configurable quality settings
             segments, info = model.transcribe(
                 tmp_path,
                 language=validated_language if validated_language != "auto" else None,
                 vad_filter=vad_filter,
                 vad_parameters=dict(
-                    min_silence_duration_ms=500,
-                    speech_pad_ms=100
+                    min_silence_duration_ms=settings.whisper_vad_min_silence_ms,
+                    speech_pad_ms=settings.whisper_vad_speech_pad_ms
                 ),
-                beam_size=1,  # Faster decoding for VPS
-                best_of=1,   # Single pass for speed
-                temperature=0.0,  # Deterministic output
-                compression_ratio_threshold=2.4,  # VPS optimization
-                log_prob_threshold=-1.0  # VPS optimization
+                beam_size=settings.whisper_beam_size,
+                best_of=settings.whisper_best_of,
+                temperature=settings.whisper_temperature,
+                condition_on_previous_text=settings.whisper_condition_on_previous_text,
+                word_timestamps=settings.whisper_word_timestamps,
+                initial_prompt=settings.whisper_initial_prompt,
+                compression_ratio_threshold=settings.whisper_compression_ratio_threshold,
+                log_prob_threshold=settings.whisper_log_prob_threshold
             )
             language_out = info.language if hasattr(info, "language") else None
             duration_out = info.duration if hasattr(info, "duration") else None

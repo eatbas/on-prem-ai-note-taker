@@ -550,7 +550,11 @@ export default function Recorder({
 				throw new Error('Failed to access audio devices')
 			}
 
-			const rec = new MediaRecorder(combinedStream, { mimeType: 'audio/webm' })
+			// Prefer higher-quality Opus in WebM with an explicit bitrate
+			const rec = new MediaRecorder(combinedStream, { 
+				mimeType: 'audio/webm;codecs=opus',
+				bitsPerSecond: 128000 // 128 kbps for clearer speech
+			})
 			// Default meeting title with start date/time for uniqueness
 			const now = new Date()
 			const human = now.toLocaleString()
@@ -560,7 +564,9 @@ export default function Recorder({
 			// Call onCreated callback
 			onCreated(createdId)
 
-			rec.start(5000) // 5s chunks
+			// Use env-driven chunk size (default 30s) for better context
+			const chunkMs = Number((import.meta as any).env?.VITE_AUDIO_CHUNK_MS ?? 30000)
+			rec.start(isNaN(chunkMs) ? 30000 : chunkMs)
 			mediaRecorderRef.current = rec
 			
 			// Use global recording manager instead of local state

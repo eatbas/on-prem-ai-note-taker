@@ -23,6 +23,15 @@ class Settings:
 	whisper_cpu_threads: int = int(os.getenv("WHISPER_CPU_THREADS", "6"))  # Optimize for 6 vCPU
 
 	whisper_beam_size: int = int(os.getenv("WHISPER_BEAM_SIZE", "1"))  # Beam size for CPU optimization
+	whisper_best_of: int = int(os.getenv("WHISPER_BEST_OF", "3"))
+	whisper_temperature: float = float(os.getenv("WHISPER_TEMPERATURE", "0.0"))
+	whisper_condition_on_previous_text: bool = os.getenv("WHISPER_CONDITION_ON_PREVIOUS_TEXT", "true").lower() == "true"
+	whisper_word_timestamps: bool = os.getenv("WHISPER_WORD_TIMESTAMPS", "false").lower() == "true"
+	whisper_vad_min_silence_ms: int = int(os.getenv("WHISPER_VAD_MIN_SILENCE_MS", "500"))
+	whisper_vad_speech_pad_ms: int = int(os.getenv("WHISPER_VAD_SPEECH_PAD_MS", "100"))
+	whisper_initial_prompt: Optional[str] = os.getenv("WHISPER_INITIAL_PROMPT", None)
+	whisper_log_prob_threshold: float = float(os.getenv("WHISPER_LOG_PROB_THRESHOLD", "-1.0"))
+	whisper_compression_ratio_threshold: float = float(os.getenv("WHISPER_COMPRESSION_RATIO_THRESHOLD", "2.4"))
 	whisper_download_root: str = os.getenv("WHISPER_DOWNLOAD_ROOT", "./models")
 	
 	# Language Restrictions
@@ -61,6 +70,10 @@ class Settings:
 	# Performance optimizations
 	max_text_length: int = int(os.getenv("MAX_TEXT_LENGTH", "4000"))
 	enable_model_caching: bool = os.getenv("ENABLE_MODEL_CACHING", "true").lower() == "true"
+
+	# Audio chunking (for backend processing)
+	chunk_duration_seconds: int = int(os.getenv("CHUNK_DURATION_SECONDS", "30"))
+	chunk_overlap_seconds: int = int(os.getenv("CHUNK_OVERLAP_SECONDS", "5"))
 	
 	# Progress Tracking
 	enable_progress_tracking: bool = os.getenv("ENABLE_PROGRESS_TRACKING", "true").lower() == "true"

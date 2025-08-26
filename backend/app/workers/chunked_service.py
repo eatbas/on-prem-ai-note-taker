@@ -11,6 +11,7 @@ import logging
 from .progress import job_store, Phase
 from ..core.prompts import get_chunk_prompt, get_merge_prompt
 from ..core.audio_utils import get_audio_duration, split_audio_into_chunks, cleanup_chunk_files
+from ..core.config import settings
 from ..clients.ollama_client import OllamaClient
 from ..core.config import settings
 
@@ -56,8 +57,12 @@ class ChunkedTranscriptionService:
             if self._is_cancelled(job_id):
                 return {"error": "Job cancelled"}
             
-            # Split audio into chunks
-            chunks = split_audio_into_chunks(file_path, chunk_duration=45, overlap=5)
+            # Split audio into chunks (configurable)
+            chunks = split_audio_into_chunks(
+                file_path,
+                chunk_duration=settings.chunk_duration_seconds,
+                overlap=settings.chunk_overlap_seconds
+            )
             logger.info(f"Split audio into {len(chunks)} chunks")
             
             # Update progress
@@ -225,21 +230,23 @@ class ChunkedTranscriptionService:
             # Get Whisper model
             model = get_whisper_model()
             
-            # Transcribe chunk with speaker identification
+            # Transcribe chunk with configured quality settings
             segments, info = model.transcribe(
                 chunk_path,
                 language=None,  # Let Whisper auto-detect for chunks
-                word_timestamps=True,  # Enable word-level timestamps for speaker detection
                 vad_filter=True,
                 vad_parameters=dict(
-                    min_silence_duration_ms=500,
-                    speech_pad_ms=100
+                    min_silence_duration_ms=settings.whisper_vad_min_silence_ms,
+                    speech_pad_ms=settings.whisper_vad_speech_pad_ms
                 ),
                 beam_size=settings.whisper_beam_size,
-                best_of=1,
-                temperature=0.0,
-                compression_ratio_threshold=2.4,
-                log_prob_threshold=-1.0
+                best_of=settings.whisper_best_of,
+                temperature=settings.whisper_temperature,
+                condition_on_previous_text=settings.whisper_condition_on_previous_text,
+                word_timestamps=True if settings.whisper_word_timestamps else False,
+                initial_prompt=settings.whisper_initial_prompt,
+                compression_ratio_threshold=settings.whisper_compression_ratio_threshold,
+                log_prob_threshold=settings.whisper_log_prob_threshold
             )
             
             # Process segments with speaker identification
