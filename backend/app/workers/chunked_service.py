@@ -327,7 +327,9 @@ class ChunkedTranscriptionService:
         if speaker_count > 1:
             prompt = base_prompt + f" This is a continuation of a meeting. "
             prompt += f"There are {speaker_count} speakers identified so far: "
-            prompt += f"{', '.join([f'Speaker {sid + 1}' for sid in self._speaker_history[:3]]}. "
+            # Fix nested f-string syntax issue
+            speaker_names = ', '.join([f'Speaker {sid + 1}' for sid in self._speaker_history[:3]])
+            prompt += f"{speaker_names}. "
             prompt += f"The last speaker was Speaker {self._last_speaker_id + 1}. "
             prompt += "Please maintain speaker consistency."
             return prompt
