@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { db, syncMeeting, updateMeetingTags, assembleFileFromChunks, deleteMeetingLocally, deleteAudioChunksLocally, updateMeeting, deleteMeeting, getMeeting as getVpsMeeting } from '../services'
 import { TagsManager } from '../components/common'
 import { useToast } from '../components/common'
-import { createRippleEffect } from '../utils'
+import { createRippleEffect, formatDuration } from '../utils'
 
 export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
 	const [meeting, setMeeting] = useState<any>(null)
@@ -445,7 +445,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
                     gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
                     gap: 12
                 }}>
-                    <div><strong>Language:</strong> <span style={{ color: '#334155' }}>{meeting.language?.toUpperCase?.() || 'AUTO'}</span></div>
+                    <div><strong>Language:</strong> <span style={{ color: '#334155' }}>{meeting.language === 'auto' ? 'TR' : meeting.language?.toUpperCase?.() || 'TR'}</span></div>
                     <div><strong>Chunks:</strong> <span style={{ color: '#334155' }}>{totalChunks}</span></div>
                     <div><strong>Chunk size:</strong> <span style={{ color: '#334155' }}>{Math.round(chunkMs/1000)}s</span></div>
                     <div><strong>Total size:</strong> <span style={{ color: '#334155' }}>{(audioTotalBytes / (1024*1024)).toFixed(2)} MB</span></div>

@@ -12,6 +12,7 @@ class MeetingResponse(BaseModel):
     transcription: Optional[str]
     summary: Optional[str]
     duration: Optional[float]
+    language: Optional[str] = "auto"
     tags: Optional[List[str]] = []
 
 
@@ -48,6 +49,7 @@ class AdminMeetingResponse(BaseModel):
     created_at: str
     updated_at: str
     duration: Optional[float]
+    language: Optional[str] = "auto"
     has_transcription: bool
     has_summary: bool
     tags: Optional[List[str]] = []

@@ -84,7 +84,8 @@ export default function QueueProcessor({ online, vpsUp }: QueueProcessorProps) {
 		}
 
 		refreshData()
-		const interval = setInterval(refreshData, 5000)
+		// Increased interval to 15 seconds (from 5 seconds) to reduce API calls
+		const interval = setInterval(refreshData, 15000)
 		return () => clearInterval(interval)
 	}, [online, vpsUp, tasks.length])
 

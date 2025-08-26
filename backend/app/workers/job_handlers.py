@@ -44,7 +44,13 @@ async def handle_summarization_task(data: Dict[str, Any]) -> Dict[str, Any]:
         validated_language = _validate_language(language)
     except Exception:
         validated_language = "auto"
-    lang_code = validated_language if validated_language in ("tr", "en") else "en"
+    
+    # Improved language selection: prioritize Turkish for better local support
+    if validated_language in ("tr", "en"):
+        lang_code = validated_language
+    else:
+        # Default to Turkish for auto/unknown languages
+        lang_code = "tr"
     prompt = get_single_summary_prompt(lang_code).format(transcript=text)
     summary = _ollama_client.generate(
         prompt,

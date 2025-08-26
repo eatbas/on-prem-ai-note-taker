@@ -6,6 +6,7 @@ import { useToast } from './components/common'
 import { watchOnline, getVpsHealth } from './services'
 import { globalRecordingManager } from './stores/globalRecordingManager'
 import { clearStuckRecordingState } from './utils/'
+import { usePageVisibility } from './hooks/usePageVisibility'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
@@ -36,21 +37,55 @@ function AppShell({
 }) {
 	const navigate = useNavigate()
 	const { ToastContainer } = useToast()
+	const isPageVisible = usePageVisibility()
 
 	useEffect(() => {
 		let stopped = false
+		let retryCount = 0
+		let currentInterval = 30000 // Start with 30 seconds instead of 15
+		let intervalId: number | null = null
+
 		async function poll() {
+			// Skip polling if page is not visible to save resources
+			if (!isPageVisible) {
+				if (!stopped) {
+					intervalId = setTimeout(poll, currentInterval)
+				}
+				return
+			}
+
 			try {
 				const res = await getVpsHealth()
-				if (!stopped) setVpsUp(res.status === 'ok')
+				if (!stopped) {
+					setVpsUp(res.status === 'ok')
+					retryCount = 0 // Reset retry count on success
+					currentInterval = 30000 // Reset to normal interval
+				}
 			} catch {
-				if (!stopped) setVpsUp(false)
+				if (!stopped) {
+					setVpsUp(false)
+					retryCount++
+					// Exponential backoff with max 5 minutes
+					currentInterval = Math.min(30000 * Math.pow(2, retryCount), 300000)
+					console.log(`VPS health check failed, next retry in ${currentInterval/1000}s`)
+				}
+			}
+			
+			// Schedule next poll only if not stopped
+			if (!stopped) {
+				intervalId = setTimeout(poll, currentInterval)
 			}
 		}
+
+		// Initial poll
 		poll()
-		const id = setInterval(poll, 15000)
-		return () => { stopped = true; clearInterval(id) }
-	}, [setVpsUp])
+
+		// Cleanup function
+		return () => { 
+			stopped = true
+			if (intervalId) clearTimeout(intervalId)
+		}
+	}, [setVpsUp, isPageVisible])
 
 	return (
 		<div style={{ 

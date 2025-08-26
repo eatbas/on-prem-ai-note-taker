@@ -144,10 +144,14 @@ async def process_transcribe_and_summarize_job(
             job_store.update(job_id, progress=80.0, message="Generating summary...")
             
             # Choose language for summary
-            lang_code = (
-                validated_language if validated_language in ("tr", "en")
-                else (getattr(info, "language", None) if getattr(info, "language", None) in ("tr", "en") else "en")
-            )
+            # Priority: 1) User specified language, 2) Whisper detected language, 3) Default to Turkish
+            if validated_language in ("tr", "en"):
+                lang_code = validated_language
+            elif hasattr(info, "language") and info.language in ("tr", "en"):
+                lang_code = info.language
+            else:
+                # Default to Turkish for auto/unknown languages
+                lang_code = "tr"
 
             prompt = get_single_summary_prompt(lang_code).format(transcript=transcript_text)
             summary = _ollama_client.generate(
@@ -174,6 +178,7 @@ async def process_transcribe_and_summarize_job(
                     id=meeting_id,
                     user_id=user.id,
                     title=f"Meeting {meeting_id[:8]}",
+                    language=validated_language,
                     duration=info.duration if hasattr(info, "duration") else None
                 )
                 db.add(meeting)

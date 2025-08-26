@@ -86,7 +86,7 @@ class ChunkedTranscriptionService:
                 # Process chunk
                 chunk_result = await self._process_chunk(
                     job_id, chunk_path, start_time, end_time, 
-                    chunk_idx, len(chunks), processed_seconds, total_duration
+                    chunk_idx, len(chunks), processed_seconds, total_duration, language
                 )
                 
                 if chunk_result.get("error"):
@@ -155,6 +155,7 @@ class ChunkedTranscriptionService:
                     id=meeting_id,
                     user_id=user.id,
                     title=f"Meeting {meeting_id[:8]}",
+                    language=language,
                     duration=total_duration
                 )
                 db.add(meeting)
@@ -220,7 +221,8 @@ class ChunkedTranscriptionService:
         chunk_idx: int,
         total_chunks: int,
         processed_seconds: float,
-        total_duration: float
+        total_duration: float,
+        language: str
     ) -> Dict[str, Any]:
         """Process a single audio chunk"""
         try:
@@ -233,7 +235,7 @@ class ChunkedTranscriptionService:
             # Transcribe chunk with configured quality settings
             segments, info = model.transcribe(
                 chunk_path,
-                language=None,  # Let Whisper auto-detect for chunks
+                language=language if language != "auto" else None,  # Use specified language or auto-detect
                 vad_filter=True,
                 vad_parameters=dict(
                     min_silence_duration_ms=settings.whisper_vad_min_silence_ms,

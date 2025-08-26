@@ -144,7 +144,13 @@ def summarize(req: SummarizeRequest) -> SummarizeResponse:
         validated_language = validate_language(req.language)
     except Exception:
         validated_language = "auto"
-    lang_code = validated_language if validated_language in ("tr", "en") else "en"
+    
+    # Improved language selection: prioritize Turkish for better local support
+    if validated_language in ("tr", "en"):
+        lang_code = validated_language
+    else:
+        # Default to Turkish for auto/unknown languages
+        lang_code = "tr"
 
     prompt = get_single_summary_prompt(lang_code).format(transcript=req.text)
     summary_text = _ollama_client.generate(
@@ -183,6 +189,7 @@ async def transcribe_and_summarize(
             id=meeting_id,
             user_id=user.id,
             title=f"Meeting {meeting_id[:8]}",  # Default title
+            language=validated_language,
         )
         db.add(meeting)
         
@@ -211,10 +218,15 @@ async def transcribe_and_summarize(
             validated_language = validate_language(language)
         except HTTPException:
             validated_language = "auto"
-        lang_code = (
-            validated_language if validated_language in ("tr", "en")
-            else (transcript.language if transcript.language in ("tr", "en") else "en")
-        )
+        
+        # Improved language selection: prioritize user choice, then detected, then Turkish default
+        if validated_language in ("tr", "en"):
+            lang_code = validated_language
+        elif transcript.language in ("tr", "en"):
+            lang_code = transcript.language
+        else:
+            # Default to Turkish for auto/unknown languages
+            lang_code = "tr"
 
         # Summarize with language-specific prompt
         prompt = get_single_summary_prompt(lang_code).format(transcript=transcript.text)

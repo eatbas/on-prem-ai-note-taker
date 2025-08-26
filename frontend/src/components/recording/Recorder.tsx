@@ -63,7 +63,7 @@ export default function Recorder({
 	const recordingTime = globalRecordingState.recordingTime
 	const [availableMics, setAvailableMics] = useState<MediaDeviceInfo[]>([])
 	const [selectedMic, setSelectedMic] = useState<string>('')
-	const [language, setLanguage] = useState<'tr' | 'en'>('tr')
+	const [language, setLanguage] = useState<'tr' | 'en' | 'auto'>('auto')
 
 	// Listen for global event from floating window to open mic selector
 	useEffect(() => {
@@ -193,17 +193,22 @@ export default function Recorder({
 				kind: device.kind
 			})))
 			
-			// Show all real devices (not brand-limited). Hide only the Communications duplicates.
-			// Deduplicate by label+groupId to avoid multiple entries of the same physical mic.
-			const dedupMap = new Map<string, MediaDeviceInfo>()
-			for (const device of audioInputs) {
-				const labelLower = device.label.toLowerCase()
-				// Skip the special "Communications" alias often shown on Windows
-				if (labelLower.startsWith('communications')) continue
-				const key = `${device.label}|${device.groupId || ''}`
-				if (!dedupMap.has(key)) dedupMap.set(key, device)
+			// Prefer a single 'Default' device if present; otherwise dedupe by label+groupId
+			const defaultDevice = audioInputs.find(d => /default/i.test(d.label))
+			let cleanDevices: MediaDeviceInfo[]
+			if (defaultDevice) {
+				cleanDevices = [defaultDevice]
+			} else {
+				const dedupMap = new Map<string, MediaDeviceInfo>()
+				for (const device of audioInputs) {
+					const labelLower = device.label.toLowerCase()
+					// Skip the special "Communications" alias often shown on Windows
+					if (labelLower.startsWith('communications')) continue
+					const key = `${device.label}|${device.groupId || ''}`
+					if (!dedupMap.has(key)) dedupMap.set(key, device)
+				}
+				cleanDevices = Array.from(dedupMap.values())
 			}
-			const cleanDevices = Array.from(dedupMap.values())
 			// Sort: default first if present, then by label
 			cleanDevices.sort((a, b) => {
 				const aDef = /default/i.test(a.label) ? -1 : 0
@@ -550,6 +555,11 @@ export default function Recorder({
 				systemAudioStreams.forEach(s => addStreamToMix(s, 0.9))
 				
 				combinedStream = dest.stream
+				// Fallback: if destination has no audio tracks for any reason, use mic stream directly
+				if (!combinedStream || combinedStream.getAudioTracks().length === 0) {
+					console.warn('Mix destination has no audio tracks; falling back to microphone stream directly')
+					combinedStream = new MediaStream(micStream.getAudioTracks())
+				}
 				
 				console.log(`Mixing graph created. Sources ->  mic: ${micStream.getAudioTracks().length}, system: ${systemAudioStreams.reduce((total, s) => total + s.getAudioTracks().length, 0)}`)
 
@@ -563,22 +573,55 @@ export default function Recorder({
 				mimeType: 'audio/webm;codecs=opus',
 				bitsPerSecond: 128000 // 128 kbps for clearer speech
 			})
+			
+			console.log('🎤 MediaRecorder created:', {
+				mimeType: rec.mimeType,
+				state: rec.state,
+				streamTracks: combinedStream.getTracks().length,
+				audioTracks: combinedStream.getAudioTracks().length
+			})
+			
 			// Default meeting title with start date/time for uniqueness
 			const now = new Date()
 			const human = now.toLocaleString()
 			const meeting = await createMeeting(`Meeting ${human}`, [], language)
 			const createdId = meeting.id
 			
+			console.log('📝 Meeting created:', {
+				id: createdId.slice(0, 8) + '...',
+				title: meeting.title,
+				language
+			})
+			
 			// Call onCreated callback
 			onCreated(createdId)
 
 			// Use env-driven chunk size (default 30s) for better context
 			const chunkMs = Number((import.meta as any).env?.VITE_AUDIO_CHUNK_MS ?? 30000)
+			console.log('🎵 Starting MediaRecorder with chunk interval:', {
+				chunkMs,
+				chunkSeconds: chunkMs / 1000,
+				fromEnv: (import.meta as any).env?.VITE_AUDIO_CHUNK_MS
+			})
+			
+			// Make sure media context is resumed (autoplay policies can suspend it)
+			try { await mixingAudioContextRef.current?.resume() } catch {}
+			
 			rec.start(isNaN(chunkMs) ? 30000 : chunkMs)
+			console.log('▶️ MediaRecorder.start() called, state:', rec.state)
 			mediaRecorderRef.current = rec
 			
+			// Prevent accidental double recording
+			try {
+				if (globalRecordingManager.isCurrentlyRecording() && globalRecordingManager.getCurrentMeetingId() !== createdId) {
+					console.warn('Detected existing recording; stopping it before starting new one')
+					globalRecordingManager.stopRecording()
+				}
+			} catch {}
 			// Use global recording manager instead of local state
+			console.log('🎙️ Starting global recording manager...')
 			globalRecordingManager.startRecording(createdId, rec)
+			console.log('✅ Global recording manager started successfully')
 			
 			setShowMicModal(false)
 
@@ -612,6 +655,8 @@ export default function Recorder({
 	}
 
 	function stop() {
+		// Flush last data if recorder is active
+		try { mediaRecorderRef.current?.requestData() } catch {}
 		// Use global recording manager to stop recording
 		const stoppedMeetingId = globalRecordingManager.stopRecording()
 		
@@ -1227,12 +1272,13 @@ export default function Recorder({
 									justifyContent: 'center'
 								}}>
 									{[
+										{ value: 'auto', label: 'Auto (TR default)' },
 										{ value: 'tr', label: 'Türkçe' },
 										{ value: 'en', label: 'English' }
 									].map((option) => (
 										<button
 											key={option.value}
-											onClick={() => setLanguage(option.value as 'tr' | 'en')}
+											onClick={() => setLanguage(option.value as 'tr' | 'en' | 'auto')}
 											style={{
 												padding: '8px 16px',
 												backgroundColor: language === option.value ? '#3b82f6' : '#f3f4f6',
@@ -1288,31 +1334,32 @@ export default function Recorder({
 							</div>
 							<button
 								onClick={startRecordingWithSelectedMic}
-								disabled={!selectedMic}
+								disabled={!selectedMic || recording}
 								style={{
 									width: '100%',
 									padding: '12px 24px',
-									backgroundColor: selectedMic ? '#8b5cf6' : '#9ca3af',
+									backgroundColor: (!selectedMic || recording) ? '#9ca3af' : '#8b5cf6',
 									color: 'white',
 									border: 'none',
 									borderRadius: '8px',
 									fontSize: '16px',
 									fontWeight: '600',
-									cursor: selectedMic ? 'pointer' : 'not-allowed',
-									transition: 'background-color 0.2s ease'
+									cursor: (!selectedMic || recording) ? 'not-allowed' : 'pointer',
+									transition: 'background-color 0.2s ease',
+									opacity: recording ? 0.6 : 1
 								}}
 								onMouseEnter={(e) => {
-									if (selectedMic) {
+									if (selectedMic && !recording) {
 										e.currentTarget.style.backgroundColor = '#7c3aed'
 									}
 								}}
 								onMouseLeave={(e) => {
-									if (selectedMic) {
+									if (selectedMic && !recording) {
 										e.currentTarget.style.backgroundColor = '#8b5cf6'
 									}
 								}}
 							>
-								🎙️ Start Recording
+								{recording ? '🎙️ Recording in Progress...' : '🎙️ Start Recording'}
 							</button>
 						</div>
 					</div>

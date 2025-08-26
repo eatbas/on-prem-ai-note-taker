@@ -69,6 +69,7 @@ class MeetingService:
             id=meeting_id,
             user_id=user.id,
             title=title,
+            language=validated_language,
             tags=json.dumps(["auto-processed"])
         )
         db.add(meeting)
@@ -133,10 +134,17 @@ class MeetingService:
                     meeting.duration = info.duration
                 
                 # Determine language to use for prompt
-                lang_code = (
-                    validated_language if validated_language in ("tr", "en")
-                    else (getattr(info, "language", None) if getattr(info, "language", None) in ("tr", "en") else "en")
-                )
+                # Priority: 1) User specified language, 2) Whisper detected language, 3) Default to Turkish
+                if validated_language in ("tr", "en"):
+                    lang_code = validated_language
+                elif hasattr(info, "language") and info.language in ("tr", "en"):
+                    lang_code = info.language
+                elif validated_language == "auto":
+                    # For auto mode, default to Turkish since it's the primary use case
+                    lang_code = "tr"
+                else:
+                    # Fallback to Turkish for better local support
+                    lang_code = "tr"
 
                 # Generate summary using language-specific prompt
                 prompt = get_single_summary_prompt(lang_code).format(transcript=transcript_text)

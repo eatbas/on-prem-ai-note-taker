@@ -5,7 +5,7 @@ export function generateId(prefix = 'id'): string {
 	return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`
 }
 
-export async function createMeeting(title: string, tags: string[] = [], language: 'tr' | 'en' = 'tr'): Promise<Meeting> {
+export async function createMeeting(title: string, tags: string[] = [], language: 'tr' | 'en' | 'auto' = 'auto'): Promise<Meeting> {
 	const meeting: Meeting = {
 		id: generateId('meeting'),
 		title,
@@ -20,6 +20,14 @@ export async function createMeeting(title: string, tags: string[] = [], language
 }
 
 export async function addChunk(meetingId: string, blob: Blob, index: number): Promise<void> {
+	console.log(`💾 addChunk called:`, {
+		meetingId: meetingId.slice(0, 8) + '...',
+		blobSize: blob.size,
+		blobType: blob.type,
+		index,
+		timestamp: new Date().toISOString()
+	})
+	
 	const chunk: Chunk = {
 		id: generateId('chunk'),
 		meetingId,
@@ -27,7 +35,14 @@ export async function addChunk(meetingId: string, blob: Blob, index: number): Pr
 		blob,
 		createdAt: Date.now(),
 	}
-	await db.chunks.add(chunk)
+	
+	try {
+		await db.chunks.add(chunk)
+		console.log(`✅ Chunk ${index} saved successfully to database (${blob.size} bytes)`)
+	} catch (error) {
+		console.error(`❌ Failed to save chunk ${index} to database:`, error)
+		throw error
+	}
 }
 
 export async function listMeetings(query?: { tag?: string; text?: string; excludeRecordingInProgress?: boolean }): Promise<any[]> {
@@ -92,7 +107,9 @@ export async function syncMeeting(meetingId: string): Promise<void> {
 	console.log(`Syncing meeting ${meetingId}, file size: ${(file.size / 1024 / 1024).toFixed(2)} MB`)
 	
 	try {
-		const res = await transcribeAndSummarize(file, { language: meeting.language })
+		// Ensure we always pass a valid language, defaulting to 'auto' for undefined
+		const language = meeting.language || 'auto'
+		const res = await transcribeAndSummarize(file, { language })
 		await db.notes.put({ 
 			meetingId, 
 			transcript: res.transcript.text, 
@@ -171,9 +188,11 @@ export async function autoProcessMeetingRecording(
 	
 	try {
 		// Use the new auto-process endpoint for better reliability
+		// Ensure we always pass a valid language, defaulting to 'auto' for undefined
+		const language = meeting.language || 'auto'
 		const result = await autoProcessMeeting(
 			file, 
-			meeting.language, 
+			language, 
 			title || meeting.title
 		)
 		

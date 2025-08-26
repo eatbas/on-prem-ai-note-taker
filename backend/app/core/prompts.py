@@ -44,9 +44,9 @@ Dili Türkçe tut ve kısa tut.
 Birleştirilecek özetler:
 {summaries}"""
 
-# Auto language prompt (defaults to English)
-CHUNK_PROMPT_AUTO = CHUNK_PROMPT_EN
-MERGE_PROMPT_AUTO = MERGE_PROMPT_EN
+# Auto language prompt (defaults to Turkish for better local support)
+CHUNK_PROMPT_AUTO = CHUNK_PROMPT_TR
+MERGE_PROMPT_AUTO = MERGE_PROMPT_TR
 
 # One-shot summary prompts
 SINGLE_SUMMARY_PROMPT_EN = (
@@ -84,7 +84,9 @@ def get_merge_prompt(language: str) -> str:
 
 def get_single_summary_prompt(language: str) -> str:
     """Get the appropriate one-shot summary prompt based on language"""
-    if language == "tr":
+    if language == "tr" or language == "auto":
         return SINGLE_SUMMARY_PROMPT_TR
-    # Default to English
-    return SINGLE_SUMMARY_PROMPT_EN
+    elif language == "en":
+        return SINGLE_SUMMARY_PROMPT_EN
+    # Default to Turkish for better local support
+    return SINGLE_SUMMARY_PROMPT_TR

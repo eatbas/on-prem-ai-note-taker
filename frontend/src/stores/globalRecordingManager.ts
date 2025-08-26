@@ -9,6 +9,7 @@ interface GlobalRecordingState {
 	chunkIndex: number
 	recordingInterval: number | null
 	startTime: number | null
+	dataRequestInterval?: number | null
 }
 
 class GlobalRecordingManager {
@@ -19,7 +20,8 @@ class GlobalRecordingManager {
 		recordingTime: 0,
 		chunkIndex: 0,
 		recordingInterval: null,
-		startTime: null
+		startTime: null,
+		dataRequestInterval: null
 	}
 
 	private listeners: Set<(state: GlobalRecordingState) => void> = new Set()
@@ -129,11 +131,27 @@ class GlobalRecordingManager {
 
 		// Set up data handler
 		mediaRecorder.ondataavailable = async (e: BlobEvent) => {
+			console.log('🎵 MediaRecorder ondataavailable event fired:', {
+				hasData: !!e.data,
+				dataSize: e.data?.size || 0,
+				currentChunkIndex: this.state.chunkIndex,
+				meetingId: meetingId.slice(0, 8) + '...'
+			})
+			
 			if (e.data && e.data.size > 0) {
-				await addChunk(meetingId, e.data, this.state.chunkIndex++)
-				console.log(`📁 Global Recording Manager: Saved chunk ${this.state.chunkIndex - 1}`)
-				// Save state after each chunk
-				this.saveState()
+				try {
+					await addChunk(meetingId, e.data, this.state.chunkIndex++)
+					console.log(`📁 Global Recording Manager: Successfully saved chunk ${this.state.chunkIndex - 1} (${e.data.size} bytes)`)
+					// Save state after each chunk
+					this.saveState()
+				} catch (error) {
+					console.error(`❌ Failed to save chunk ${this.state.chunkIndex}:`, error)
+				}
+			} else {
+				console.warn('⚠️ ondataavailable fired but no valid data:', {
+					hasData: !!e.data,
+					dataSize: e.data?.size || 0
+				})
 			}
 		}
 
@@ -148,6 +166,18 @@ class GlobalRecordingManager {
 				this.saveState()
 			}
 		}, 1000)
+
+		// Safety: periodically force data flush in case timeslice is ignored by platform
+		try {
+			const fallbackMs = 10000
+			this.state.dataRequestInterval = window.setInterval(() => {
+				try {
+					if (this.state.mediaRecorder && this.state.mediaRecorder.state === 'recording') {
+						this.state.mediaRecorder.requestData()
+					}
+				} catch {}
+			}, fallbackMs)
+		} catch {}
 
 		// Save initial state
 		this.saveState()
@@ -173,6 +203,9 @@ class GlobalRecordingManager {
 		if (this.state.recordingInterval) {
 			clearInterval(this.state.recordingInterval)
 		}
+		if (this.state.dataRequestInterval) {
+			clearInterval(this.state.dataRequestInterval)
+		}
 
 		const meetingId = this.state.meetingId
 		
@@ -187,6 +220,7 @@ class GlobalRecordingManager {
 		this.state.chunkIndex = 0
 		this.state.recordingInterval = null
 		this.state.startTime = null
+		this.state.dataRequestInterval = null
 
 		this.notifyListeners()
 		return meetingId

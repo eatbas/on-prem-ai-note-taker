@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useCallback } from 'react'
 import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, deleteMeeting, db } from '../services'
 import AskLlama from './AskLlama'
 
 import { useToast } from '../components/common'
 import { createRippleEffect } from '../utils'
+import { useDebounce } from '../hooks/useDebounce'
 
 export default function Dashboard({ 
 	onOpen, 
@@ -41,6 +42,10 @@ export default function Dashboard({
 	const [vpsError, setVpsError] = useState<string | null>(null)
 	const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
 	const { showToast, ToastContainer } = useToast()
+	
+	// Debounce search terms to avoid API calls on every keystroke
+	const debouncedText = useDebounce(text, 500) // 500ms delay
+	const debouncedTag = useDebounce(tag, 300) // 300ms delay
 	
 	// Context menu state
 	const [contextMenu, setContextMenu] = useState<{
@@ -150,58 +155,76 @@ export default function Dashboard({
 		closeContextMenu()
 	}
 
-	async function refresh() {
-		console.log('🔄 Dashboard refresh started')
+	const refresh = useCallback(async (searchText?: string, searchTag?: string) => {
+		// Use provided parameters or fall back to debounced values
+		const effectiveText = searchText !== undefined ? searchText : debouncedText
+		const effectiveTag = searchTag !== undefined ? searchTag : debouncedTag
+		
+		console.log('🔄 Dashboard refresh started', { effectiveText, effectiveTag })
 		setLoading(true)
 		setError(null)
 		try {
 			if (online) {
 				// Always load local meetings first so user sees something immediately
-				const localMeetings = await listMeetings({ text, tag, excludeRecordingInProgress: true })
+				const localMeetings = await listMeetings({ 
+					text: effectiveText, 
+					tag: effectiveTag, 
+					excludeRecordingInProgress: true 
+				})
 				console.log('📁 Loaded local meetings:', localMeetings.length)
 				setMeetings(localMeetings)
 				
-				// Try to fetch from backend and merge
-				try {
-					console.log('🌐 Attempting to fetch from VPS backend...')
-					const backendMeetings = await getMeetings()
-					console.log('☁️ Loaded VPS meetings:', backendMeetings.length)
-					const byId = new Map<string, any>()
-					// Start with local meetings to preserve any unsent ones
-					for (const m of localMeetings) byId.set(m.id, m)
-					// Overlay with backend data
-					for (const m of backendMeetings as any[]) {
-						const existing = byId.get(m.id)
-						// Merge backend data with local data, preferring backend for processed content
-						byId.set(m.id, { 
-							...existing, 
-							...m, 
-							// Keep local status if it's more recent or unsent
-							status: existing?.status === 'local' ? existing.status : m.status || 'sent',
-							// Keep local tags and title if they exist
-							tags: existing?.tags || [],
-							title: existing?.title || m.title
-						})
+				// Try to fetch from backend and merge (only if VPS is up)
+				if (vpsUp) {
+					try {
+						console.log('🌐 Attempting to fetch from VPS backend...')
+						const backendMeetings = await getMeetings()
+						console.log('☁️ Loaded VPS meetings:', backendMeetings.length)
+						const byId = new Map<string, any>()
+						// Start with local meetings to preserve any unsent ones
+						for (const m of localMeetings) byId.set(m.id, m)
+						// Overlay with backend data
+						for (const m of backendMeetings as any[]) {
+							const existing = byId.get(m.id)
+							// Merge backend data with local data, preferring backend for processed content
+							byId.set(m.id, { 
+								...existing, 
+								...m, 
+								// Keep local status if it's more recent or unsent
+								status: existing?.status === 'local' ? existing.status : m.status || 'sent',
+								// Keep local tags and title if they exist
+								tags: existing?.tags || [],
+								title: existing?.title || m.title
+							})
+						}
+						const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
+						console.log('🔄 Merged meetings:', mergedMeetings.length)
+						setMeetings(mergedMeetings)
+					} catch (backendErr) {
+						// Backend failed, but we still have local data
+						console.warn('❌ Backend fetch failed, using local data:', backendErr)
+						setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
 					}
-					const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-					console.log('🔄 Merged meetings:', mergedMeetings.length)
-					setMeetings(mergedMeetings)
-				} catch (backendErr) {
-					// Backend failed, but we still have local data
-					console.warn('❌ Backend fetch failed, using local data:', backendErr)
-					setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
 				}
 			} else {
 				// Use local data when offline
 				console.log('📱 Offline mode - using local data only')
-				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: true }))
+				setMeetings(await listMeetings({ 
+					text: effectiveText, 
+					tag: effectiveTag, 
+					excludeRecordingInProgress: true 
+				}))
 			}
 		} catch (err) {
 			console.error('❌ Failed to load meetings:', err)
 			setError(`Failed to load meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
 			// Try to load any local data as last resort
 			try {
-				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: true }))
+				setMeetings(await listMeetings({ 
+					text: effectiveText, 
+					tag: effectiveTag, 
+					excludeRecordingInProgress: true 
+				}))
 			} catch (localErr) {
 				console.error('❌ Even local data failed:', localErr)
 				setMeetings([])
@@ -210,7 +233,7 @@ export default function Dashboard({
 			setLoading(false)
 			console.log('✅ Dashboard refresh completed')
 		}
-	}
+	}, [debouncedText, debouncedTag, online, vpsUp])
 
 	async function clearAllLocalData() {
 		// Ask for confirmation before clearing all data
@@ -324,9 +347,10 @@ export default function Dashboard({
 		}
 	}
 
+	// Use debounced values for search to avoid excessive API calls
 	useEffect(() => {
 		refresh()
-	}, [text, tag, online])
+	}, [refresh]) // refresh is now memoized with debounced values as dependencies
 
 	// Re-run refresh when parent bumps refreshSignal (e.g., on recording stop)
 	useEffect(() => {
@@ -413,10 +437,10 @@ export default function Dashboard({
 		}
 	}, [totalPages, currentPage])
 
-	// Reset to first page when search/filter changes
+	// Reset to first page when search/filter changes (using debounced values)
 	useEffect(() => {
 		setCurrentPage(1)
-	}, [text, tag])
+	}, [debouncedText, debouncedTag])
 
 	// Add pagination controls at the bottom
 	const PaginationControls = () => (

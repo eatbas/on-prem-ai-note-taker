@@ -23,13 +23,20 @@ export default function JobQueue({ online, vpsUp }: JobQueueProps) {
 		return unsubscribe
 	}, [])
 
-	// Auto-refresh active jobs every 5 seconds
+	// Auto-refresh active jobs every 20 seconds (reduced from 5 seconds)
+	// Only refresh when there are actually active jobs to reduce unnecessary API calls
 	useEffect(() => {
 		if (!online || !vpsUp) return
 
+		const hasActiveJobs = jobHistory.some(job => 
+			['pending', 'transcribing', 'summarizing', 'finalizing'].includes(job.status)
+		)
+
+		if (!hasActiveJobs) return // Don't poll if no active jobs
+
 		const interval = setInterval(() => {
 			refreshActiveJobs()
-		}, 5000)
+		}, 20000)
 
 		return () => clearInterval(interval)
 	}, [online, vpsUp, jobHistory])

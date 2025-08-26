@@ -113,6 +113,7 @@ async def list_meetings(
             transcription=transcription.text if transcription else None,
             summary=summary.summary_text if summary else None,
             duration=meeting.duration,
+            language=meeting.language or "auto",
             tags=tags,
         ))
     
@@ -160,6 +161,7 @@ async def get_meeting(
         transcription=transcription.text if transcription else None,
         summary=summary.summary_text if summary else None,
         duration=meeting.duration,
+        language=meeting.language or "auto",
         tags=tags,
     )
 
@@ -290,6 +292,7 @@ async def start_meeting(
         id=meeting_id,
         user_id=user.id,
         title=request.title,
+        language=validated_language,
         tags=json.dumps(request.tags) if request.tags else None
     )
     db.add(meeting)

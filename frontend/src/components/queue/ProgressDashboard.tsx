@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { getProgressStats, getQueueStats, type ProgressStats, type QueueStats } from '../../services'
+import { usePageVisibility } from '../../hooks/usePageVisibility'
 
 interface ProgressDashboardProps {
 	online: boolean
@@ -12,6 +13,7 @@ export default function ProgressDashboard({ online, vpsUp }: ProgressDashboardPr
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+	const isPageVisible = usePageVisibility()
 
 	const loadStats = async () => {
 		if (!online || !vpsUp) return
@@ -36,12 +38,23 @@ export default function ProgressDashboard({ online, vpsUp }: ProgressDashboardPr
 		}
 	}
 
-	// Auto-refresh every 10 seconds
+	// Auto-refresh every 30 seconds (reduced from 10 seconds)
+	// Only poll when component is visible and VPS is up
 	useEffect(() => {
+		if (!online || !vpsUp || !isPageVisible) return
+
+		// Initial load
 		loadStats()
-		const interval = setInterval(loadStats, 10000)
+		
+		// Set up interval with reduced frequency
+		const interval = setInterval(() => {
+			// Only load stats if page is still visible
+			if (isPageVisible) {
+				loadStats()
+			}
+		}, 30000)
 		return () => clearInterval(interval)
-	}, [online, vpsUp])
+	}, [online, vpsUp, isPageVisible])
 
 	const formatDuration = (seconds: number) => {
 		if (seconds < 60) return `${Math.round(seconds)}s`

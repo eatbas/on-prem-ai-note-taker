@@ -38,7 +38,8 @@ function getAuthHeader(): Record<string, string> {
 export async function transcribe(file: File, opts?: { language?: string; vadFilter?: boolean }) {
 	const form = new FormData()
 	form.append('file', file)
-	if (opts?.language) form.append('language', opts.language)
+	// Always send a language parameter, defaulting to 'auto' for undefined/null/empty
+	form.append('language', opts?.language || 'auto')
 	if (opts?.vadFilter !== undefined) form.append('vad_filter', String(opts.vadFilter))
 
 	// Add job to queue for tracking
@@ -87,7 +88,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	return result
 }
 
-export async function summarize(text: string) {
+export async function summarize(text: string, language: string = 'auto') {
 	// Add job to queue for tracking
 	const jobId = `summarize_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 	
@@ -102,7 +103,7 @@ export async function summarize(text: string) {
 	const resp = await fetch(`${apiBase}/summarize`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
-		body: JSON.stringify({ text }),
+		body: JSON.stringify({ text, language }),
 	})
 	
 	if (!resp.ok) {
@@ -193,7 +194,8 @@ export async function chat(prompt: string, model?: string) {
 export async function transcribeAndSummarize(file: File, opts?: { language?: string; vadFilter?: boolean }) {
 	const form = new FormData()
 	form.append('file', file)
-	if (opts?.language) form.append('language', opts.language)
+	// Always send a language parameter, defaulting to 'auto' for undefined/null/empty
+	form.append('language', opts?.language || 'auto')
 	if (opts?.vadFilter !== undefined) form.append('vad_filter', String(opts.vadFilter))
 
 	// Add job to queue for tracking
@@ -545,7 +547,7 @@ export async function getProgressStats(): Promise<ProgressStats> {
 // ===== 🎬 ENHANCED MEETING WORKFLOW =====
 export async function startMeeting(
 	title: string,
-	language: 'tr' | 'en',
+	language: 'tr' | 'en' | 'auto',
 	tags?: string[]
 ): Promise<{ meeting_id: string; job_id: string; message: string; language: string }> {
 	const payload = {
