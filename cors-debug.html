@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 CORS Debug Tool - AI Note Taker</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+        }
+        h1 { color: #2c3e50; margin-bottom: 30px; }
+        .test-section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #007bff;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #6c757d; cursor: not-allowed; }
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-bottom: 10px;
+            font-size: 14px;
+        }
+        .config-section {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+        }
+        label { font-weight: bold; display: block; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 CORS Debug Tool - AI Note Taker</h1>
+        
+        <div class="config-section">
+            <label for="apiBase">API Base URL:</label>
+            <input type="text" id="apiBase" value="http://95.111.244.159:8000/api" placeholder="Enter API base URL">
+            
+            <label for="username">Username:</label>
+            <input type="text" id="username" value="myca" placeholder="Basic auth username">
+            
+            <label for="password">Password:</label>
+            <input type="text" id="password" value="wj2YyxrJ4cqcXgCA" placeholder="Basic auth password">
+        </div>
+
+        <div class="test-section">
+            <h3>🌐 Test 1: Basic Connectivity</h3>
+            <p>Test if we can reach the health endpoint with proper CORS headers.</p>
+            <button onclick="testBasicConnectivity()">Run Test 1</button>
+            <div id="test1-result" class="result info">Click "Run Test 1" to start...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔐 Test 2: Authentication</h3>
+            <p>Test if authentication is working properly.</p>
+            <button onclick="testAuthentication()">Run Test 2</button>
+            <div id="test2-result" class="result info">Click "Run Test 2" to start...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>📤 Test 3: File Upload CORS</h3>
+            <p>Test if file upload endpoints accept CORS requests.</p>
+            <button onclick="testFileUpload()">Run Test 3</button>
+            <div id="test3-result" class="result info">Click "Run Test 3" to start...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🔄 Test 4: Preflight Requests</h3>
+            <p>Manually test OPTIONS preflight requests that browsers send.</p>
+            <button onclick="testPreflight()">Run Test 4</button>
+            <div id="test4-result" class="result info">Click "Run Test 4" to start...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🧪 Test 5: Full API Call</h3>
+            <p>Test a real API call with authentication and CORS.</p>
+            <button onclick="testFullAPICall()">Run Test 5</button>
+            <div id="test5-result" class="result info">Click "Run Test 5" to start...</div>
+        </div>
+
+        <div class="test-section">
+            <h3>🚀 Test All</h3>
+            <p>Run all tests sequentially to get a full report.</p>
+            <button onclick="runAllTests()">Run All Tests</button>
+            <button onclick="clearResults()">Clear Results</button>
+        </div>
+    </div>
+
+    <script>
+        function getConfig() {
+            return {
+                apiBase: document.getElementById('apiBase').value.trim(),
+                username: document.getElementById('username').value.trim(),
+                password: document.getElementById('password').value.trim()
+            };
+        }
+
+        function getAuthHeader() {
+            const config = getConfig();
+            if (config.username && config.password) {
+                const token = btoa(`${config.username}:${config.password}`);
+                return { 'Authorization': `Basic ${token}` };
+            }
+            return {};
+        }
+
+        function logResult(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.className = `result ${type}`;
+            element.textContent = message;
+        }
+
+        async function testBasicConnectivity() {
+            logResult('test1-result', 'Testing basic connectivity...', 'info');
+            const config = getConfig();
+            
+            try {
+                const response = await fetch(`${config.apiBase}/health`, {
+                    method: 'GET',
+                    headers: getAuthHeader()
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    logResult('test1-result', `✅ SUCCESS: Connected to API
+Status: ${response.status}
+Data: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    logResult('test1-result', `❌ ERROR: HTTP ${response.status}
+Status Text: ${response.statusText}
+Headers: ${JSON.stringify(Object.fromEntries(response.headers.entries()), null, 2)}`, 'error');
+                }
+            } catch (error) {
+                logResult('test1-result', `❌ NETWORK ERROR: ${error.message}
+Error Type: ${error.constructor.name}
+Stack: ${error.stack}`, 'error');
+            }
+        }
+
+        async function testAuthentication() {
+            logResult('test2-result', 'Testing authentication...', 'info');
+            const config = getConfig();
+            
+            try {
+                // Test without auth first
+                const noAuthResponse = await fetch(`${config.apiBase}/health`, {
+                    method: 'GET'
+                });
+                
+                // Test with auth
+                const authResponse = await fetch(`${config.apiBase}/health`, {
+                    method: 'GET',
+                    headers: getAuthHeader()
+                });
+                
+                let result = `No Auth Response: ${noAuthResponse.status} ${noAuthResponse.statusText}\n`;
+                result += `With Auth Response: ${authResponse.status} ${authResponse.statusText}\n`;
+                
+                if (authResponse.ok) {
+                    const data = await authResponse.json();
+                    result += `Auth Data: ${JSON.stringify(data, null, 2)}`;
+                    logResult('test2-result', `✅ SUCCESS: Authentication working\n${result}`, 'success');
+                } else {
+                    logResult('test2-result', `❌ ERROR: Authentication failed\n${result}`, 'error');
+                }
+            } catch (error) {
+                logResult('test2-result', `❌ ERROR: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFileUpload() {
+            logResult('test3-result', 'Testing file upload CORS...', 'info');
+            const config = getConfig();
+            
+            try {
+                // Create a dummy file
+                const dummyFile = new File(['test content'], 'test.txt', { type: 'text/plain' });
+                const formData = new FormData();
+                formData.append('file', dummyFile);
+                
+                const response = await fetch(`${config.apiBase}/transcribe`, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        ...getAuthHeader(),
+                        'X-User-Id': 'test-user'
+                    }
+                });
+                
+                logResult('test3-result', `File Upload Test: ${response.status} ${response.statusText}
+CORS Headers:
+${JSON.stringify(Object.fromEntries([...response.headers.entries()].filter(([k, v]) => k.includes('access-control'))), null, 2)}`, 
+                    response.status < 500 ? 'success' : 'error');
+            } catch (error) {
+                logResult('test3-result', `❌ ERROR: ${error.message}`, 'error');
+            }
+        }
+
+        async function testPreflight() {
+            logResult('test4-result', 'Testing preflight requests...', 'info');
+            const config = getConfig();
+            
+            try {
+                const response = await fetch(`${config.apiBase}/health`, {
+                    method: 'OPTIONS',
+                    headers: {
+                        'Origin': window.location.origin,
+                        'Access-Control-Request-Method': 'POST',
+                        'Access-Control-Request-Headers': 'Authorization,Content-Type'
+                    }
+                });
+                
+                const corsHeaders = {};
+                for (const [key, value] of response.headers.entries()) {
+                    if (key.includes('access-control')) {
+                        corsHeaders[key] = value;
+                    }
+                }
+                
+                logResult('test4-result', `Preflight Response: ${response.status} ${response.statusText}
+CORS Headers:
+${JSON.stringify(corsHeaders, null, 2)}
+Origin: ${window.location.origin}`, 'success');
+            } catch (error) {
+                logResult('test4-result', `❌ ERROR: ${error.message}`, 'error');
+            }
+        }
+
+        async function testFullAPICall() {
+            logResult('test5-result', 'Testing full API call...', 'info');
+            const config = getConfig();
+            
+            try {
+                // Test a simple chat request
+                const response = await fetch(`${config.apiBase}/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        ...getAuthHeader()
+                    },
+                    body: JSON.stringify({
+                        prompt: 'Hello, this is a test message.',
+                        model: 'qwen2.5:3b-instruct'
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    logResult('test5-result', `✅ SUCCESS: Full API call working
+Response: ${JSON.stringify(data, null, 2)}`, 'success');
+                } else {
+                    const errorText = await response.text();
+                    logResult('test5-result', `❌ ERROR: ${response.status} ${response.statusText}
+Error: ${errorText}`, 'error');
+                }
+            } catch (error) {
+                logResult('test5-result', `❌ ERROR: ${error.message}`, 'error');
+            }
+        }
+
+        async function runAllTests() {
+            await testBasicConnectivity();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testAuthentication();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testFileUpload();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testPreflight();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            await testFullAPICall();
+        }
+
+        function clearResults() {
+            ['test1-result', 'test2-result', 'test3-result', 'test4-result', 'test5-result'].forEach(id => {
+                logResult(id, 'Test not run yet...', 'info');
+            });
+        }
+
+        // Auto-detect current origin and suggest API URL
+        window.addEventListener('load', () => {
+            const currentOrigin = window.location.origin;
+            console.log('🔧 CORS Debug Tool loaded from:', currentOrigin);
+            console.log('🔧 Testing API at:', document.getElementById('apiBase').value);
+            
+            // Show browser info
+            const browserInfo = `Browser: ${navigator.userAgent}
+Origin: ${currentOrigin}
+Protocol: ${window.location.protocol}`;
+            console.log('🔧 Browser Info:', browserInfo);
+        });
+    </script>
+</body>
+</html>

@@ -1,2 +1,11 @@
 scripts\start-electron-dev.bat
 .\scripts\build-desktop-app.bat
+
+
+❓ MISSING or UNDERUTILIZED in Frontend:
+  - 🏷️ Tags management (/api/tags) - Backend supports, frontend doesn't use
+  - 📤 Queue system (/api/queue/*) - Backend supports, frontend doesn't use
+  - 📈 Progress stats (/api/progress/stats) - Backend supports, frontend doesn't use
+  - 🎬 Meeting start workflow (/api/meetings/start) - Backend supports, frontend doesn't use
+  - 📎 Meeting audio upload (/api/meetings/{id}/upload-audio) - Backend supports, frontend doesn't use
+  - 🏷️ Meeting tags update (/api/meetings/{id}/tags) - Backend supports, frontend doesn't use

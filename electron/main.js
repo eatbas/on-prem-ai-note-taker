@@ -26,7 +26,9 @@ function createWindow() {
 			nodeIntegration: false,
 			contextIsolation: true,
 			preload: path.join(__dirname, 'preload.js'),
-			webSecurity: false // Allow loading local files
+			webSecurity: false, // Allow loading local files
+			allowRunningInsecureContent: true, // Allow HTTP content from HTTPS
+			experimentalFeatures: true // Enable experimental web features
 		},
 		icon: path.join(__dirname, 'default-icon.svg')
 	})
@@ -218,7 +220,9 @@ function createFloatingRecorderWindow() {
 			nodeIntegration: false,
 			contextIsolation: true,
 			preload: path.join(__dirname, 'preload.js'),
-			webSecurity: false
+			webSecurity: false, // Allow loading local files
+			allowRunningInsecureContent: true, // Allow HTTP content from HTTPS
+			experimentalFeatures: true // Enable experimental web features
 		},
 		show: false, // Don't show until recording starts
 		transparent: true, // Allow for rounded corners
@@ -279,6 +283,44 @@ app.whenReady().then(() => {
 		console.log('🔗 VPS Backend: http://95.111.244.159:8000/api')
 		console.log('👤 Auth User: myca')
 		console.log('🌐 Development Mode: Always connects to VPS for AI services')
+		
+		// Add request interceptor to handle CORS issues
+		const { session } = require('electron')
+		
+		// Intercept and modify requests to VPS
+		session.defaultSession.webRequest.onBeforeSendHeaders(
+			{ urls: ['http://95.111.244.159:8000/*'] },
+			(details, callback) => {
+				// Add CORS headers to requests
+				details.requestHeaders['Origin'] = 'electron://app'
+				details.requestHeaders['User-Agent'] = 'ElectronApp/1.0'
+				
+				// Ensure auth header is present
+				if (!details.requestHeaders['Authorization'] && 
+					details.url.includes('95.111.244.159:8000/api')) {
+					const credentials = Buffer.from('myca:wj2YyxrJ4cqcXgCA').toString('base64')
+					details.requestHeaders['Authorization'] = `Basic ${credentials}`
+				}
+				
+				console.log('🔧 Modified request headers for:', details.url)
+				callback({ requestHeaders: details.requestHeaders })
+			}
+		)
+		
+		// Handle response headers
+		session.defaultSession.webRequest.onHeadersReceived(
+			{ urls: ['http://95.111.244.159:8000/*'] },
+			(details, callback) => {
+				// Ensure CORS headers are present in response
+				details.responseHeaders['Access-Control-Allow-Origin'] = ['*']
+				details.responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS']
+				details.responseHeaders['Access-Control-Allow-Headers'] = ['*']
+				details.responseHeaders['Access-Control-Allow-Credentials'] = ['true']
+				
+				console.log('🔧 Modified response headers for:', details.url)
+				callback({ responseHeaders: details.responseHeaders })
+			}
+		)
 		
 		createWindow()
 		createFloatingRecorderWindow()

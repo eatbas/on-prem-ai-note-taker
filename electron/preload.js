@@ -102,3 +102,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
 		ipcRenderer.removeAllListeners('app-closing-stop-recording')
 	}
 })
+
+// CORS debugging functionality
+contextBridge.exposeInMainWorld('corsDebug', {
+	testConnection: async () => {
+		try {
+			const response = await fetch('http://95.111.244.159:8000/api/health', {
+				method: 'GET',
+				headers: {
+					'Authorization': 'Basic ' + btoa('myca:wj2YyxrJ4cqcXgCA'),
+					'Content-Type': 'application/json'
+				}
+			})
+			
+			console.log('🔧 CORS Test Response:', response.status, response.statusText)
+			
+			if (response.ok) {
+				const data = await response.json()
+				console.log('🔧 CORS Test Data:', data)
+				return { success: true, data }
+			} else {
+				return { success: false, error: `HTTP ${response.status}` }
+			}
+		} catch (error) {
+			console.error('🔧 CORS Test Error:', error)
+			return { success: false, error: error.message }
+		}
+	}
+})
