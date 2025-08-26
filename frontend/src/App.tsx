@@ -3,17 +3,17 @@ import { useState, useEffect } from 'react'
 import { Dashboard, MeetingView, AdminDashboard } from './pages'
 import { Recorder, FloatingRecorder } from './components/recording'
 import { useToast } from './components/common'
-import { watchOnline, getVpsHealth } from './services'
+import { watchOnline } from './services'
 import { globalRecordingManager } from './stores/globalRecordingManager'
 import { clearStuckRecordingState } from './utils/'
-import { usePageVisibility } from './hooks/usePageVisibility'
+import { useVpsHealth, useApiState } from './stores/apiStateManager'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 
 function AppShell({ 
 	text, setText, 
 	tag, setTag, 
-	online, vpsUp, setVpsUp,
+	online,
 	availableTags, setAvailableTags,
 	refreshSignal, setRefreshSignal,
 	isRecording, recordingMeetingId,
@@ -24,8 +24,6 @@ function AppShell({
 	tag: string
 	setTag: (tag: string) => void
 	online: boolean
-	vpsUp: boolean | null
-	setVpsUp: (vpsUp: boolean | null) => void
 	availableTags: [string, number][]
 	setAvailableTags: (tags: [string, number][]) => void
 	refreshSignal: number
@@ -37,55 +35,10 @@ function AppShell({
 }) {
 	const navigate = useNavigate()
 	const { ToastContainer } = useToast()
-	const isPageVisible = usePageVisibility()
-
-	useEffect(() => {
-		let stopped = false
-		let retryCount = 0
-		let currentInterval = 30000 // Start with 30 seconds instead of 15
-		let intervalId: number | null = null
-
-		async function poll() {
-			// Skip polling if page is not visible to save resources
-			if (!isPageVisible) {
-				if (!stopped) {
-					intervalId = setTimeout(poll, currentInterval)
-				}
-				return
-			}
-
-			try {
-				const res = await getVpsHealth()
-				if (!stopped) {
-					setVpsUp(res.status === 'ok')
-					retryCount = 0 // Reset retry count on success
-					currentInterval = 30000 // Reset to normal interval
-				}
-			} catch {
-				if (!stopped) {
-					setVpsUp(false)
-					retryCount++
-					// Exponential backoff with max 5 minutes
-					currentInterval = Math.min(30000 * Math.pow(2, retryCount), 300000)
-					console.log(`VPS health check failed, next retry in ${currentInterval/1000}s`)
-				}
-			}
-			
-			// Schedule next poll only if not stopped
-			if (!stopped) {
-				intervalId = setTimeout(poll, currentInterval)
-			}
-		}
-
-		// Initial poll
-		poll()
-
-		// Cleanup function
-		return () => { 
-			stopped = true
-			if (intervalId) clearTimeout(intervalId)
-		}
-	}, [setVpsUp, isPageVisible])
+	
+	// Use centralized VPS health state instead of local polling
+	const vpsHealth = useVpsHealth()
+	const vpsUp = vpsHealth.status === 'ok'
 
 	return (
 		<div style={{ 
@@ -311,7 +264,6 @@ function AppShell({
 					tag={tag}
 					setTag={setTag}
 					online={online}
-					vpsUp={vpsUp}
 					onTagsChange={setAvailableTags}
 					isRecording={isRecording}
 					recordingMeetingId={recordingMeetingId}
@@ -324,7 +276,7 @@ function AppShell({
 function MeetingRoute({ 
 	text, setText, 
 	tag, setTag, 
-	online, vpsUp, 
+	online,
 	availableTags,
 	isRecording, recordingMeetingId
 }: {
@@ -333,7 +285,6 @@ function MeetingRoute({
 	tag: string
 	setTag: (tag: string) => void
 	online: boolean
-	vpsUp: boolean | null
 	availableTags: [string, number][]
 	isRecording: boolean
 	recordingMeetingId: string | null
@@ -342,6 +293,10 @@ function MeetingRoute({
 	const navigate = useNavigate()
 	const id = params.meetingId as string
 	const { ToastContainer } = useToast()
+	
+	// Use centralized VPS health state
+	const vpsHealth = useVpsHealth()
+	const vpsUp = vpsHealth.status === 'ok'
 	
 	return (
 		<div style={{ 
@@ -500,13 +455,16 @@ export default function App() {
 	const [text, setText] = useState('')
 	const [tag, setTag] = useState('')
 	const [online, setOnline] = useState(true)
-	const [vpsUp, setVpsUp] = useState<boolean | null>(null)
 	const [availableTags, setAvailableTags] = useState<[string, number][]>([])
 	
 	// Global recording state
 	const [isRecording, setIsRecording] = useState(false)
 	const [recordingMeetingId, setRecordingMeetingId] = useState<string | null>(null)
 	const [recordingTime, setRecordingTime] = useState(0)
+	
+	// Use centralized API state
+	const apiState = useApiState()
+	const vpsUp = apiState.vpsHealth.status === 'ok'
 
 	// Format recording time as HH:MM:SS
 	const formatRecordingTime = () => {
@@ -730,25 +688,23 @@ export default function App() {
 				transition: 'padding-top 0.3s ease'
 			}}>
 				<Routes>
-					<Route path="/" element={
-						<AppShell 
-						text={text}
-						setText={setText}
-						tag={tag}
-						setTag={setTag}
-						online={online}
-						vpsUp={vpsUp}
-						setVpsUp={setVpsUp}
-						availableTags={availableTags}
-						setAvailableTags={setAvailableTags}
-						refreshSignal={refreshSignal}
-						setRefreshSignal={setRefreshSignal}
-						isRecording={isRecording}
-						recordingMeetingId={recordingMeetingId}
-						onRecordingCreated={handleRecordingCreated}
-						onRecordingStopped={handleRecordingStopped}
-					/>
-				} />
+									<Route path="/" element={
+					<AppShell 
+					text={text}
+					setText={setText}
+					tag={tag}
+					setTag={setTag}
+					online={online}
+					availableTags={availableTags}
+					setAvailableTags={setAvailableTags}
+					refreshSignal={refreshSignal}
+					setRefreshSignal={setRefreshSignal}
+					isRecording={isRecording}
+					recordingMeetingId={recordingMeetingId}
+					onRecordingCreated={handleRecordingCreated}
+					onRecordingStopped={handleRecordingStopped}
+				/>
+			} />
 				<Route path="/meeting/:meetingId" element={
 					<MeetingRoute 
 						text={text}
@@ -756,7 +712,6 @@ export default function App() {
 						tag={tag}
 						setTag={setTag}
 						online={online}
-						vpsUp={vpsUp}
 						availableTags={availableTags}
 						isRecording={isRecording}
 						recordingMeetingId={recordingMeetingId}

@@ -4,9 +4,9 @@ import {
 	submitQueueSummarization, 
 	getQueueTaskStatus, 
 	getQueueTaskResult,
-	getQueueStats,
 	type QueueStats 
 } from '../../services'
+import { useQueueStats } from '../../stores/apiStateManager'
 
 interface QueueProcessorProps {
 	online: boolean
@@ -26,22 +26,23 @@ interface QueueTask {
 
 export default function QueueProcessor({ online, vpsUp }: QueueProcessorProps) {
 	const [tasks, setTasks] = useState<QueueTask[]>([])
-	const [queueStats, setQueueStats] = useState<QueueStats | null>(null)
 	const [selectedFile, setSelectedFile] = useState<File | null>(null)
 	const [textInput, setTextInput] = useState('')
 	const [language, setLanguage] = useState<'tr' | 'en'>('tr')
 	const [submitting, setSubmitting] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 
-	// Auto-refresh queue stats and task statuses
+	// Use centralized queue stats
+	const queueStatsState = useQueueStats()
+	const queueStats = queueStatsState.data
+
+	// Auto-refresh task statuses (but use centralized queue stats)
 	useEffect(() => {
 		if (!online || !vpsUp) return
 
 		const refreshData = async () => {
 			try {
-				// Load queue stats
-				const stats = await getQueueStats().catch(() => null)
-				setQueueStats(stats)
+				// Queue stats are now managed centrally, just update task statuses
 
 				// Update task statuses
 				const updatedTasks = await Promise.all(

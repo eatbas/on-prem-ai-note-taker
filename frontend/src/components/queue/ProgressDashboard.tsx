@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
-import { getProgressStats, getQueueStats, type ProgressStats, type QueueStats } from '../../services'
-import { usePageVisibility } from '../../hooks/usePageVisibility'
+import { type ProgressStats, type QueueStats } from '../../services'
+import { useProgressStats, useQueueStats } from '../../stores/apiStateManager'
 
 interface ProgressDashboardProps {
 	online: boolean
@@ -8,53 +8,46 @@ interface ProgressDashboardProps {
 }
 
 export default function ProgressDashboard({ online, vpsUp }: ProgressDashboardProps) {
-	const [progressStats, setProgressStats] = useState<ProgressStats | null>(null)
-	const [queueStats, setQueueStats] = useState<QueueStats | null>(null)
+	// Use centralized state instead of local polling
+	const progressStatsState = useProgressStats()
+	const queueStatsState = useQueueStats()
+	
 	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState<string | null>(null)
 	const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-	const isPageVisible = usePageVisibility()
 
+	// Extract data and errors from centralized state
+	const progressStats = progressStatsState.data
+	const queueStats = queueStatsState.data
+	const error = progressStatsState.error || queueStatsState.error
+
+	// Update last update time when data changes
+	useEffect(() => {
+		if (progressStatsState.lastUpdated || queueStatsState.lastUpdated) {
+			setLastUpdate(new Date(Math.max(
+				progressStatsState.lastUpdated || 0,
+				queueStatsState.lastUpdated || 0
+			)))
+		}
+	}, [progressStatsState.lastUpdated, queueStatsState.lastUpdated])
+
+	// Manual refresh function (for user-triggered refreshes)
 	const loadStats = async () => {
 		if (!online || !vpsUp) return
 
 		try {
 			setLoading(true)
-			setError(null)
 			
-			const [progress, queue] = await Promise.all([
-				getProgressStats().catch(() => null),
-				getQueueStats().catch(() => null)
+			// Force refresh both stats from centralized manager
+			await Promise.all([
+				progressStatsState.refresh(),
+				queueStatsState.refresh()
 			])
-			
-			setProgressStats(progress)
-			setQueueStats(queue)
-			setLastUpdate(new Date())
 		} catch (err) {
-			console.error('Failed to load stats:', err)
-			setError('Failed to load statistics')
+			console.error('Failed to refresh stats:', err)
 		} finally {
 			setLoading(false)
 		}
 	}
-
-	// Auto-refresh every 30 seconds (reduced from 10 seconds)
-	// Only poll when component is visible and VPS is up
-	useEffect(() => {
-		if (!online || !vpsUp || !isPageVisible) return
-
-		// Initial load
-		loadStats()
-		
-		// Set up interval with reduced frequency
-		const interval = setInterval(() => {
-			// Only load stats if page is still visible
-			if (isPageVisible) {
-				loadStats()
-			}
-		}, 30000)
-		return () => clearInterval(interval)
-	}, [online, vpsUp, isPageVisible])
 
 	const formatDuration = (seconds: number) => {
 		if (seconds < 60) return `${Math.round(seconds)}s`

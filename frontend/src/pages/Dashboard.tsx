@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react'
-import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, deleteMeeting, db } from '../services'
+import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, updateMeeting, deleteMeeting, db } from '../services'
 import AskLlama from './AskLlama'
 
 import { useToast } from '../components/common'
 import { createRippleEffect } from '../utils'
 import { useDebounce } from '../hooks/useDebounce'
+import { useMeetings, useVpsHealth } from '../stores/apiStateManager'
 
 export default function Dashboard({ 
 	onOpen, 
@@ -14,7 +15,6 @@ export default function Dashboard({
 	tag,
 	setTag,
 	online,
-	vpsUp,
 	onTagsChange,
 	isRecording,
 	recordingMeetingId
@@ -26,7 +26,6 @@ export default function Dashboard({
 	tag: string;
 	setTag: (tag: string) => void;
 	online: boolean;
-	vpsUp: boolean | null;
 	onTagsChange?: (tags: [string, number][]) => void;
 	isRecording?: boolean;
 	recordingMeetingId?: string | null;
@@ -46,6 +45,11 @@ export default function Dashboard({
 	// Debounce search terms to avoid API calls on every keystroke
 	const debouncedText = useDebounce(text, 500) // 500ms delay
 	const debouncedTag = useDebounce(tag, 300) // 300ms delay
+	
+	// Use centralized state for VPS data
+	const vpsHealth = useVpsHealth()
+	const centralizedMeetings = useMeetings()
+	const vpsUp = vpsHealth.status === 'ok'
 	
 	// Context menu state
 	const [contextMenu, setContextMenu] = useState<{
@@ -160,61 +164,55 @@ export default function Dashboard({
 		const effectiveText = searchText !== undefined ? searchText : debouncedText
 		const effectiveTag = searchTag !== undefined ? searchTag : debouncedTag
 		
-		console.log('🔄 Dashboard refresh started', { effectiveText, effectiveTag })
+		console.log('🔄 Dashboard refresh started (centralized)', { effectiveText, effectiveTag })
 		setLoading(true)
 		setError(null)
 		try {
-			if (online) {
-				// Always load local meetings first so user sees something immediately
-				const localMeetings = await listMeetings({ 
-					text: effectiveText, 
-					tag: effectiveTag, 
-					excludeRecordingInProgress: true 
-				})
-				console.log('📁 Loaded local meetings:', localMeetings.length)
-				setMeetings(localMeetings)
+			// Always load local meetings first for immediate display
+			const localMeetings = await listMeetings({ 
+				text: effectiveText, 
+				tag: effectiveTag, 
+				excludeRecordingInProgress: true 
+			})
+			console.log('📁 Loaded local meetings:', localMeetings.length)
+			
+			// Use centralized VPS meetings data if available and fresh
+			// Access centralizedMeetings directly without making it a dependency
+			let finalMeetings = localMeetings
+			if (vpsUp && centralizedMeetings.data.length > 0 && !centralizedMeetings.error) {
+				console.log('☁️ Using centralized VPS meetings:', centralizedMeetings.data.length)
+				const byId = new Map<string, any>()
 				
-				// Try to fetch from backend and merge (only if VPS is up)
-				if (vpsUp) {
-					try {
-						console.log('🌐 Attempting to fetch from VPS backend...')
-						const backendMeetings = await getMeetings()
-						console.log('☁️ Loaded VPS meetings:', backendMeetings.length)
-						const byId = new Map<string, any>()
-						// Start with local meetings to preserve any unsent ones
-						for (const m of localMeetings) byId.set(m.id, m)
-						// Overlay with backend data
-						for (const m of backendMeetings as any[]) {
-							const existing = byId.get(m.id)
-							// Merge backend data with local data, preferring backend for processed content
-							byId.set(m.id, { 
-								...existing, 
-								...m, 
-								// Keep local status if it's more recent or unsent
-								status: existing?.status === 'local' ? existing.status : m.status || 'sent',
-								// Keep local tags and title if they exist
-								tags: existing?.tags || [],
-								title: existing?.title || m.title
-							})
-						}
-						const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-						console.log('🔄 Merged meetings:', mergedMeetings.length)
-						setMeetings(mergedMeetings)
-					} catch (backendErr) {
-						// Backend failed, but we still have local data
-						console.warn('❌ Backend fetch failed, using local data:', backendErr)
-						setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
-					}
+				// Start with local meetings to preserve any unsent ones
+				for (const m of localMeetings) byId.set(m.id, m)
+				
+				// Overlay with centralized backend data
+				for (const m of centralizedMeetings.data as any[]) {
+					const existing = byId.get(m.id)
+					// Merge backend data with local data, preferring backend for processed content
+					byId.set(m.id, { 
+						...existing, 
+						...m, 
+						// Keep local status if it's more recent or unsent
+						status: existing?.status === 'local' ? existing.status : m.status || 'sent',
+						// Keep local tags and title if they exist
+						tags: existing?.tags || [],
+						title: existing?.title || m.title
+					})
 				}
+				finalMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
+				console.log('🔄 Merged with centralized data:', finalMeetings.length)
 			} else {
-				// Use local data when offline
-				console.log('📱 Offline mode - using local data only')
-				setMeetings(await listMeetings({ 
-					text: effectiveText, 
-					tag: effectiveTag, 
-					excludeRecordingInProgress: true 
-				}))
+				console.log('📱 Using local data only (VPS down or no centralized data)')
 			}
+			
+			setMeetings(finalMeetings)
+			
+			// Set error from centralized state if VPS is having issues
+			if (centralizedMeetings.error && vpsUp) {
+				setError(`VPS connection issues: ${centralizedMeetings.error}. Showing local meetings only.`)
+			}
+			
 		} catch (err) {
 			console.error('❌ Failed to load meetings:', err)
 			setError(`Failed to load meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -233,7 +231,7 @@ export default function Dashboard({
 			setLoading(false)
 			console.log('✅ Dashboard refresh completed')
 		}
-	}, [debouncedText, debouncedTag, online, vpsUp])
+	}, [debouncedText, debouncedTag, online, vpsUp]) // Removed centralizedMeetings from dependencies
 
 	async function clearAllLocalData() {
 		// Ask for confirmation before clearing all data
@@ -314,8 +312,21 @@ export default function Dashboard({
 		setVpsLoading(true)
 		setVpsError(null)
 		try {
-			const vpsMeetingsData = await getMeetings()
-			setVpsMeetings(vpsMeetingsData)
+			// Use centralized meetings data first, fallback to direct API call
+			if (centralizedMeetings.data.length > 0 && !centralizedMeetings.error) {
+				console.log('📊 Using centralized VPS meetings for VPS tab')
+				setVpsMeetings(centralizedMeetings.data)
+			} else {
+				// Force refresh centralized data if it's empty or has errors
+				console.log('🔄 Refreshing centralized meetings data')
+				await centralizedMeetings.refresh()
+				setVpsMeetings(centralizedMeetings.data)
+			}
+			
+			// Set error from centralized state if available
+			if (centralizedMeetings.error) {
+				setVpsError(centralizedMeetings.error)
+			}
 		} catch (err) {
 			console.error('Failed to load VPS meetings:', err)
 			setVpsError(`Failed to load VPS meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
@@ -327,21 +338,30 @@ export default function Dashboard({
 	async function checkBackendStatus() {
 		try {
 			setLoading(true)
-			const health = await getVpsHealth()
-			showToast(`Backend is healthy! 🟢 Whisper: ${health.whisper_model}, Ollama: ${health.ollama_model}`, 'success')
+			
+			// Force refresh centralized VPS health data
+			await vpsHealth.refresh()
+			
+			if (vpsHealth.status === 'ok' && vpsHealth.data) {
+				showToast(`Backend is healthy! 🟢 Whisper: ${vpsHealth.data.whisper_model}, Ollama: ${vpsHealth.data.ollama_model}`, 'success')
+			} else if (vpsHealth.error) {
+				const errorMessage = vpsHealth.error
+				
+				if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch')) {
+					showToast('❌ Cannot connect to backend server. Check if the backend is running.', 'error')
+				} else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+					showToast('❌ Authentication failed. Check your credentials.', 'error')
+				} else if (errorMessage.includes('500')) {
+					showToast('❌ Backend server error. The AI services may be having issues.', 'error')
+				} else {
+					showToast(`❌ Backend check failed: ${errorMessage}`, 'error')
+				}
+			} else {
+				showToast('❌ Backend status unknown. Please try again.', 'info')
+			}
 		} catch (err) {
 			console.error('Backend health check failed:', err)
-			const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-			
-			if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch')) {
-				showToast('❌ Cannot connect to backend server. Check if the backend is running.', 'error')
-			} else if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
-				showToast('❌ Authentication failed. Check your credentials.', 'error')
-			} else if (errorMessage.includes('500')) {
-				showToast('❌ Backend server error. The AI services may be having issues.', 'error')
-			} else {
-				showToast(`❌ Backend check failed: ${errorMessage}`, 'error')
-			}
+			showToast(`❌ Backend check failed: ${err instanceof Error ? err.message : 'Unknown error'}`, 'error')
 		} finally {
 			setLoading(false)
 		}
@@ -362,6 +382,9 @@ export default function Dashboard({
 		}
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, [refreshSignal])
+
+	// Note: Centralized meetings updates are handled automatically
+	// through the refresh function accessing the latest data directly
 
 	// Refresh VPS meetings when VPS tab is selected or VPS status changes
 	useEffect(() => {
