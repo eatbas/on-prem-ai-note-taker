@@ -580,8 +580,12 @@ export default function App() {
 		console.log('⏹️ Recording stopped for meeting:', meetingId)
 		setIsRecording(false)
 		setRecordingMeetingId(null)
-		// Now refresh dashboard to show the completed meeting
-		setRefreshSignal(Date.now())
+		// Don't refresh dashboard immediately - wait for meeting processing to complete
+		// The meeting processing happens asynchronously, so we'll refresh after a delay
+		setTimeout(() => {
+			console.log('🔄 Refreshing dashboard after meeting processing delay')
+			setRefreshSignal(Date.now())
+		}, 2000) // 2 second delay to allow meeting processing to complete
 	}
 
 	// Handle stop click from floating recorder window

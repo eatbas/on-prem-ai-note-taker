@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../components/common'
-import { ProgressDashboard } from '../components/queue'
+import { ProgressDashboard, JobQueue } from '../components/queue'
+import { getVpsHealth } from '../services'
 
 interface User {
     id: string
@@ -91,7 +92,7 @@ async function makeAdminRequest(path: string, options?: RequestInit) {
 
 export default function AdminDashboard() {
     const navigate = useNavigate()
-    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'progress'>('stats')
+    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'tools' | 'jobs' | 'progress'>('stats')
     const [stats, setStats] = useState<Stats | null>(null)
     const [users, setUsers] = useState<User[]>([])
     const [meetings, setMeetings] = useState<AdminMeeting[]>([])
@@ -260,6 +261,8 @@ export default function AdminDashboard() {
                     { key: 'stats', label: '📊 Statistics', icon: '📊' },
                     { key: 'users', label: '👥 Users', icon: '👥' },
                     { key: 'meetings', label: '📋 Meetings', icon: '📋' },
+                    { key: 'tools', label: '🧰 Tools', icon: '🧰' },
+                    { key: 'jobs', label: '⚙️ Jobs', icon: '⚙️' },
                     { key: 'progress', label: '📈 Progress', icon: '📈' }
                 ].map(tab => (
                     <button
@@ -649,6 +652,64 @@ export default function AdminDashboard() {
                             </div>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* Tools Tab */}
+            {activeTab === 'tools' && (
+                <div style={{
+                    padding: '16px',
+                    backgroundColor: '#f8fafc',
+                    border: '1px solid #e2e8f0',
+                    borderRadius: '12px'
+                }}>
+                    <h3 style={{ marginTop: 0 }}>🧰 Admin Tools</h3>
+                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    setLoading(true)
+                                    const health = await getVpsHealth()
+                                    // eslint-disable-next-line no-alert
+                                    alert(`Backend OK\nWhisper: ${health.whisper_model}\nOllama: ${health.ollama_model}`)
+                                } catch (err) {
+                                    // eslint-disable-next-line no-alert
+                                    alert(`Backend check failed: ${err instanceof Error ? err.message : 'Unknown error'}`)
+                                } finally {
+                                    setLoading(false)
+                                }
+                            }}
+                            style={{ padding: '8px 16px', backgroundColor: '#10b981', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                            🔍 Check Backend Status
+                        </button>
+                        <button
+                            onClick={() => {
+                                // Move local data clearing here for admin
+                                // eslint-disable-next-line no-alert
+                                if (confirm('This clears ALL local browser data for this app on this device. Continue?')) {
+                                    try {
+                                        localStorage.clear()
+                                        sessionStorage.clear()
+                                        // eslint-disable-next-line no-alert
+                                        alert('Local data cleared. Reloading...')
+                                    } finally {
+                                        window.location.reload()
+                                    }
+                                }
+                            }}
+                            style={{ padding: '8px 16px', backgroundColor: '#dc2626', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}
+                        >
+                            🗑️ Clear All Local Data
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Jobs Tab */}
+            {activeTab === 'jobs' && (
+                <div>
+                    <JobQueue online={true} vpsUp={true} />
                 </div>
             )}
 

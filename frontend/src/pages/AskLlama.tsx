@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { chat } from '../services'
 
 export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: boolean | null }) {
@@ -9,12 +9,17 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 		answer: string
 		model: string
 		timestamp: Date
+		durationSeconds: number
 	}>>([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
 	const [model] = useState<string>('qwen2.5:3b-instruct') // Use actual Ollama model name
 	const [requestId, setRequestId] = useState(0)
 	const [activeTab, setActiveTab] = useState<'current' | 'history'>('current')
+	const [elapsedSeconds, setElapsedSeconds] = useState(0)
+	const [lastThinkingSeconds, setLastThinkingSeconds] = useState<number | null>(null)
+	const timerRef = useRef<number | null>(null)
+	const startTimeRef = useRef<number | null>(null)
 
 	// Debug logging for status
 	useEffect(() => {
@@ -22,6 +27,29 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 	}, [online, vpsUp, loading, error])
 
 	// Remove the availableModels state and useEffect since we only have one model
+
+	// Handle live timer while loading
+	useEffect(() => {
+		if (loading) {
+			setElapsedSeconds(0)
+			const startedAt = startTimeRef.current ?? Date.now()
+			if (startTimeRef.current == null) startTimeRef.current = startedAt
+			timerRef.current = window.setInterval(() => {
+				setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
+			}, 1000)
+		} else {
+			if (timerRef.current) {
+				clearInterval(timerRef.current)
+				timerRef.current = null
+			}
+		}
+		return () => {
+			if (timerRef.current) {
+				clearInterval(timerRef.current)
+				timerRef.current = null
+			}
+		}
+	}, [loading])
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault()
@@ -42,6 +70,9 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 		setRequestId(currentRequestId)
 		setError(null)
 		setLoading(true)
+		setLastThinkingSeconds(null)
+		setElapsedSeconds(0)
+		startTimeRef.current = Date.now()
 
 		// Store the current prompt to ensure we're setting response for the right request
 		const currentPrompt = prompt.trim()
@@ -54,16 +85,19 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 			
 			// Only update chat history if this is still the current request
 			if (currentRequestId === requestId + 1) {
+				const durationSeconds = startTimeRef.current ? Math.round((Date.now() - startTimeRef.current) / 1000) : elapsedSeconds
+				setLastThinkingSeconds(durationSeconds)
 				const newChatEntry = {
 					id: currentRequestId,
 					question: currentPrompt,
 					answer: result.response,
 					model: currentModel || 'qwen2.5:3b-instruct',
-					timestamp: new Date()
+					timestamp: new Date(),
+					durationSeconds
 				}
 				setChatHistory(prev => [...prev, newChatEntry])
 				setPrompt('') // Clear the input after successful submission
-				setActiveTab('history') // Switch to history tab to show the new response
+				// Keep user in Current Chat; Past Queries will update automatically
 			}
 		} catch (err) {
 			console.error(`[Request ${currentRequestId}] Chat request failed:`, err)
@@ -247,23 +281,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 			{/* Current Chat Tab */}
 			{activeTab === 'current' && (
 				<div>
-					{/* Loading indicator */}
-					{loading && (
-						<div style={{
-							padding: '12px 16px',
-							backgroundColor: '#fef3c7',
-							border: '1px solid #f59e0b',
-							borderRadius: '8px',
-							marginBottom: '16px',
-							textAlign: 'center',
-							color: '#92400e',
-							fontWeight: '500'
-						}}>
-							⏳ Form is disabled while processing request #{requestId + 1}. Please wait or cancel the request.
-						</div>
-					)}
-
-					{/* Status message */}
+					{/* Preparing indicator with live timer */}
 					{loading && (
 						<div style={{
 							padding: '12px 16px',
@@ -275,7 +293,23 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 							color: '#1e40af',
 							fontWeight: '500'
 						}}>
-							🔄 Processing request #{requestId + 1}... Please wait or cancel if needed.
+							⏳ Preparing your response ( {elapsedSeconds} sec )
+						</div>
+					)}
+
+					{/* Last thinking duration after completion */}
+					{!loading && lastThinkingSeconds !== null && (
+						<div style={{
+							padding: '10px 14px',
+							backgroundColor: '#ecfeff',
+							border: '1px solid #06b6d4',
+							borderRadius: '8px',
+							marginBottom: '16px',
+							textAlign: 'center',
+							color: '#155e75',
+							fontWeight: '500'
+						}}>
+							💭 Thinked ( {lastThinkingSeconds} sec )
 						</div>
 					)}
 
@@ -309,7 +343,7 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 							<div style={{
 								display: 'flex',
 								gap: '12px',
-								justifyContent: 'flex-start',
+								justifyContent: 'center',
 								flexWrap: 'wrap'
 							}}>
 								<button
@@ -614,6 +648,17 @@ export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: bo
 													fontWeight: '500'
 												}}>
 													Request #{chat.id}
+												</span>
+												<span style={{
+													fontSize: '12px',
+													color: '#0c4a6e',
+													backgroundColor: 'white',
+													padding: '4px 8px',
+													borderRadius: '6px',
+													border: '1px solid #0ea5e9',
+													fontWeight: '500'
+												}}>
+													⏱️ Thinked: {chat.durationSeconds}s
 												</span>
 											</div>
 										</div>

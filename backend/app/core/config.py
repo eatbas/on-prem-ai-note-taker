@@ -43,7 +43,7 @@ class Settings:
 	# Ollama
 	ollama_base_url: str = os.getenv("OLLAMA_BASE_URL", "http://ollama:11434")
 	ollama_model: str = os.getenv("OLLAMA_MODEL", "qwen2.5:3b-instruct")
-	ollama_timeout_seconds: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "120"))
+	ollama_timeout_seconds: int = int(os.getenv("OLLAMA_TIMEOUT_SECONDS", "3600"))
 	
 	# Ollama VPS Optimizations
 	ollama_cpu_threads: int = int(os.getenv("OLLAMA_CPU_THREADS", "6"))

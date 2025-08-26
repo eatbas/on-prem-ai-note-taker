@@ -136,7 +136,7 @@ export async function summarize(text: string) {
 
 export async function chat(prompt: string, model?: string) {
 	const controller = new AbortController()
-	const timeoutId = setTimeout(() => controller.abort(), 120000) // 2 minute timeout
+	const timeoutId = setTimeout(() => controller.abort(), 3600000) // 1 hour timeout
 	
 	// Add job to queue for tracking
 	const jobId = `chat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`

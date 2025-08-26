@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../services'
 import AskLlama from './AskLlama'
-import { JobQueue } from '../components/queue'
+
 import { useToast } from '../components/common'
 import { createRippleEffect } from '../utils'
 
@@ -35,16 +35,12 @@ export default function Dashboard({
 	const [error, setError] = useState<string | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
-	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'jobs'>('local')
+	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama'>('local')
 	const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
 	const [vpsLoading, setVpsLoading] = useState(false)
 	const [vpsError, setVpsError] = useState<string | null>(null)
 	const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
 	const { showToast, ToastContainer } = useToast()
-	const [vpsDiagnosticResults, setVpsDiagnosticResults] = useState<VpsDiagnosticResult[]>([])
-	const [showVpsDiagnostics, setShowVpsDiagnostics] = useState(false)
-	const [quickTestResult, setQuickTestResult] = useState<any>(null)
-	const [showQuickTest, setShowQuickTest] = useState(false)
 	
 	// Context menu state
 	const [contextMenu, setContextMenu] = useState<{
@@ -600,8 +596,7 @@ export default function Dashboard({
 				{[
 					{ id: 'local', label: '📁 Local Meetings', icon: '🏠' },
 					{ id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
-					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' },
-					{ id: 'jobs', label: '📋 Job Queue', icon: '⚙️' }
+					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
 				].map((tab) => (
 					<button
 						key={tab.id}
@@ -620,7 +615,7 @@ export default function Dashboard({
 							alignItems: 'center',
 							justifyContent: 'center',
 							gap: '8px',
-							borderRight: tab.id !== 'jobs' ? '1px solid #e2e8f0' : 'none',
+							borderRight: '1px solid #e2e8f0',
 							transform: 'scale(1)'
 						}}
 						onMouseEnter={(e) => {
@@ -646,392 +641,18 @@ export default function Dashboard({
 				))}
 			</div>
 
-			{/* Backend Status Check */}
-			{online && (
-				<div style={{
-					display: 'flex',
-					justifyContent: 'center',
-					marginBottom: '16px',
-					padding: '12px',
-					backgroundColor: '#f8fafc',
-					borderRadius: '8px',
-					border: '1px solid #e2e8f0'
-				}}>
-					<div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', justifyContent: 'center' }}>
-						<button
-							onClick={(e) => {
-								createRippleEffect(e)
-								refresh()
-							}}
-							disabled={loading}
-							style={{
-								padding: '8px 16px',
-								backgroundColor: loading ? '#9ca3af' : '#f59e0b',
-								color: 'white',
-								border: 'none',
-								borderRadius: '6px',
-								cursor: loading ? 'not-allowed' : 'pointer',
-								fontSize: '14px',
-								fontWeight: '500',
-								transition: 'all 0.2s ease',
-								transform: 'scale(1)'
-							}}
-							onMouseDown={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(0.95)'
-									e.currentTarget.style.backgroundColor = '#d97706'
-								}
-							}}
-							onMouseUp={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#f59e0b'
-								}
-							}}
-							onMouseLeave={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#f59e0b'
-								}
-							}}
-						>
-							{loading ? '🔄 Refreshing...' : '🔄 Manual Refresh'}
-						</button>
-						
-						<button
-							onClick={(e) => {
-								createRippleEffect(e)
-								clearAllLocalData()
-							}}
-							disabled={loading}
-							style={{
-								padding: '8px 16px',
-								backgroundColor: loading ? '#9ca3af' : '#dc2626',
-								color: 'white',
-								border: 'none',
-								borderRadius: '6px',
-								cursor: loading ? 'not-allowed' : 'pointer',
-								fontSize: '14px',
-								fontWeight: '500',
-								transition: 'all 0.2s ease',
-								transform: 'scale(1)'
-							}}
-							onMouseDown={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(0.95)'
-									e.currentTarget.style.backgroundColor = '#b91c1c'
-								}
-							}}
-							onMouseUp={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#dc2626'
-								}
-							}}
-							onMouseLeave={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#dc2626'
-								}
-							}}
-						>
-							{loading ? '🗑️ Clearing...' : '🗑️ Clear All Local Data'}
-						</button>
-						
-						<button
-							onClick={(e) => {
-								createRippleEffect(e)
-								checkBackendStatus()
-							}}
-							disabled={loading}
-							style={{
-								padding: '8px 16px',
-								backgroundColor: loading ? '#9ca3af' : '#10b981',
-								color: 'white',
-								border: 'none',
-								borderRadius: '6px',
-								cursor: loading ? 'not-allowed' : 'pointer',
-								fontSize: '14px',
-								fontWeight: '500',
-								transition: 'all 0.2s ease',
-								transform: 'scale(1)'
-							}}
-							onMouseDown={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(0.95)'
-									e.currentTarget.style.backgroundColor = '#059669'
-								}
-							}}
-							onMouseUp={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#10b981'
-								}
-							}}
-							onMouseLeave={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#10b981'
-								}
-							}}
-						>
-							{loading ? '🔍 Checking...' : '🔍 Check Backend Status'}
-						</button>
-						
-						<button
-							onClick={(e) => {
-								createRippleEffect(e)
-								quickVpsConnectionTest()
-							}}
-							disabled={loading}
-							style={{
-								padding: '8px 16px',
-								backgroundColor: loading ? '#9ca3af' : '#3b82f6',
-								color: 'white',
-								border: 'none',
-								borderRadius: '6px',
-								cursor: loading ? 'not-allowed' : 'pointer',
-								fontSize: '14px',
-								fontWeight: '500',
-								transition: 'all 0.2s ease',
-								transform: 'scale(1)'
-							}}
-							onMouseDown={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(0.95)'
-									e.currentTarget.style.backgroundColor = '#2563eb'
-								}
-							}}
-							onMouseUp={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#3b82f6'
-								}
-							}}
-							onMouseLeave={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#3b82f6'
-								}
-							}}
-						>
-							{loading ? '🧪 Testing...' : '🧪 Quick VPS Test'}
-						</button>
-						
-						<button
-							onClick={(e) => {
-								createRippleEffect(e)
-								runFullVpsDiagnostics()
-							}}
-							disabled={loading}
-							style={{
-								padding: '8px 16px',
-								backgroundColor: loading ? '#9ca3af' : '#8b5cf6',
-								color: 'white',
-								border: 'none',
-								borderRadius: '6px',
-								cursor: loading ? 'not-allowed' : 'pointer',
-								fontSize: '14px',
-								fontWeight: '500',
-								transition: 'all 0.2s ease',
-								transform: 'scale(1)'
-							}}
-							onMouseDown={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(0.95)'
-									e.currentTarget.style.backgroundColor = '#7c3aed'
-								}
-							}}
-							onMouseUp={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#8b5cf6'
-								}
-							}}
-							onMouseLeave={(e) => {
-								if (!loading) {
-									e.currentTarget.style.transform = 'scale(1)'
-									e.currentTarget.style.backgroundColor = '#8b5cf6'
-								}
-							}}
-						>
-							{loading ? '🔬 Running...' : '🔬 Full VPS Diagnostics'}
-						</button>
-					</div>
-					
-					<span style={{ 
-						marginLeft: '12px', 
-						fontSize: '14px', 
-						color: '#6b7280',
-						display: 'flex',
-						alignItems: 'center',
-						gap: '8px'
-					}}>
-						<span style={{ 
-							width: '8px', 
-							height: '8px', 
-							borderRadius: '50%', 
-							backgroundColor: online ? '#10b981' : '#ef4444' 
-						}}></span>
-						{online ? 'Online' : 'Offline'}
-					</span>
-				</div>
-			)}
+			{/* Admin controls moved to Admin Dashboard */}
 
-			{/* Quick Test Results */}
-			{showQuickTest && quickTestResult && (
-				<div style={{
-					marginBottom: '16px',
-					padding: '16px',
-					backgroundColor: quickTestResult.success ? '#f0fdf4' : '#fef2f2',
-					border: `1px solid ${quickTestResult.success ? '#bbf7d0' : '#fecaca'}`,
-					borderRadius: '8px'
-				}}>
-					<div style={{
-						display: 'flex',
-						justifyContent: 'space-between',
-						alignItems: 'center',
-						marginBottom: '8px'
-					}}>
-						<h4 style={{ margin: 0, color: quickTestResult.success ? '#166534' : '#dc2626' }}>
-							🧪 Quick VPS Test Result
-						</h4>
-						<button
-							onClick={() => setShowQuickTest(false)}
-							style={{
-								background: 'none',
-								border: 'none',
-								fontSize: '18px',
-								cursor: 'pointer',
-								color: '#6b7280'
-							}}
-						>
-							✕
-						</button>
-					</div>
-					<p style={{ margin: 0, color: quickTestResult.success ? '#166534' : '#dc2626' }}>
-						{quickTestResult.message}
-					</p>
-					{quickTestResult.details && (
-						<details style={{ marginTop: '8px' }}>
-							<summary style={{ cursor: 'pointer', color: '#6b7280' }}>View Details</summary>
-							<pre style={{ 
-								margin: '8px 0 0 0', 
-								padding: '8px', 
-								backgroundColor: 'rgba(0,0,0,0.05)', 
-								borderRadius: '4px',
-								fontSize: '12px',
-								overflow: 'auto'
-							}}>
-								{JSON.stringify(quickTestResult.details, null, 2)}
-							</pre>
-						</details>
-					)}
-				</div>
-			)}
+			{/* Quick Test Results moved to Admin Dashboard */}
 
-			{/* Full Diagnostic Results */}
-			{showVpsDiagnostics && vpsDiagnosticResults.length > 0 && (
-				<div style={{
-					marginBottom: '16px',
-					padding: '16px',
-					backgroundColor: '#f8fafc',
-					border: '1px solid #e2e8f0',
-					borderRadius: '8px'
-				}}>
-					<div style={{
-						display: 'flex',
-						justifyContent: 'space-between',
-						alignItems: 'center',
-						marginBottom: '16px'
-					}}>
-						<h4 style={{ margin: 0, color: '#1e293b' }}>
-							🔬 VPS Diagnostic Results
-						</h4>
-						<button
-							onClick={() => setShowVpsDiagnostics(false)}
-							style={{
-								background: 'none',
-								border: 'none',
-								fontSize: '18px',
-								cursor: 'pointer',
-								color: '#6b7280'
-							}}
-						>
-							✕
-						</button>
-					</div>
-					
-					<div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-						{vpsDiagnosticResults.map((result, index) => (
-							<div key={index} style={{
-								padding: '12px',
-								backgroundColor: result.status === 'success' ? '#f0fdf4' : 
-												result.status === 'warning' ? '#fef3c7' : '#fef2f2',
-								border: `1px solid ${result.status === 'success' ? '#bbf7d0' : 
-													result.status === 'warning' ? '#fde68a' : '#fecaca'}`,
-								borderRadius: '6px'
-							}}>
-								<div style={{
-									display: 'flex',
-									justifyContent: 'space-between',
-									alignItems: 'center',
-									marginBottom: '4px'
-								}}>
-									<strong style={{ 
-										color: result.status === 'success' ? '#166534' : 
-												result.status === 'warning' ? '#92400e' : '#dc2626'
-									}}>
-										{result.step}
-									</strong>
-									{result.responseTime && (
-										<span style={{ 
-											fontSize: '12px', 
-											color: '#6b7280',
-											backgroundColor: 'rgba(0,0,0,0.05)',
-											padding: '2px 6px',
-											borderRadius: '4px'
-										}}>
-											{result.responseTime}ms
-										</span>
-									)}
-								</div>
-								<p style={{ 
-									margin: 0, 
-									color: result.status === 'success' ? '#166534' : 
-											result.status === 'warning' ? '#92400e' : '#dc2626'
-								}}>
-									{result.message}
-								</p>
-								{result.details && (
-									<details style={{ marginTop: '8px' }}>
-										<summary style={{ cursor: 'pointer', color: '#6b7280' }}>View Details</summary>
-										<pre style={{ 
-											margin: '8px 0 0 0', 
-											padding: '8px', 
-											backgroundColor: 'rgba(0,0,0,0.05)', 
-											borderRadius: '4px',
-											fontSize: '12px',
-											overflow: 'auto'
-										}}>
-											{JSON.stringify(result.details, null, 2)}
-										</pre>
-									</details>
-								)}
-							</div>
-						))}
-					</div>
-				</div>
-			)}
+			{/* Diagnostic Results moved to Admin Dashboard */}
 
 			{/* Tab Content */}
 			{activeTab === 'llama' && (
 				<AskLlama online={online} vpsUp={vpsUp} />
 			)}
 			
-			{activeTab === 'jobs' && (
-				<JobQueue online={online} vpsUp={vpsUp} />
-			)}
+			{/* Job Queue moved to Admin Dashboard */}
 
 			{activeTab === 'local' && (
 				<>
