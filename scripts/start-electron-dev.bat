@@ -43,7 +43,7 @@ start "Vite Dev Server" cmd /c "npm run dev"
 cd ..
 
 echo ⏳ Waiting for Vite dev server to start...
-timeout /t 5 /nobreak >nul
+timeout 5 /nobreak >nul
 
 echo.
 echo 🎯 Starting Electron app in development mode...
@@ -54,10 +54,14 @@ set "API_BASE_URL=http://%VPS_IP%:8000/api"
 set "BASIC_AUTH_USERNAME=myca"
 set "BASIC_AUTH_PASSWORD=wj2YyxrJ4cqcXgCA"
 
-echo 🚀 Starting Electron with VPS connection...
+echo 🚀 Starting Electron with live frontend development server!
 echo 💡 The app will now load from the live Vite dev server!
+echo 🌐 You can see your frontend changes in real-time in Electron!
+echo 📝 Make changes to frontend code and they'll appear immediately in Electron
 echo 🌐 All AI processing will happen on your VPS
-call npm start
+
+REM Use npx to ensure electron is available
+call npx electron .
 cd ..
 
 echo.

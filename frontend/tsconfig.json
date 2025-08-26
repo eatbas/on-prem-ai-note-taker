@@ -10,9 +10,17 @@
 		"isolatedModules": true,
 		"noEmit": true,
 		"jsx": "react-jsx",
-		"strict": true
+		"strict": true,
+		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"baseUrl": ".",
+		"paths": {
+			"@/*": ["src/*"]
+		}
 	},
-	"include": ["src"]
+	"include": ["src", "vite.config.ts", "src/vite-env.d.ts"],
+	"exclude": ["node_modules", "dist"]
 }
 
 

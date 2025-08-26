@@ -3,6 +3,8 @@
  * Leverages Electron features for better performance and user experience
  */
 
+import { CrossPlatformTimerId } from '../types'
+
 export interface ElectronApiFeatures {
   onAppSuspend?: (callback: () => void) => void
   onAppResume?: (callback: () => void) => void
@@ -157,7 +159,7 @@ export class ElectronApiOptimizer {
     stop: () => void
     isRunning: boolean
   } {
-    let timerId: number | null = null
+    let timerId: CrossPlatformTimerId | null = null
     let isRunning = false
 
     return {

@@ -45,24 +45,27 @@ function createWindow() {
 	fetch(devServerUrl)
 		.then(response => {
 			if (response.ok) {
-				console.log('Dev server found, loading from:', devServerUrl)
+				console.log('✅ Dev server found, loading from:', devServerUrl)
+				console.log('🔥 Loading LIVE development version with latest changes!')
 				mainWindow.loadURL(devServerUrl)
 			} else {
 				throw new Error('Dev server not responding')
 			}
 		})
 		.catch(error => {
-			console.log('Dev server not available, trying built files:', error.message)
+			console.log('❌ Dev server not available, trying built files:', error.message)
 			
 			// Check if the built frontend exists
 			if (!fs.existsSync(frontendPath)) {
-				console.error('Frontend not built! Please run "npm run build" in the frontend folder first.')
+				console.error('❌ Frontend not built! Run: npm run build in frontend folder')
+				console.error('🚨 OR: Make sure Vite dev server is running on port 5173')
 				// Create a simple error page
-				mainWindow.loadURL('data:text/html,<html><body><h1>Frontend Not Built</h1><p>Please run "npm run build" in the frontend folder first.</p></body></html>')
+				mainWindow.loadURL('data:text/html,<html><body style="font-family:Arial;text-align:center;padding:50px;"><h1 style="color:red;">⚠️ Frontend Not Available</h1><p>Neither dev server nor built files found!</p><p><strong>Solutions:</strong></p><ul style="text-align:left;max-width:400px;margin:0 auto;"><li>Make sure Vite dev server is running on port 5173</li><li>OR run "npm run build" in frontend folder</li></ul></body></html>')
 				return
 			}
 			
-			console.log('Loading from built files:', frontendPath)
+			console.log('📦 Loading from built files:', frontendPath)
+			console.log('⚠️ This may contain OLDER code - use dev server for latest changes!')
 			mainWindow.loadFile(frontendPath)
 		})
 	
@@ -73,9 +76,10 @@ function createWindow() {
 	
 	// Add success logging
 	mainWindow.webContents.on('did-finish-load', () => {
-		console.log('✅ Frontend loaded successfully')
+		console.log('✅ Frontend loaded successfully!')
 		console.log('🔗 VPS connection configured at: http://95.111.244.159:8000/api')
 		console.log('🎯 AI services (transcription, chat, summarization) will use VPS backend')
+		console.log('📈 Centralized API management active - optimized polling enabled!')
 	})
 }
 

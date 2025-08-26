@@ -80,33 +80,45 @@ function buildFrontend() {
 
 // Install dependencies
 async function installDependencies() {
-    console.log('📦 Installing dependencies...')
+    console.log('📦 Checking dependencies...')
     
-    // Frontend dependencies
-    await new Promise((resolve, reject) => {
-        const npm = spawn('npm', ['install'], {
-            cwd: FRONTEND_DIR,
-            stdio: 'inherit',
-            shell: true
-        })
-        npm.on('close', (code) => {
-            if (code === 0) resolve()
-            else reject(new Error(`Frontend npm install failed with code ${code}`))
-        })
-    })
+    // Check if frontend node_modules exists
+    const frontendNodeModules = path.join(FRONTEND_DIR, 'node_modules')
+    const electronNodeModules = path.join(ELECTRON_DIR, 'node_modules')
     
-    // Electron dependencies
-    await new Promise((resolve, reject) => {
-        const npm = spawn('npm', ['install'], {
-            cwd: ELECTRON_DIR,
-            stdio: 'inherit',
-            shell: true
+    if (!fs.existsSync(frontendNodeModules)) {
+        console.log('📦 Installing frontend dependencies...')
+        await new Promise((resolve, reject) => {
+            const npm = spawn('npm', ['install'], {
+                cwd: FRONTEND_DIR,
+                stdio: 'inherit',
+                shell: true
+            })
+            npm.on('close', (code) => {
+                if (code === 0) resolve()
+                else reject(new Error(`Frontend npm install failed with code ${code}`))
+            })
         })
-        npm.on('close', (code) => {
-            if (code === 0) resolve()
-            else reject(new Error(`Electron npm install failed with code ${code}`))
+    } else {
+        console.log('✅ Frontend dependencies already installed')
+    }
+    
+    if (!fs.existsSync(electronNodeModules)) {
+        console.log('📦 Installing electron dependencies...')
+        await new Promise((resolve, reject) => {
+            const npm = spawn('npm', ['install'], {
+                cwd: ELECTRON_DIR,
+                stdio: 'inherit',
+                shell: true
+            })
+            npm.on('close', (code) => {
+                if (code === 0) resolve()
+                else reject(new Error(`Electron npm install failed with code ${code}`))
+            })
         })
-    })
+    } else {
+        console.log('✅ Electron dependencies already installed')
+    }
 }
 
 // Main build function

@@ -1,3 +1,5 @@
+import { CrossPlatformTimerId } from '../types'
+
 // Utility functions for enhanced UI interactions
 
 /**
@@ -55,12 +57,12 @@ export function createRippleEffect(event: React.MouseEvent<HTMLButtonElement>, c
 }
 
 /**
- * Debounce function to limit how often a function can be called
+ * Debounce function to delay execution until after a specified delay
  * @param func - The function to debounce
  * @param wait - The delay in milliseconds
  */
 export function debounce<T extends (...args: any[]) => any>(func: T, wait: number): (...args: Parameters<T>) => void {
-    let timeout: number | undefined
+    let timeout: CrossPlatformTimerId | undefined
     return (...args: Parameters<T>) => {
         clearTimeout(timeout)
         timeout = setTimeout(() => func(...args), wait)

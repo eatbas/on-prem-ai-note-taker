@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { CrossPlatformTimerId } from '../types'
 
 /**
  * Custom hook for debouncing values
@@ -34,7 +35,7 @@ export function useDebounceCallback<T extends (...args: any[]) => any>(
   delay: number,
   deps: React.DependencyList = []
 ): T {
-  const [debounceTimer, setDebounceTimer] = useState<number | null>(null)
+  const [debounceTimer, setDebounceTimer] = useState<CrossPlatformTimerId | null>(null)
 
   const debouncedCallback = ((...args: Parameters<T>) => {
     if (debounceTimer) {

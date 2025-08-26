@@ -1,6 +1,7 @@
 import { getMeetings, getVpsHealth, getQueueStats, getProgressStats } from '../services'
 import type { QueueStats, ProgressStats } from '../services'
 import { electronApiOptimizer, isElectronApp, getOptimalPollingIntervals } from './electronApiOptimizer'
+import { CrossPlatformTimerId } from '../types'
 
 // Types for our centralized state
 export interface ApiState {
@@ -51,7 +52,7 @@ class ApiStateManager {
   }
 
   private subscribers: Set<StateUpdateCallback> = new Set()
-  private timers: Map<ApiDataType, number> = new Map()
+  private timers: Map<ApiDataType, CrossPlatformTimerId> = new Map()
   private retryAttempts: Map<ApiDataType, number> = new Map()
   
   // Polling configurations for different data types

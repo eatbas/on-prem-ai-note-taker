@@ -17,3 +17,16 @@ export {
   watchOnline,
   updateMeetingTags as updateMeetingTagsOffline
 } from './offline'
+
+// Export missing types
+export interface JobStatusResponse {
+  status: string
+  progress?: number
+  message?: string
+}
+
+export interface GlobalRecordingState {
+  isRecording: boolean
+  meetingId: string | null
+  recordingTime: number
+}
