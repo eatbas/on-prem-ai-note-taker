@@ -27,6 +27,11 @@ class ChunkedTranscriptionService:
             default_model=settings.ollama_model,
             timeout_seconds=settings.ollama_timeout_seconds,
         )
+        # Global speaker tracking across chunks
+        self._global_speaker_map = {}  # Maps local chunk speakers to global speakers
+        self._speaker_history = []     # History of speakers for context
+        self._last_chunk_end_time = 0.0
+        self._last_speaker_id = 0
     
     async def process_audio_file(
         self,
@@ -36,12 +41,18 @@ class ChunkedTranscriptionService:
         user_id: str
     ) -> Dict[str, Any]:
         """
-        Process audio file with chunked transcription and summarization
+        Process audio file with chunked transcription and enhanced speaker persistence
         """
         try:
+            # Reset speaker tracking for new file
+            self._global_speaker_map = {}
+            self._speaker_history = []
+            self._last_chunk_end_time = 0.0
+            self._last_speaker_id = 0
+            
             # Get audio duration and info
             total_duration = get_audio_duration(file_path)
-            logger.info(f"Processing audio file: {file_path}, duration: {total_duration:.2f}s")
+            logger.info(f"Processing audio file with enhanced speaker tracking: {file_path}, duration: {total_duration:.2f}s")
             
             # Update job with audio info
             job_store.update(
@@ -57,19 +68,19 @@ class ChunkedTranscriptionService:
             if self._is_cancelled(job_id):
                 return {"error": "Job cancelled"}
             
-            # Split audio into chunks (configurable)
+            # Split audio into larger chunks with more overlap for better speaker tracking
             chunks = split_audio_into_chunks(
                 file_path,
-                chunk_duration=settings.chunk_duration_seconds,
-                overlap=settings.chunk_overlap_seconds
+                chunk_duration=settings.chunk_duration_seconds,  # Now 45 seconds
+                overlap=settings.chunk_overlap_seconds           # Now 8 seconds
             )
-            logger.info(f"Split audio into {len(chunks)} chunks")
+            logger.info(f"Split audio into {len(chunks)} chunks ({settings.chunk_duration_seconds}s each with {settings.chunk_overlap_seconds}s overlap)")
             
             # Update progress
             job_store.update(
                 job_id,
                 progress=10.0,
-                message=f"Processing {len(chunks)} audio chunks"
+                message=f"Processing {len(chunks)} audio chunks with enhanced speaker tracking"
             )
             
             # Process each chunk
@@ -83,8 +94,8 @@ class ChunkedTranscriptionService:
                     cleanup_chunk_files([chunk_path for _, chunk_path, _ in chunks])
                     return {"error": "Job cancelled"}
                 
-                # Process chunk
-                chunk_result = await self._process_chunk(
+                # Process chunk with enhanced speaker tracking
+                chunk_result = await self._process_chunk_with_speaker_persistence(
                     job_id, chunk_path, start_time, end_time, 
                     chunk_idx, len(chunks), processed_seconds, total_duration, language
                 )
@@ -100,12 +111,13 @@ class ChunkedTranscriptionService:
                 
                 # Update progress (0-30% for transcription)
                 progress = min(30, 10 + (processed_seconds / max(total_duration, 1)) * 20)
+                speakers_found = len(self._speaker_history)
                 job_store.update(
                     job_id,
                     progress=progress,
                     current=int(processed_seconds),
                     total=int(total_duration),
-                    message=f"Transcribed chunk {chunk_idx + 1}/{len(chunks)}"
+                    message=f"Transcribed chunk {chunk_idx + 1}/{len(chunks)} - {speakers_found} speakers identified"
                 )
             
             # Cleanup chunk files
@@ -211,6 +223,170 @@ class ChunkedTranscriptionService:
             )
             
             return {"error": error_message}
+    
+    async def _process_chunk_with_speaker_persistence(
+        self,
+        job_id: str,
+        chunk_path: str,
+        start_time: float,
+        end_time: float,
+        chunk_idx: int,
+        total_chunks: int,
+        processed_seconds: float,
+        total_duration: float,
+        language: str
+    ) -> Dict[str, Any]:
+        """Process a single audio chunk with enhanced speaker persistence across chunks"""
+        try:
+            # Import here to avoid circular imports
+            from ..core.utils import get_whisper_model
+            
+            # Get Whisper model
+            model = get_whisper_model()
+            
+            # Build context-aware prompt for speaker consistency
+            initial_prompt = self._build_speaker_context_prompt(chunk_idx)
+            
+            # Transcribe chunk with enhanced quality settings
+            segments, info = model.transcribe(
+                chunk_path,
+                language=language if language != "auto" else None,
+                vad_filter=True,
+                vad_parameters=dict(
+                    min_silence_duration_ms=settings.whisper_vad_min_silence_ms,
+                    speech_pad_ms=settings.whisper_vad_speech_pad_ms
+                ),
+                beam_size=settings.whisper_beam_size,
+                best_of=settings.whisper_best_of,
+                temperature=settings.whisper_temperature,
+                condition_on_previous_text=True,  # Always true for consistency
+                word_timestamps=True,  # Always enable for better boundaries
+                initial_prompt=initial_prompt,
+                compression_ratio_threshold=settings.whisper_compression_ratio_threshold,
+                log_prob_threshold=settings.whisper_log_prob_threshold
+            )
+            
+            # Enhanced speaker identification with global tracking
+            segments_out = []
+            text_parts = []
+            speaker_changes = []
+            
+            for s in segments:
+                text_cleaned = s.text.strip()
+                if text_cleaned:
+                    # Adjust timestamps to global time
+                    global_start = start_time + float(s.start)
+                    global_end = start_time + float(s.end)
+                    
+                    # Enhanced speaker detection with cross-chunk persistence
+                    speaker_id = self._detect_speaker_with_persistence(
+                        global_start, global_end, text_cleaned, chunk_idx
+                    )
+                    
+                    segments_out.append({
+                        "start": global_start,
+                        "end": global_end,
+                        "text": text_cleaned,
+                        "speaker": f"Speaker {speaker_id + 1}",
+                        "speaker_id": speaker_id
+                    })
+                    text_parts.append(f"Speaker {speaker_id + 1}: {text_cleaned}")
+            
+            # Update global speaker tracking
+            if segments_out:
+                self._last_chunk_end_time = segments_out[-1]["end"]
+                self._last_speaker_id = segments_out[-1]["speaker_id"]
+                
+                # Update speaker history
+                chunk_speakers = set(seg["speaker_id"] for seg in segments_out)
+                for speaker_id in chunk_speakers:
+                    if speaker_id not in self._speaker_history:
+                        self._speaker_history.append(speaker_id)
+            
+            return {
+                "segments": segments_out,
+                "text_parts": text_parts,
+                "language": info.language if hasattr(info, "language") else None,
+                "speaker_changes": speaker_changes,
+                "total_speakers": len(self._speaker_history)
+            }
+            
+        except Exception as e:
+            logger.error(f"Error processing chunk {chunk_idx}: {e}")
+            return {"error": str(e)}
+    
+    def _build_speaker_context_prompt(self, chunk_idx: int) -> str:
+        """Build context-aware prompt for better speaker consistency"""
+        base_prompt = settings.whisper_initial_prompt or "This is a professional meeting with multiple speakers."
+        
+        if chunk_idx == 0:
+            return base_prompt + " Please transcribe accurately with natural speaker changes."
+        
+        # For subsequent chunks, provide speaker context
+        speaker_count = len(self._speaker_history)
+        if speaker_count > 1:
+            prompt = base_prompt + f" This is a continuation of a meeting. "
+            prompt += f"There are {speaker_count} speakers identified so far: "
+            prompt += f"{', '.join([f'Speaker {sid + 1}' for sid in self._speaker_history[:3]]}. "
+            prompt += f"The last speaker was Speaker {self._last_speaker_id + 1}. "
+            prompt += "Please maintain speaker consistency."
+            return prompt
+        
+        return base_prompt
+    
+    def _detect_speaker_with_persistence(
+        self, 
+        global_start: float, 
+        global_end: float, 
+        text: str, 
+        chunk_idx: int
+    ) -> int:
+        """Enhanced speaker detection with cross-chunk persistence"""
+        
+        # Calculate gap from last segment
+        gap = global_start - self._last_chunk_end_time
+        
+        # For first chunk or first segment, start with speaker 0
+        if chunk_idx == 0 and not self._speaker_history:
+            self._speaker_history = [0]
+            return 0
+        
+        # Speaker change detection logic
+        should_change_speaker = False
+        
+        # 1. Long silence gap (configurable threshold)
+        threshold_ms = settings.speaker_change_threshold_ms / 1000.0  # Convert to seconds
+        if gap > threshold_ms:
+            should_change_speaker = True
+        
+        # 2. Early in new chunk with reasonable gap (likely speaker continuation from overlap)
+        chunk_relative_start = global_start % settings.chunk_duration_seconds
+        if chunk_idx > 0 and chunk_relative_start < 5.0 and gap < 2.0:
+            # Likely continuation, keep last speaker
+            return self._last_speaker_id
+        
+        # 3. Question/answer pattern detection
+        if (text.strip().endswith('?') or 
+            text.lower().startswith(('yes', 'no', 'well', 'so', 'okay', 'right', 'i think', 'actually'))):
+            if gap > 0.3:  # Even short gaps for Q&A
+                should_change_speaker = True
+        
+        # 4. Short utterances often indicate speaker changes
+        if len(text.split()) <= 3 and gap > 0.5:
+            should_change_speaker = True
+        
+        if should_change_speaker:
+            # Assign next speaker (cycling through max speakers)
+            next_speaker = (self._last_speaker_id + 1) % settings.max_speakers
+            
+            # Add to history if new
+            if next_speaker not in self._speaker_history:
+                self._speaker_history.append(next_speaker)
+            
+            return next_speaker
+        
+        # No change, continue with last speaker
+        return self._last_speaker_id
     
     async def _process_chunk(
         self,

@@ -3,8 +3,8 @@ const { contextBridge, ipcRenderer } = require('electron')
 contextBridge.exposeInMainWorld('USER_ID', process.env.USERNAME || process.env.USER || '')
 
 contextBridge.exposeInMainWorld('BASIC_AUTH', {
-	username: process.env.BASIC_AUTH_USERNAME || 'myca',
-	password: process.env.BASIC_AUTH_PASSWORD || 'wj2YyxrJ4cqcXgCA'
+	username: process.env.BASIC_AUTH_USERNAME,
+	password: process.env.BASIC_AUTH_PASSWORD
 })
 
 // Always connect to VPS backend for AI services (both dev and production)
@@ -107,10 +107,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
 contextBridge.exposeInMainWorld('corsDebug', {
 	testConnection: async () => {
 		try {
+			const username = process.env.BASIC_AUTH_USERNAME
+			const password = process.env.BASIC_AUTH_PASSWORD
+			
+			if (!username || !password) {
+				throw new Error('Authentication credentials not configured in environment variables')
+			}
 			const response = await fetch('http://95.111.244.159:8000/api/health', {
 				method: 'GET',
 				headers: {
-					'Authorization': 'Basic ' + btoa('myca:wj2YyxrJ4cqcXgCA'),
+					'Authorization': 'Basic ' + btoa(`${username}:${password}`),
 					'Content-Type': 'application/json'
 				}
 			})

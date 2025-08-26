@@ -1,10 +1,12 @@
+import config from '../utils/envLoader'
+
 const apiBase = (() => {
 	try {
 		// @ts-ignore
 		const fromPreload = (window as any).API_BASE_URL as string | undefined
 		if (fromPreload) return fromPreload
 	} catch {}
-	return (import.meta as any).env.VITE_API_BASE_URL || '/api'
+	return config.apiBaseUrl
 })()
 
 function getUserId(): string | undefined {
@@ -26,10 +28,10 @@ function getAuthHeader(): Record<string, string> {
 			return { Authorization: `Basic ${token}` }
 		}
 	} catch {}
-	const u = (import.meta as any).env.VITE_BASIC_AUTH_USERNAME as string | undefined
-	const p = (import.meta as any).env.VITE_BASIC_AUTH_PASSWORD as string | undefined
-	if (u && p) {
-		const token = btoa(`${u}:${p}`)
+	
+	// Use centralized config
+	if (config.basicAuthUsername && config.basicAuthPassword) {
+		const token = btoa(`${config.basicAuthUsername}:${config.basicAuthPassword}`)
 		return { Authorization: `Basic ${token}` }
 	}
 	return {}

@@ -39,33 +39,13 @@ services:
     depends_on:
       - ollama
       - redis
+    env_file:
+      - .env  # Load all variables from centralized .env file
     environment:
-      APP_HOST: 0.0.0.0
-      APP_PORT: 8000
-      ALLOWED_ORIGINS: "*"
-      WHISPER_MODEL: ${WHISPER_MODEL:-tiny}
-      WHISPER_COMPUTE_TYPE: ${WHISPER_COMPUTE_TYPE:-int8}
-      WHISPER_DEVICE: ${WHISPER_DEVICE:-cpu}
-      WHISPER_CPU_THREADS: ${WHISPER_CPU_THREADS:-6}
-      WHISPER_MEMORY_LIMIT_GB: ${WHISPER_MEMORY_LIMIT_GB:-16}
+      # Override specific Docker networking values
+      OLLAMA_BASE_URL: http://ollama:11434  # Docker service name for internal communication
+      REDIS_URL: redis://redis:6379  # Docker service name for internal communication
       WHISPER_DOWNLOAD_ROOT: ./models
-      OLLAMA_BASE_URL: http://ollama:11434  # Fixed: Docker service name for internal communication
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:3b-instruct}
-      OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-3600}
-      OLLAMA_CPU_THREADS: ${OLLAMA_CPU_THREADS:-12}
-      OLLAMA_MEMORY_LIMIT_GB: ${OLLAMA_MEMORY_LIMIT_GB:-18}
-      BASIC_AUTH_USERNAME: ${BASIC_AUTH_USERNAME:-myca}
-      BASIC_AUTH_PASSWORD: ${BASIC_AUTH_PASSWORD:-wj2YyxrJ4cqcXgCA}
-      REDIS_URL: redis://redis:6379  # Fixed: use internal Redis port
-      QUEUE_MAX_WORKERS: ${QUEUE_MAX_WORKERS:-2}
-      USE_QUEUE_SYSTEM: ${USE_QUEUE_SYSTEM:-true}
-      MAX_CONCURRENCY: ${MAX_CONCURRENCY:-2}
-      MAX_UPLOAD_MB: ${MAX_UPLOAD_MB:-100}
-      ALLOWED_LANGUAGES: ${ALLOWED_LANGUAGES:-tr,en}
-      FORCE_LANGUAGE_VALIDATION: ${FORCE_LANGUAGE_VALIDATION:-true}
-      ENABLE_PROGRESS_TRACKING: ${ENABLE_PROGRESS_TRACKING:-true}
-      PROGRESS_UPDATE_INTERVAL_MS: ${PROGRESS_UPDATE_INTERVAL_MS:-500}
-      ENABLE_SSE: ${ENABLE_SSE:-true}
     ports:
       - "8000:8000"
     deploy:

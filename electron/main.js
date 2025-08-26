@@ -281,7 +281,7 @@ app.whenReady().then(() => {
 		console.log('🚀 App is ready, creating windows...')
 		console.log('📁 Current directory:', __dirname)
 		console.log('🔗 VPS Backend: http://95.111.244.159:8000/api')
-		console.log('👤 Auth User: myca')
+		console.log('👤 Auth User:', process.env.BASIC_AUTH_USERNAME || 'Not configured')
 		console.log('🌐 Development Mode: Always connects to VPS for AI services')
 		
 		// Add request interceptor to handle CORS issues
@@ -298,7 +298,14 @@ app.whenReady().then(() => {
 				// Ensure auth header is present
 				if (!details.requestHeaders['Authorization'] && 
 					details.url.includes('95.111.244.159:8000/api')) {
-					const credentials = Buffer.from('myca:wj2YyxrJ4cqcXgCA').toString('base64')
+					const username = process.env.BASIC_AUTH_USERNAME
+					const password = process.env.BASIC_AUTH_PASSWORD
+					
+					if (!username || !password) {
+						console.error('❌ Authentication credentials not configured!')
+						return
+					}
+					const credentials = Buffer.from(`${username}:${password}`).toString('base64')
 					details.requestHeaders['Authorization'] = `Basic ${credentials}`
 				}
 				

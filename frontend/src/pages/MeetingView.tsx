@@ -3,6 +3,7 @@ import { db, syncMeeting, updateMeetingTags, assembleFileFromChunks, deleteMeeti
 import { TagsManager } from '../components/common'
 import { useToast } from '../components/common'
 import { createRippleEffect, formatDuration } from '../utils'
+import config from '../utils/envLoader'
 
 export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
 	const [meeting, setMeeting] = useState<any>(null)
@@ -18,7 +19,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     // Audio details
     const [audioTotalBytes, setAudioTotalBytes] = useState(0)
     const [audioDurationSec, setAudioDurationSec] = useState<number | null>(null)
-    const chunkMs = Number((import.meta as any).env?.VITE_AUDIO_CHUNK_MS ?? 30000)
+    const chunkMs = config.audioChunkMs
 
     // Audio playback state
     const [audioUrl, setAudioUrl] = useState<string | null>(null)

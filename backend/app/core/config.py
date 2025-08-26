@@ -1,6 +1,10 @@
 import os
 from typing import Optional
 
+# Load centralized environment variables from root .env file
+from .env_loader import load_root_env
+load_root_env()
+
 
 class Settings:
 	"""Application settings loaded from environment variables."""
@@ -72,8 +76,14 @@ class Settings:
 	enable_model_caching: bool = os.getenv("ENABLE_MODEL_CACHING", "true").lower() == "true"
 
 	# Audio chunking (for backend processing)
-	chunk_duration_seconds: int = int(os.getenv("CHUNK_DURATION_SECONDS", "30"))
-	chunk_overlap_seconds: int = int(os.getenv("CHUNK_OVERLAP_SECONDS", "5"))
+	chunk_duration_seconds: int = int(os.getenv("CHUNK_DURATION_SECONDS", "45"))
+	chunk_overlap_seconds: int = int(os.getenv("CHUNK_OVERLAP_SECONDS", "8"))
+	
+	# Enhanced speaker identification settings
+	enable_speaker_identification: bool = os.getenv("ENABLE_SPEAKER_IDENTIFICATION", "true").lower() == "true"
+	max_speakers: int = int(os.getenv("MAX_SPEAKERS", "6"))
+	speaker_change_threshold_ms: int = int(os.getenv("SPEAKER_CHANGE_THRESHOLD_MS", "800"))
+	speaker_similarity_threshold: float = float(os.getenv("SPEAKER_SIMILARITY_THRESHOLD", "0.7"))
 	
 	# Progress Tracking
 	enable_progress_tracking: bool = os.getenv("ENABLE_PROGRESS_TRACKING", "true").lower() == "true"

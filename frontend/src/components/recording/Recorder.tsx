@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { addChunk, createMeeting, syncMeeting, autoProcessMeetingRecording, db } from '../../services'
 import { globalRecordingManager, GlobalRecordingState } from '../../stores/globalRecordingManager'
+import config from '../../utils/envLoader'
 
 // Add CSS animations for the component
 const pulseAnimation = `
@@ -596,8 +597,8 @@ export default function Recorder({
 			// Call onCreated callback
 			onCreated(createdId)
 
-			// Use env-driven chunk size (default 30s) for better context
-			const chunkMs = Number((import.meta as any).env?.VITE_AUDIO_CHUNK_MS ?? 30000)
+			// Use centralized chunk size configuration
+			const chunkMs = config.audioChunkMs
 			console.log('🎵 Starting MediaRecorder with chunk interval:', {
 				chunkMs,
 				chunkSeconds: chunkMs / 1000,

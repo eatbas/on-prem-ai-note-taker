@@ -17,33 +17,49 @@ const FRONTEND_DIR = path.join(PROJECT_ROOT, 'frontend')
 const BACKEND_DIR = path.join(PROJECT_ROOT, 'backend')
 const ELECTRON_DIR = __dirname
 
-// Create environment files
+// Create centralized environment file for Electron app
 function createEnvironmentFiles() {
-    console.log('🔧 Creating environment files...')
+    console.log('🔧 Creating centralized environment file for Electron app...')
     
-    // Frontend .env.local
-    const frontendEnv = `# Auto-generated for Electron app
-VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api
-VITE_BASIC_AUTH_USERNAME=electron
-VITE_BASIC_AUTH_PASSWORD=electron-local
-`
-    fs.writeFileSync(path.join(FRONTEND_DIR, '.env.local'), frontendEnv)
+    // Load existing root .env if it exists
+    const rootEnvPath = path.join(PROJECT_ROOT, '.env')
+    let existingEnv = ''
+    if (fs.existsSync(rootEnvPath)) {
+        existingEnv = fs.readFileSync(rootEnvPath, 'utf8')
+    }
     
-    // Backend .env.local
-    const backendEnv = `# Auto-generated for Electron app
+    // Create/update root .env with Electron-specific overrides
+    const electronEnv = `# Centralized Environment Configuration
+# Auto-updated for Electron app
+
+# === ELECTRON APP OVERRIDES ===
 APP_HOST=127.0.0.1
 APP_PORT=${BACKEND_PORT}
 ALLOWED_ORIGINS=*
+BASIC_AUTH_USERNAME=electron
+BASIC_AUTH_PASSWORD=electron-local
+
+# === VPS CONNECTION ===
+VPS_HOST=${VPS_IP}
 OLLAMA_BASE_URL=http://${VPS_IP}:11434
-OLLAMA_MODEL=qwen2.5:3b-instruct
+
+# === ELECTRON FRONTEND CONFIG ===
+VITE_API_BASE_URL=http://localhost:${BACKEND_PORT}/api
+VITE_BASIC_AUTH_USERNAME=electron
+VITE_BASIC_AUTH_PASSWORD=electron-local
+
+# === PERFORMANCE OPTIMIZED FOR LOCAL ===
 WHISPER_MODEL=tiny
 WHISPER_COMPUTE_TYPE=int8
 WHISPER_DOWNLOAD_ROOT=./models
-BASIC_AUTH_USERNAME=electron
-BASIC_AUTH_PASSWORD=electron-local
 LOG_LEVEL=INFO
 `
-    fs.writeFileSync(path.join(BACKEND_DIR, '.env.local'), backendEnv)
+    
+    // Append to existing env or create new
+    const finalEnv = existingEnv ? existingEnv + '\n\n' + electronEnv : electronEnv
+    fs.writeFileSync(rootEnvPath, finalEnv)
+    
+    console.log('✅ Centralized .env file updated at:', rootEnvPath)
 }
 
 // Build frontend for production
