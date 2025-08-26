@@ -50,7 +50,14 @@ echo "🚀 Starting Electron with live frontend development server!"
 echo "💡 The app will now load from the live Vite dev server!"
 echo "🌐 You can see your frontend changes in real-time in Electron!"
 echo "📝 Make changes to frontend code and they'll appear immediately in Electron"
-npx electron .
+
+# Check if running as root and add --no-sandbox flag if needed
+if [ "$EUID" -eq 0 ]; then
+    echo "⚠️  Running as root - adding --no-sandbox flag for Electron"
+    npx electron . --no-sandbox
+else
+    npx electron .
+fi
 cd ..
 
 echo "✅ Development session ended"

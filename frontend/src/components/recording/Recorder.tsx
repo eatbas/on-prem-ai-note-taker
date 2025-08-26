@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import { addChunk, createMeeting, syncMeeting, autoProcessMeetingRecording, db } from '../../services'
 import { globalRecordingManager, GlobalRecordingState } from '../../stores/globalRecordingManager'
 import config from '../../utils/envLoader'
+import { AudioDebugger } from '../../utils/audioDebug'
 
 // Add CSS animations for the component
 const pulseAnimation = `
@@ -52,6 +53,8 @@ export default function Recorder({
 	const [showMicModal, setShowMicModal] = useState(false)
 	const [systemAudioLevel, setSystemAudioLevel] = useState(0)
 	const [microphoneLevel, setMicrophoneLevel] = useState(0)
+	const [showDebugDialog, setShowDebugDialog] = useState(false)
+	const [debugResults, setDebugResults] = useState<any>(null)
 	
 	// Use global recording state
 	const [globalRecordingState, setGlobalRecordingState] = useState<GlobalRecordingState>(globalRecordingManager.getState())
@@ -441,6 +444,16 @@ export default function Recorder({
 
 	async function startRecordingWithSelectedMic() {
 		try {
+			// Debug: Log recording attempt
+			console.log('🔧 DEBUG: Starting recording with selected mic...')
+			AudioDebugger.log('Starting recording attempt')
+			
+			// First, test microphone access
+			const micTest = await AudioDebugger.testMicrophoneAccess()
+			if (!micTest) {
+				throw new Error('Microphone access test failed. Please check permissions.')
+			}
+
 			setError(null)
 
 			// Automatically select the first available microphone if none is selected
@@ -570,15 +583,39 @@ export default function Recorder({
 			}
 
 			// Prefer higher-quality Opus in WebM with an explicit bitrate
-			const rec = new MediaRecorder(combinedStream, { 
-				mimeType: 'audio/webm;codecs=opus',
+			// Debug: Check codec support first
+			const preferredCodec = 'audio/webm;codecs=opus'
+			const fallbackCodec = 'audio/webm'
+			
+			let selectedCodec = preferredCodec
+			if (!MediaRecorder.isTypeSupported(preferredCodec)) {
+				console.warn('🔧 DEBUG: Preferred codec not supported, trying fallback')
+				AudioDebugger.log('Preferred codec not supported', { preferredCodec })
+				if (MediaRecorder.isTypeSupported(fallbackCodec)) {
+					selectedCodec = fallbackCodec
+				} else {
+					// Use whatever the browser supports
+					selectedCodec = undefined as any
+				}
+			}
+			
+			const rec = new MediaRecorder(combinedStream, selectedCodec ? { 
+				mimeType: selectedCodec,
 				bitsPerSecond: 128000 // 128 kbps for clearer speech
-			})
+			} : undefined)
 			
 			console.log('🎤 MediaRecorder created:', {
 				mimeType: rec.mimeType,
 				state: rec.state,
 				streamTracks: combinedStream.getTracks().length,
+				audioTracks: combinedStream.getAudioTracks().length,
+				selectedCodec
+			})
+			
+			// Debug: Test if MediaRecorder can actually start
+			AudioDebugger.log('MediaRecorder created successfully', {
+				mimeType: rec.mimeType,
+				state: rec.state,
 				audioTracks: combinedStream.getAudioTracks().length
 			})
 			
@@ -608,8 +645,14 @@ export default function Recorder({
 			// Make sure media context is resumed (autoplay policies can suspend it)
 			try { await mixingAudioContextRef.current?.resume() } catch {}
 			
-			rec.start(isNaN(chunkMs) ? 30000 : chunkMs)
+			// Debug: Log chunk size configuration
+			const finalChunkMs = isNaN(chunkMs) ? 30000 : chunkMs
+			console.log('🔧 DEBUG: Starting MediaRecorder with chunk size:', finalChunkMs)
+			AudioDebugger.log('Starting MediaRecorder', { chunkMs: finalChunkMs })
+			
+			rec.start(finalChunkMs)
 			console.log('▶️ MediaRecorder.start() called, state:', rec.state)
+			AudioDebugger.log('MediaRecorder started', { state: rec.state })
 			mediaRecorderRef.current = rec
 			
 			// Prevent accidental double recording
