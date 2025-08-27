@@ -266,16 +266,11 @@ export default function Recorder({
         onStop={handleStopRecording}
         showStopButton={showStopButton}
         error={recorderState.error}
+        micStream={recorderState.micStream}
+        speakerStream={recorderState.speakerStream}
       />
 
-      {/* Audio Level Monitor - Only show when recording */}
-      {isRecording && recorderState.micStream && (
-        <AudioLevelMonitor
-          micStream={recorderState.micStream}
-          speakerStream={recorderState.speakerStream}
-          size="medium"
-        />
-      )}
+
 
       {/* Sync Status */}
       {syncStatus !== 'idle' && (

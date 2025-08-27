@@ -135,29 +135,7 @@ export default function Dashboard({
       margin: '0 auto',
       padding: '0 20px'
     }}>
-      {/* Dashboard Header */}
-      <div style={{ 
-        textAlign: 'center', 
-        marginBottom: '32px' 
-      }}>
-        <h1 style={{ 
-          fontSize: '32px', 
-          fontWeight: 'bold', 
-          margin: '0 0 8px 0',
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          WebkitBackgroundClip: 'text',
-          WebkitTextFillColor: 'transparent'
-        }}>
-          Meeting Dashboard
-        </h1>
-        <p style={{ 
-          fontSize: '16px', 
-          color: '#6b7280', 
-          margin: 0 
-        }}>
-          Manage your AI-powered meeting notes and recordings
-        </p>
-      </div>
+
 
       {/* Recording Status */}
       {isRecording && recordingMeetingId && (

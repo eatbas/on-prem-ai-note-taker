@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { Recorder, FloatingRecorder } from '../../features/recording'
 import { useToast } from '../common'
 import { globalRecordingManager } from '../../stores/globalRecordingManager'
@@ -32,7 +32,11 @@ export default function AppShell({
   children
 }: AppShellProps) {
   const navigate = useNavigate()
+  const location = useLocation()
   const { ToastContainer } = useToast()
+  
+  // Check if we're on admin page
+  const isAdminPage = location.pathname === '/admin'
   
   // Global recording state for FloatingRecorder
   const [globalRecordingState, setGlobalRecordingState] = useState(() => 
@@ -161,66 +165,64 @@ export default function AppShell({
             )}
           </div>
 
-          {/* Navigation Buttons */}
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={() => navigate('/')}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#f3f4f6',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}
-            >
-              🏠 Home
-            </button>
+          {/* Navigation Buttons and Recording Controls */}
+          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+            {/* Recording Controls - only show on non-admin pages */}
+            {!isAdminPage && (
+              <Recorder
+                onCreated={handleRecordingCreated}
+                onStopped={handleRecordingStopped}
+                text={text}
+                setText={setText}
+                tag={tag}
+                setTag={setTag}
+                online={online}
+                vpsUp={vpsUp}
+                showStopButton={true}
+              />
+            )}
             
-            <button
-              onClick={() => navigate('/admin')}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#f3f4f6',
-                border: '1px solid #d1d5db',
-                borderRadius: '6px',
-                fontSize: '14px',
-                cursor: 'pointer',
-                fontWeight: '500'
-              }}
-            >
-              ⚙️ Admin
-            </button>
+            {/* Navigation Buttons */}
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <button
+                onClick={() => navigate('/')}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#f3f4f6',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: '500'
+                }}
+              >
+                🏠 Home
+              </button>
+              
+              <button
+                onClick={() => navigate('/admin')}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#f3f4f6',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  fontWeight: '500'
+                }}
+              >
+                ⚙️ Admin
+              </button>
+            </div>
           </div>
         </div>
       </header>
 
-      {/* Recording Controls Bar */}
-      <div style={{
-        marginBottom: '24px',
-        padding: '16px 24px',
-        backgroundColor: '#ffffff',
-        borderRadius: '12px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-        display: 'flex',
-        justifyContent: 'center'
-      }}>
-        <Recorder
-          onCreated={handleRecordingCreated}
-          onStopped={handleRecordingStopped}
-          text={text}
-          setText={setText}
-          tag={tag}
-          setTag={setTag}
-          online={online}
-          vpsUp={vpsUp}
-          showStopButton={true}
-        />
-      </div>
-
       {/* Main Content */}
-      <main>
+      <main style={{
+        paddingTop: globalRecordingState.isRecording ? '80px' : '0',
+        transition: 'padding-top 0.3s ease'
+      }}>
         {children}
       </main>
 

@@ -222,28 +222,7 @@ export default function RecordingModal({
           </label>
         </div>
 
-        {/* System Audio Tip */}
-        <div style={{
-          padding: '16px',
-          backgroundColor: '#fef3c7',
-          border: '1px solid #fbbf24',
-          borderRadius: '8px',
-          marginBottom: '24px'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            gap: '8px'
-          }}>
-            <span style={{ fontSize: '16px' }}>💡</span>
-            <div style={{ fontSize: '13px', lineHeight: '1.4', color: '#92400e' }}>
-              <strong>System Audio Recording:</strong>
-              <br />
-              To record computer audio and speakers, enable "Share system audio" when the screen sharing prompt appears. 
-              On Windows, if this option is missing, enable "Stereo Mix" in Sound settings or use a virtual audio device like VB-CABLE.
-            </div>
-          </div>
-        </div>
+
 
         {/* Action Buttons */}
         <div style={{

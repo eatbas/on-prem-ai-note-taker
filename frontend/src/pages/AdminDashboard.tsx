@@ -17,6 +17,7 @@ import {
     deleteUser,
     deleteMeeting
 } from '../features/admin/utils/adminApi'
+import { config } from '../utils/envLoader'
 
 // Types
 interface User {
@@ -102,11 +103,20 @@ export default function AdminDashboard() {
         setLoading(true)
         setError(null)
         try {
+            // Debug: Log auth configuration
+            console.log('🔐 Admin Auth Debug:', {
+                hasUsername: !!config.basicAuthUsername,
+                hasPassword: !!config.basicAuthPassword,
+                apiBaseUrl: config.apiBaseUrl,
+                username: config.basicAuthUsername ? `${config.basicAuthUsername.substring(0, 2)}***` : 'undefined'
+            })
+            
             const data = await loadStats()
             setStats(data)
         } catch (err) {
+            console.error('❌ Admin Stats Error:', err)
             setError(err instanceof Error ? err.message : 'Failed to load stats')
-            showToast('error', 'Failed to load statistics')
+            showToast('Failed to load statistics', 'error')
         } finally {
             setLoading(false)
         }
@@ -120,7 +130,7 @@ export default function AdminDashboard() {
             setUsers(data)
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load users')
-            showToast('error', 'Failed to load users')
+            showToast('Failed to load users', 'error')
         } finally {
             setLoading(false)
         }
@@ -144,7 +154,7 @@ export default function AdminDashboard() {
             })
         } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to load meetings')
-            showToast('error', 'Failed to load meetings')
+            showToast('Failed to load meetings', 'error')
         } finally {
             setLoading(false)
         }
@@ -158,10 +168,10 @@ export default function AdminDashboard() {
         try {
             await deleteUser(userId)
             await loadUsersData() // Reload users
-            showToast('success', 'User deleted successfully')
+            showToast('User deleted successfully', 'success')
         } catch (err) {
             console.error('Failed to delete user:', err)
-            showToast('error', `Failed to delete user: ${err}`)
+            showToast(`Failed to delete user: ${err}`, 'error')
         }
     }
 
@@ -173,10 +183,10 @@ export default function AdminDashboard() {
         try {
             await deleteMeeting(meetingId)
             await loadMeetingsData() // Reload current page
-            showToast('success', 'Meeting deleted successfully')
+            showToast('Meeting deleted successfully', 'success')
         } catch (err) {
             console.error('Failed to delete meeting:', err)
-            showToast('error', `Failed to delete meeting: ${err}`)
+            showToast(`Failed to delete meeting: ${err}`, 'error')
         }
     }
 
@@ -234,13 +244,13 @@ export default function AdminDashboard() {
             case 'tools':
                 return (
                     <AdminTools
-                        onShowToast={showToast}
+                        onShowToast={(type: 'success' | 'error', message: string) => showToast(message, type)}
                     />
                 )
             case 'jobs':
-                return <JobQueue />
+                return <JobQueue online={true} vpsUp={true} />
             case 'progress':
-                return <ProgressDashboard />
+                return <ProgressDashboard online={true} vpsUp={true} />
             default:
                 return null
         }
@@ -360,6 +370,34 @@ export default function AdminDashboard() {
                 minHeight: '600px'
             }}>
                 {renderTabContent()}
+            </div>
+
+            {/* Auth Configuration Status - Bottom */}
+            <div style={{
+                marginTop: '20px',
+                padding: '12px',
+                backgroundColor: config.basicAuthUsername && config.basicAuthPassword ? '#f0f9ff' : '#fef2f2',
+                border: `1px solid ${config.basicAuthUsername && config.basicAuthPassword ? '#bae6fd' : '#fecaca'}`,
+                borderRadius: '6px',
+                fontSize: '14px'
+            }}>
+                <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>
+                    🔐 Authentication Status
+                </div>
+                <div>
+                    Username: {config.basicAuthUsername ? '✅ Configured' : '❌ Missing'}
+                </div>
+                <div>
+                    Password: {config.basicAuthPassword ? '✅ Configured' : '❌ Missing'}
+                </div>
+                <div>
+                    API URL: {config.apiBaseUrl}
+                </div>
+                {(!config.basicAuthUsername || !config.basicAuthPassword) && (
+                    <div style={{ marginTop: '8px', color: '#dc2626', fontWeight: 'bold' }}>
+                        ⚠️ Admin credentials not configured in environment variables!
+                    </div>
+                )}
             </div>
 
             <ToastContainer />
