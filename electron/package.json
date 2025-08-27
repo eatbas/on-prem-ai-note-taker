@@ -1,9 +1,9 @@
 {
-	"name": "on-prem-ai-note-taker-electron",
-	"version": "0.1.0",
+	"name": "dgmeets-electron",
+	"version": "1.0.0",
 	"private": true,
 	"main": "main.js",
-	"description": "Electron wrapper for On-Prem AI Note Taker",
+	"description": "Electron wrapper for dgMeets",
 	"scripts": {
 		"dev": "electron .",
 		"build:win": "electron-builder --win nsis",
@@ -19,8 +19,8 @@
 		"electron-builder": "24.13.3"
 	},
 	"build": {
-		"appId": "com.onprem.note",
-		"productName": "On-Prem AI Note Taker",
+		"appId": "com.dgmeets.app",
+		"productName": "dgMeets",
 		"directories": {
 			"buildResources": "build",
 			"output": "dist-electron"
@@ -43,12 +43,13 @@
 			}
 		],
 		"extraMetadata": {
-			"name": "on-prem-ai-note-taker",
+			"name": "dgmeets",
 			"version": "1.0.0"
 		},
 		"win": {
 			"target": ["nsis"],
-			"artifactName": "OnPremNoteTaker-Setup-${version}.exe"
+			"artifactName": "dgMeets-Setup-${version}.exe",
+			"icon": "dgMeets.ico"
 		},
 		"nsis": {
 			"oneClick": false,
@@ -57,17 +58,17 @@
 			"allowToChangeInstallationDirectory": true,
 			"createDesktopShortcut": true,
 			"createStartMenuShortcut": true,
-			"shortcutName": "On-Prem AI Note Taker"
+			"shortcutName": "dgMeets"
 		},
 		"mac": {
 			"target": ["dmg"],
-			"artifactName": "OnPremNoteTaker-${version}.dmg",
-			"icon": "icon.icns"
+			"artifactName": "dgMeets-${version}.dmg",
+			"icon": "dgMeets.icns"
 		},
 		"linux": {
 			"target": ["AppImage", "deb"],
-			"artifactName": "OnPremNoteTaker-${version}.${ext}",
-			"icon": "icon.png",
+			"artifactName": "dgMeets-${version}.${ext}",
+			"icon": "dgMeets.png",
 			"category": "Office"
 		}
 	}

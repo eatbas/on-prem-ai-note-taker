@@ -12,12 +12,15 @@ export type Meeting = {
 	duration?: number
 }
 
+export type AudioType = 'microphone' | 'system' | 'mixed'
+
 export type Chunk = {
 	id: string
 	meetingId: string
 	index: number
 	blob: Blob
 	createdAt: number
+	audioType: AudioType  // NEW: Track audio source for Whisper optimization
 }
 
 export type Note = {
@@ -34,10 +37,24 @@ export class AppDB extends Dexie {
 
 	constructor() {
 		super('onprem_notes_db')
+		
+		// Version 1: Original schema
 		this.version(1).stores({
 			meetings: 'id, createdAt, updatedAt, status, *tags, title',
 			chunks: 'id, meetingId, index, createdAt',
 			notes: 'meetingId, createdAt',
+		})
+		
+		// Version 2: Add audioType for Whisper optimization
+		this.version(2).stores({
+			meetings: 'id, createdAt, updatedAt, status, *tags, title',
+			chunks: 'id, meetingId, index, createdAt, audioType', // Added audioType index
+			notes: 'meetingId, createdAt',
+		}).upgrade(trans => {
+			// Migrate existing chunks to have 'mixed' audioType (backward compatibility)
+			return trans.table('chunks').toCollection().modify((chunk: any) => {
+				chunk.audioType = 'mixed'
+			})
 		})
 	}
 }

@@ -8,7 +8,7 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-echo -e "${BLUE}🚀 Building On-Prem AI Note Taker Desktop App${NC}"
+echo -e "${BLUE}🚀 Building dgMeets Desktop App${NC}"
 echo "=================================================="
 
 # Check if we're in the right directory
@@ -163,7 +163,7 @@ echo "2. Install the application"
 echo "3. Launch and start recording!"
 echo ""
 echo -e "${GREEN}📱 The app will:${NC}"
-echo "- Store all data locally in ~/.on-prem-ai-notes/"
+echo "- Store all data locally in ~/.dgmeets/"
 echo "- Connect to VPS at $VPS_IP for AI processing"
 echo "- Work offline for viewing existing notes"
 echo "- Auto-detect your username for authentication"

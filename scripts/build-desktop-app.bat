@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 echo ===================================================
-echo 🚀 Building On-Prem AI Note Taker Desktop App
+echo 🚀 Building dgMeets Desktop App
 echo ===================================================
 
 REM Check if we're in the right directory
@@ -116,7 +116,7 @@ echo 2. Install the application
 echo 3. Launch and start recording!
 echo.
 echo 📱 The app will:
-echo - Store all data locally in %%USERPROFILE%%\.on-prem-ai-notes\
+echo - Store all data locally in %%USERPROFILE%%\.dgmeets\
 echo - Connect to VPS at %VPS_IP% for AI processing
 echo - Work offline for viewing existing notes
 echo - Auto-detect your username for authentication

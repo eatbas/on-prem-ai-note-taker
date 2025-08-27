@@ -1,5 +1,5 @@
 """
-On-Prem AI Note Taker - Main FastAPI Application
+dgMeets - Main FastAPI Application
 
 This is a clean, organized main application file that follows best practices.
 All business logic has been extracted to dedicated modules and routers.
@@ -39,15 +39,15 @@ from .workers.job_handlers import (
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="On-Prem AI Note Taker", 
-    version="0.2.0",
-    description="A self-hosted AI-powered note taking and transcription service 🎙️✨"
+    title="dgMeets", 
+    version="1.0.0",
+    description="AI-powered meeting transcription and summarization service 🎙️✨"
 )
 
 # Configure logging
 _level = getattr(logging, settings.log_level.upper(), logging.INFO)
 logging.basicConfig(level=_level)
-logger = logging.getLogger("on_prem_note_taker")
+logger = logging.getLogger("dgmeets")
 
 
 # Configure CORS
@@ -122,9 +122,9 @@ async def shutdown_event():
 def read_root() -> Dict[str, Any]:
     """Welcome message and API information"""
     return {
-        "message": "🎙️ Welcome to On-Prem AI Note Taker! ✨",
-        "version": "0.2.0",
-        "description": "A self-hosted AI-powered note taking and transcription service",
+        "message": "🎙️ Welcome to dgMeets! ✨",
+        "version": "1.0.0",
+        "description": "AI-powered meeting transcription and summarization service",
         "docs_url": "/docs",
         "health_check": "/api/health",
         "features": [

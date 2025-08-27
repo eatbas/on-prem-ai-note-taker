@@ -30,7 +30,7 @@ function createWindow() {
 			allowRunningInsecureContent: true, // Allow HTTP content from HTTPS
 			experimentalFeatures: true // Enable experimental web features
 		},
-		icon: path.join(__dirname, 'default-icon.svg')
+		icon: path.join(__dirname, 'dgMeets.svg')
 	})
 
 	// Try to load from dev server first (for development)
@@ -45,7 +45,7 @@ function createWindow() {
 	fetch(devServerUrl)
 		.then(response => {
 			if (response.ok) {
-				console.log('✅ Dev server found, loading from:', devServerUrl)
+				console.log('✅ Dev server found!')
 				console.log('🔥 Loading LIVE development version with latest changes!')
 				mainWindow.loadURL(devServerUrl)
 			} else {
@@ -57,15 +57,16 @@ function createWindow() {
 			
 			// Check if the built frontend exists
 			if (!fs.existsSync(frontendPath)) {
-				console.error('❌ Frontend not built! Run: npm run build in frontend folder')
-				console.error('🚨 OR: Make sure Vite dev server is running on port 5173')
+				console.error('❌ Frontend not built!')
+				console.error('🚨 Run: ./scripts/start-electron-dev.sh to start dev server')
 				// Create a simple error page
-				mainWindow.loadURL('data:text/html,<html><body style="font-family:Arial;text-align:center;padding:50px;"><h1 style="color:red;">⚠️ Frontend Not Available</h1><p>Neither dev server nor built files found!</p><p><strong>Solutions:</strong></p><ul style="text-align:left;max-width:400px;margin:0 auto;"><li>Make sure Vite dev server is running on port 5173</li><li>OR run "npm run build" in frontend folder</li></ul></body></html>')
+				mainWindow.loadURL('data:text/html,<html><body style="font-family:Arial;text-align:center;padding:50px;"><h1 style="color:red;">⚠️ Frontend Not Available</h1><p>Neither dev server nor built files found!</p><p><strong>Solution:</strong></p><ul style="text-align:left;max-width:500px;margin:0 auto;"><li>Run: <code>./scripts/start-electron-dev.sh</code></li><li>This will start the Vite dev server on port 5173</li></ul></body></html>')
 				return
 			}
 			
 			console.log('📦 Loading from built files:', frontendPath)
 			console.log('⚠️ This may contain OLDER code - use dev server for latest changes!')
+			console.log('💡 To get latest changes, run: ./scripts/start-electron-dev.sh')
 			mainWindow.loadFile(frontendPath)
 		})
 	
@@ -90,16 +91,21 @@ function createTray() {
 		let icon
 		
 		try {
-			// Try to load the default icon first
-			icon = nativeImage.createFromPath(path.join(__dirname, 'default-icon.svg'))
+			// Try to load the circular dgMeets icon for tray (works better in small sizes)
+			icon = nativeImage.createFromPath(path.join(__dirname, 'dgMeets-circle.svg'))
 		} catch (error) {
 			console.error('Failed to load tray icon:', error)
-			// Create a simple default icon if all else fails
-			icon = nativeImage.createFromBuffer(Buffer.from('<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" fill="#007acc"/></svg>'))
+			// Try the 16px version
+			try {
+				icon = nativeImage.createFromPath(path.join(__dirname, 'dgMeets-16.svg'))
+			} catch (error2) {
+				// Create a simple default icon if all else fails
+				icon = nativeImage.createFromBuffer(Buffer.from('<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" fill="#00d9ff"/></svg>'))
+			}
 		}
 		
 		tray = new Tray(icon)
-		tray.setToolTip('On-Prem AI Note Taker')
+		tray.setToolTip('dgMeets')
 		
 		const contextMenu = require('electron').Menu.buildFromTemplate([
 			{
@@ -192,7 +198,7 @@ function updateTrayRecordingState(recording) {
 			])
 			
 			tray.setContextMenu(contextMenu)
-			tray.setToolTip(recording ? '🎙️ Recording in progress...' : '🚀 On-Prem AI Note Taker')
+			tray.setToolTip(recording ? '🎙️ Recording in progress...' : '🚀 dgMeets')
 		} catch (error) {
 			console.error('Error updating tray menu:', error)
 		}

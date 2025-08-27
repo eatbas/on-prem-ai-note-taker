@@ -198,12 +198,12 @@ function AppShell({
 						fontSize: '2.5rem',
 						fontWeight: '700',
 						color: '#1e293b',
-						background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+						background: 'linear-gradient(135deg, #00d9ff 0%, #0099ff 100%)',
 						backgroundClip: 'text',
 						WebkitBackgroundClip: 'text',
 						WebkitTextFillColor: 'transparent'
 					}}>
-						On-Prem AI Note Taker
+						dgMeets
 					</h1>
 					<p style={{
 						margin: '8px 0 0 0',
@@ -211,7 +211,7 @@ function AppShell({
 						color: '#64748b',
 						fontWeight: '500'
 					}}>
-						Secure, local-first AI-powered meeting notes
+						AI-powered meeting notes and transcription
 					</p>
 					
 					{/* Admin Dashboard and Queue Links */}

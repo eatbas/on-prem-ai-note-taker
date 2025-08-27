@@ -140,7 +140,9 @@ class GlobalRecordingManager {
 			
 			if (e.data && e.data.size > 0) {
 				try {
-					await addChunk(meetingId, e.data, this.state.chunkIndex++)
+					// For now, use 'mixed' audioType for backward compatibility
+					// This will be updated when dual recording is fully implemented
+					await addChunk(meetingId, e.data, this.state.chunkIndex++, 'mixed')
 					console.log(`📁 Global Recording Manager: Successfully saved chunk ${this.state.chunkIndex - 1} (${e.data.size} bytes)`)
 					// Save state after each chunk
 					this.saveState()
@@ -306,7 +308,7 @@ class GlobalRecordingManager {
 			// Set up event handlers
 			mediaRecorder.ondataavailable = async (e) => {
 				if (e.data && e.data.size > 0 && this.state.meetingId) {
-					await addChunk(this.state.meetingId, e.data, this.state.chunkIndex++)
+					await addChunk(this.state.meetingId, e.data, this.state.chunkIndex++, 'mixed')
 					console.log(`📁 Global Recording Manager: Saved chunk ${this.state.chunkIndex - 1}`)
 					this.saveState()
 				}

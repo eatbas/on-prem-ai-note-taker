@@ -29,3 +29,4 @@ class Meeting(Base):
     user = relationship("User", back_populates="meetings")
     transcriptions = relationship("Transcription", back_populates="meeting", cascade="all, delete-orphan")
     summaries = relationship("Summary", back_populates="meeting", cascade="all, delete-orphan")
+    speakers = relationship("Speaker", back_populates="meeting", cascade="all, delete-orphan")

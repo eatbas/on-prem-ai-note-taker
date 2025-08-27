@@ -10,4 +10,8 @@ sqlalchemy==2.0.23
 aiosqlite==0.19.0
 redis[hiredis]==4.6.0
 wheel
+# Speaker diarization dependencies
+pyannote.audio==3.1.1
+torch>=1.13.0
+torchaudio>=0.13.0
 

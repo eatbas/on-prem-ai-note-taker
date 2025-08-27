@@ -1,4 +1,4 @@
-import { db, Meeting, Chunk } from './db'
+import { db, Meeting, Chunk, AudioType } from './db'
 import { transcribeAndSummarize, autoProcessMeeting } from './api'
 
 export function generateId(prefix = 'id'): string {
@@ -19,12 +19,13 @@ export async function createMeeting(title: string, tags: string[] = [], language
 	return meeting
 }
 
-export async function addChunk(meetingId: string, blob: Blob, index: number): Promise<void> {
+export async function addChunk(meetingId: string, blob: Blob, index: number, audioType: AudioType = 'mixed'): Promise<void> {
 	console.log(`💾 addChunk called:`, {
 		meetingId: meetingId.slice(0, 8) + '...',
 		blobSize: blob.size,
 		blobType: blob.type,
 		index,
+		audioType, // NEW: Log audio source type
 		timestamp: new Date().toISOString()
 	})
 	
@@ -34,13 +35,14 @@ export async function addChunk(meetingId: string, blob: Blob, index: number): Pr
 		index,
 		blob,
 		createdAt: Date.now(),
+		audioType, // NEW: Store audio source type for Whisper optimization
 	}
 	
 	try {
 		await db.chunks.add(chunk)
-		console.log(`✅ Chunk ${index} saved successfully to database (${blob.size} bytes)`)
+		console.log(`✅ Chunk ${index} (${audioType}) saved successfully to database (${blob.size} bytes)`)
 	} catch (error) {
-		console.error(`❌ Failed to save chunk ${index} to database:`, error)
+		console.error(`❌ Failed to save chunk ${index} (${audioType}) to database:`, error)
 		throw error
 	}
 }
@@ -91,6 +93,63 @@ export async function assembleFileFromChunks(meetingId: string): Promise<File> {
 	const parts = await getChunks(meetingId)
 	const blobs = parts.map(p => p.blob)
 	return new File(blobs, `${meetingId}.webm`, { type: 'audio/webm' })
+}
+
+// WHISPER OPTIMIZATION: Assemble files by audio type for separate processing
+export async function assembleFilesByAudioType(meetingId: string): Promise<{
+	microphone?: File
+	system?: File
+	mixed?: File
+	hasSeparateStreams: boolean
+}> {
+	console.log('🎯 Assembling Whisper-optimized audio files by type...')
+	
+	const allChunks = await db.chunks.where('meetingId').equals(meetingId).sortBy('index')
+	
+	// Group chunks by audio type
+	const micChunks = allChunks.filter(chunk => chunk.audioType === 'microphone').sort((a, b) => a.index - b.index)
+	const systemChunks = allChunks.filter(chunk => chunk.audioType === 'system').sort((a, b) => a.index - b.index)
+	const mixedChunks = allChunks.filter(chunk => chunk.audioType === 'mixed').sort((a, b) => a.index - b.index)
+	
+	const result: {
+		microphone?: File
+		system?: File  
+		mixed?: File
+		hasSeparateStreams: boolean
+	} = {
+		hasSeparateStreams: micChunks.length > 0 && systemChunks.length > 0
+	}
+	
+	// Create microphone file if chunks exist
+	if (micChunks.length > 0) {
+		const micBlobs = micChunks.map(chunk => chunk.blob)
+		result.microphone = new File(micBlobs, `${meetingId}_microphone.webm`, { type: 'audio/webm' })
+		console.log(`🎤 Microphone file: ${micChunks.length} chunks, ${(result.microphone.size / 1024).toFixed(2)} KB`)
+	}
+	
+	// Create system audio file if chunks exist  
+	if (systemChunks.length > 0) {
+		const systemBlobs = systemChunks.map(chunk => chunk.blob)
+		result.system = new File(systemBlobs, `${meetingId}_system.webm`, { type: 'audio/webm' })
+		console.log(`🔊 System audio file: ${systemChunks.length} chunks, ${(result.system.size / 1024).toFixed(2)} KB`)
+	}
+	
+	// Create mixed file if chunks exist (fallback compatibility)
+	if (mixedChunks.length > 0) {
+		const mixedBlobs = mixedChunks.map(chunk => chunk.blob)
+		result.mixed = new File(mixedBlobs, `${meetingId}_mixed.webm`, { type: 'audio/webm' })
+		console.log(`🔄 Mixed audio file: ${mixedChunks.length} chunks, ${(result.mixed.size / 1024).toFixed(2)} KB`)
+	}
+	
+	console.log('🎯 Whisper Audio File Analysis:', {
+		hasSeparateStreams: result.hasSeparateStreams,
+		microphoneFile: !!result.microphone,
+		systemFile: !!result.system,
+		mixedFile: !!result.mixed,
+		whisperBenefit: result.hasSeparateStreams ? 'MAXIMUM - Perfect speaker separation!' : 'LIMITED - Single stream only'
+	})
+	
+	return result
 }
 
 export async function syncMeeting(meetingId: string): Promise<void> {
@@ -235,6 +294,161 @@ export async function autoProcessMeetingRecording(
 		}
 		throw e
 	}
+}
+
+// WHISPER OPTIMIZATION: Enhanced auto-processing with dual audio support
+export async function autoProcessMeetingRecordingWithWhisperOptimization(
+	meetingId: string,
+	title?: string
+): Promise<void> {
+	console.log('🎯 WHISPER OPTIMIZATION: Starting enhanced audio processing...')
+	
+	const meeting = await db.meetings.get(meetingId)
+	if (!meeting) {
+		throw new Error('Meeting not found')
+	}
+	
+	// Check for dual recording files first (Whisper optimization)
+	const audioFiles = await assembleFilesByAudioType(meetingId)
+	
+	if (!audioFiles.microphone && !audioFiles.system && !audioFiles.mixed) {
+		throw new Error('No audio data found for this meeting')
+	}
+	
+	const language = meeting.language || 'auto'
+	const meetingTitle = title || meeting.title
+	
+	// WHISPER OPTIMIZATION: Process separate audio streams if available
+	if (audioFiles.hasSeparateStreams && audioFiles.microphone && audioFiles.system) {
+		console.log('🎯 PERFECT WHISPER SETUP: Processing separate mic and system audio for maximum accuracy!')
+		
+		try {
+			// Process microphone audio (user speech)
+			console.log('🎤 Processing microphone audio (user voice)...')
+			const micResult = await autoProcessMeeting(
+				audioFiles.microphone,
+				language,
+				`${meetingTitle} - User Audio`
+			)
+			
+			// Process system audio (other speakers)
+			console.log('🔊 Processing system audio (other speakers)...')
+			const systemResult = await autoProcessMeeting(
+				audioFiles.system,
+				language,
+				`${meetingTitle} - System Audio`
+			)
+			
+			// Combine transcripts with speaker labels for perfect diarization
+			const combinedTranscript = combineTranscriptsWithSpeakers(
+				micResult.transcript,
+				systemResult.transcript
+			)
+			
+			// Enhanced summary with speaker context
+			const enhancedSummary = `## Whisper-Optimized Meeting Summary (Perfect Speaker Separation)
+
+**User (Microphone):**
+${micResult.summary}
+
+**Other Speakers (System Audio):**
+${systemResult.summary}
+
+## Combined Analysis:
+This meeting was processed using dual audio streams for maximum Whisper accuracy, achieving perfect speaker separation.`
+			
+			// Save enhanced results
+			await db.notes.put({ 
+				meetingId, 
+				transcript: combinedTranscript, 
+				createdAt: Date.now(), 
+				summary: enhancedSummary
+			})
+			
+			await db.meetings.update(meetingId, { 
+				status: 'sent', 
+				updatedAt: Date.now(),
+				title: meetingTitle
+			})
+			
+			console.log('✅ WHISPER DUAL PROCESSING COMPLETE: Maximum accuracy achieved!')
+			return
+			
+		} catch (error) {
+			console.warn('⚠️ Dual processing failed, falling back to mixed audio:', error)
+			// Fall through to mixed audio processing
+		}
+	}
+	
+	// Fallback: Process single audio file (mixed or available stream)
+	const fallbackFile = audioFiles.mixed || audioFiles.microphone || audioFiles.system!
+	console.log(`🔄 Processing fallback audio file: ${fallbackFile.name} (${(fallbackFile.size / 1024 / 1024).toFixed(2)} MB)`)
+	
+	try {
+		const result = await autoProcessMeeting(
+			fallbackFile, 
+			language, 
+			meetingTitle
+		)
+		
+		// Save the results to local database
+		await db.notes.put({ 
+			meetingId, 
+			transcript: result.transcript, 
+			createdAt: Date.now(), 
+			summary: result.summary 
+		})
+		
+		// Update meeting status and metadata
+		await db.meetings.update(meetingId, { 
+			status: 'sent', 
+			updatedAt: Date.now(),
+			title: result.message.includes('Meeting') ? result.message.split("'")[1] : meetingTitle
+		})
+		
+		console.log(`Successfully auto-processed meeting ${meetingId}`)
+	} catch (e) {
+		await db.meetings.update(meetingId, { 
+			status: 'queued', 
+			updatedAt: Date.now() 
+		})
+		console.error(`Failed to auto-process meeting ${meetingId}:`, e)
+		
+		// Provide more specific error messages
+		if (e instanceof Error) {
+			if (e.message.includes('Failed to fetch') || e.message.includes('fetch')) {
+				throw new Error('Cannot connect to AI backend server. Make sure the backend is running and accessible.')
+			} else if (e.message.includes('401') || e.message.includes('Unauthorized')) {
+				throw new Error('Authentication failed. Check your API credentials.')
+			} else if (e.message.includes('503') || e.message.includes('500')) {
+				throw new Error('Backend server error. The AI service may be temporarily unavailable.')
+			}
+		}
+		
+		throw e
+	}
+}
+
+// Helper function to combine transcripts with speaker labels
+function combineTranscriptsWithSpeakers(micTranscript: string, systemTranscript: string): string {
+	const lines: string[] = []
+	
+	if (micTranscript.trim()) {
+		lines.push('## Speaker: USER (Microphone)')
+		lines.push(micTranscript.trim())
+		lines.push('')
+	}
+	
+	if (systemTranscript.trim()) {
+		lines.push('## Speaker: OTHERS (System Audio)')
+		lines.push(systemTranscript.trim())
+		lines.push('')
+	}
+	
+	lines.push('---')
+	lines.push('*This transcript was processed using Whisper dual-stream optimization for perfect speaker separation.*')
+	
+	return lines.join('\n')
 }
 
 export async function deleteMeetingLocally(meetingId: string): Promise<void> {

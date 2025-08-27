@@ -30,7 +30,7 @@ from ..schemas.meetings import (
     StartMeetingResponse,
 )
 from ..core.config import settings
-from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary
+from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary, Speaker, SpeakerSegment
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language
 from ..clients.ollama_client import OllamaClient
 from ..workers.chunked_service import chunked_service
@@ -408,3 +408,89 @@ async def auto_process_meeting(
     
     service = MeetingService()
     return await service.auto_process_meeting(file, language, title, x_user_id, db)
+
+
+@router.get("/{meeting_id}/speakers", response_model=List[Dict[str, Any]])
+async def get_meeting_speakers(
+    meeting_id: str,
+    _: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
+) -> List[Dict[str, Any]]:
+    """Get all speakers for a meeting"""
+    # Verify meeting exists
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Get speakers with their segments
+    speakers = (
+        db.query(Speaker)
+        .filter(Speaker.meeting_id == meeting_id)
+        .all()
+    )
+    
+    speakers_data = []
+    for speaker in speakers:
+        segments = (
+            db.query(SpeakerSegment)
+            .filter(SpeakerSegment.speaker_id == speaker.id)
+            .order_by(SpeakerSegment.start_time)
+            .all()
+        )
+        
+        speakers_data.append({
+            "id": speaker.id,
+            "original_speaker_id": speaker.original_speaker_id,
+            "custom_name": speaker.custom_name,
+            "speaker_type": speaker.speaker_type,
+            "total_segments": speaker.total_segments,
+            "total_duration": speaker.total_duration,
+            "segments": [
+                {
+                    "id": seg.id,
+                    "start_time": seg.start_time,
+                    "end_time": seg.end_time,
+                    "text": seg.text,
+                    "confidence": seg.confidence,
+                }
+                for seg in segments
+            ]
+        })
+    
+    return speakers_data
+
+
+@router.put("/{meeting_id}/speakers/{speaker_id}/name")
+async def update_speaker_name(
+    meeting_id: str,
+    speaker_id: str,
+    new_name: str = Form(...),
+    _: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Update a speaker's custom name"""
+    # Verify meeting exists
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    # Find speaker
+    speaker = (
+        db.query(Speaker)
+        .filter(Speaker.id == speaker_id, Speaker.meeting_id == meeting_id)
+        .first()
+    )
+    if not speaker:
+        raise HTTPException(status_code=404, detail="Speaker not found")
+    
+    # Update name
+    speaker.custom_name = new_name
+    speaker.updated_at = datetime.utcnow()
+    db.commit()
+    
+    return {
+        "message": f"Speaker name updated to '{new_name}'",
+        "speaker_id": speaker_id,
+        "original_speaker_id": speaker.original_speaker_id,
+        "custom_name": speaker.custom_name,
+    }

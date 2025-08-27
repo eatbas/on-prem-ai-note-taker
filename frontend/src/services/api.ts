@@ -853,4 +853,37 @@ export async function quickVpsTest(): Promise<{ success: boolean; message: strin
 	}
 }
 
+export async function getMeetingSpeakers(meetingId: string) {
+    const response = await fetch(`${apiBase}/meetings/${meetingId}/speakers`, {
+        headers: {
+            'Authorization': 'Basic YWRtaW46YWRtaW4=',
+        },
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Failed to get speakers: ${response.statusText}`);
+    }
+    
+    return response.json();
+}
+
+export async function updateSpeakerName(meetingId: string, speakerId: string, newName: string) {
+    const formData = new FormData();
+    formData.append('new_name', newName);
+    
+    const response = await fetch(`${apiBase}/meetings/${meetingId}/speakers/${speakerId}/name`, {
+        method: 'PUT',
+        headers: {
+            'Authorization': 'Basic YWRtaW46YWRtaW4=',
+        },
+        body: formData,
+    });
+    
+    if (!response.ok) {
+        throw new Error(`Failed to update speaker name: ${response.statusText}`);
+    }
+    
+    return response.json();
+}
+
 
