@@ -321,8 +321,8 @@ export default function RecordingControls({
             style={{
               padding: '8px 16px',
               backgroundColor: disabled ? '#9ca3af' : '#3b82f6',
-              color: 'white',
-              border: 'none',
+              color: disabled ? '#6b7280' : 'white',
+              border: '1px solid #d1d5db',
               borderRadius: '6px',
               fontSize: '14px',
               fontWeight: '500',

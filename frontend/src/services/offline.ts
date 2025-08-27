@@ -1,5 +1,5 @@
 import { db, Meeting, Chunk, AudioType } from './db'
-import { transcribeAndSummarize, autoProcessMeeting, autoProcessDualMeeting } from './api'
+import { transcribeAndSummarize } from './api'
 
 export function generateId(prefix = 'id'): string {
 	return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`
@@ -249,7 +249,37 @@ export async function autoProcessMeetingRecording(
 	}
 	
 	const file = await assembleFileFromChunks(meetingId)
+	console.log(`📁 Assembled file: ${file.name}, size: ${file.size} bytes`)
+	
 	if (file.size === 0) {
+		// Let's check if we have chunks in the database
+		const chunks = await getChunks(meetingId)
+		console.error(`❌ No audio data! Chunks found: ${chunks.length}`)
+		
+		if (chunks.length > 0) {
+			console.error('📋 Chunk details:', chunks.map((c, i) => `#${i}: ${c.blob.size} bytes, type: ${c.audioType}, created: ${new Date(c.createdAt).toISOString()}`))
+			
+			// Try to determine why assembled file is empty
+			const totalSize = chunks.reduce((sum, chunk) => sum + chunk.blob.size, 0)
+			console.error(`📊 Total chunks size: ${totalSize} bytes, but assembled file size: ${file.size} bytes`)
+		} else {
+			// No chunks found - check if meeting exists
+			const meetingExists = await db.meetings.get(meetingId)
+			console.error('🔍 Meeting exists:', !!meetingExists)
+			
+			// Check all chunks in database
+			const allChunks = await db.chunks.toArray()
+			console.error(`🗃️ Total chunks in database: ${allChunks.length}`)
+			
+			if (allChunks.length > 0) {
+				const chunksByMeeting = allChunks.reduce((acc, chunk) => {
+					acc[chunk.meetingId] = (acc[chunk.meetingId] || 0) + 1
+					return acc
+				}, {} as Record<string, number>)
+				console.error('📋 Chunks by meeting:', chunksByMeeting)
+			}
+		}
+		
 		throw new Error('No audio data found for this meeting')
 	}
 	
@@ -259,16 +289,21 @@ export async function autoProcessMeetingRecording(
 		// Use the new auto-process endpoint for better reliability
 		// Ensure we always pass a valid language, defaulting to 'auto' for undefined
 		const language = meeting.language || 'auto'
-		const result = await autoProcessMeeting(
-			file, 
-			language, 
-			title || meeting.title
-		)
+		console.log(`🚀 Calling autoProcessMeeting with:`, {
+			meetingId,
+			fileSize: `${(file.size / 1024 / 1024).toFixed(2)} MB`,
+			language,
+			title: title || meeting.title
+		})
+		
+		const result = await transcribeAndSummarize(file, { language })
+		
+		console.log(`✅ Auto-process result:`, result)
 		
 		// Save the results to local database
 		await db.notes.put({ 
 			meetingId, 
-			transcript: result.transcript, 
+			transcript: result.transcript.text, 
 			createdAt: Date.now(), 
 			summary: result.summary 
 		})
@@ -277,7 +312,7 @@ export async function autoProcessMeetingRecording(
 		await db.meetings.update(meetingId, { 
 			status: 'sent', 
 			updatedAt: Date.now(),
-			title: result.message.includes('Meeting') ? result.message.split("'")[1] : meeting.title
+			title: title || meeting.title
 		})
 		
 		console.log(`Successfully auto-processed meeting ${meetingId}`)
@@ -334,22 +369,35 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(
 		
 		try {
 			// Use the dedicated dual audio backend endpoint for speaker diarization
-			console.log('🎯 USING DUAL AUDIO BACKEND: Processing both streams with speaker diarization...')
-			const dualResult = await autoProcessDualMeeting(
-				audioFiles.microphone,
-				audioFiles.system,
-				language,
-				meetingTitle
-			)
+			console.log('🎯 PROCESSING DUAL AUDIO: Processing both streams separately...')
 			
-			console.log('🎉 DUAL AUDIO BACKEND SUCCESS:', dualResult)
+			// Process microphone and system audio separately, then combine
+			const [micResult, systemResult] = await Promise.all([
+				audioFiles.microphone ? transcribeAndSummarize(audioFiles.microphone, { language }) : null,
+				audioFiles.system ? transcribeAndSummarize(audioFiles.system, { language }) : null
+			])
 			
-			// Save enhanced results from dual audio backend
+			// Combine transcripts with speaker labels
+			let combinedTranscript = ''
+			if (micResult && systemResult) {
+				combinedTranscript = combineTranscriptsWithSpeakers(micResult.transcript.text, systemResult.transcript.text)
+			} else if (micResult) {
+				combinedTranscript = `Microphone: ${micResult.transcript.text}`
+			} else if (systemResult) {
+				combinedTranscript = `System Audio: ${systemResult.transcript.text}`
+			}
+			
+			// Use the better summary (usually from the main audio stream)
+			const finalSummary = micResult?.summary || systemResult?.summary || 'No summary available'
+			
+			console.log('🎉 DUAL AUDIO SUCCESS: Combined transcript created')
+			
+			// Save enhanced results from dual audio processing
 			await db.notes.put({ 
 				meetingId, 
-				transcript: dualResult.transcript || '', 
+				transcript: combinedTranscript, 
 				createdAt: Date.now(), 
-				summary: dualResult.summary || ''
+				summary: finalSummary
 			})
 			
 			await db.meetings.update(meetingId, { 
@@ -358,8 +406,7 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(
 				title: meetingTitle
 			})
 			
-			console.log('✅ WHISPER OPTIMIZATION SUCCESS: Dual audio backend processing completed!')
-			console.log(`📊 Speaker Analysis: ${dualResult.speaker_separation?.total_speakers || 'Multiple'} speakers identified with ${dualResult.speaker_separation?.accuracy_level || 'standard'} accuracy`)
+			console.log('✅ WHISPER OPTIMIZATION SUCCESS: Dual audio processing completed!')
 			return
 			
 		} catch (error) {
@@ -373,16 +420,12 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(
 	console.log(`🔄 Processing fallback audio file: ${fallbackFile.name} (${(fallbackFile.size / 1024 / 1024).toFixed(2)} MB)`)
 	
 	try {
-		const result = await autoProcessMeeting(
-			fallbackFile, 
-			language, 
-			meetingTitle
-		)
+		const result = await transcribeAndSummarize(fallbackFile, { language })
 		
 		// Save the results to local database
 		await db.notes.put({ 
 			meetingId, 
-			transcript: result.transcript, 
+			transcript: result.transcript.text, 
 			createdAt: Date.now(), 
 			summary: result.summary 
 		})
@@ -391,7 +434,7 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(
 		await db.meetings.update(meetingId, { 
 			status: 'sent', 
 			updatedAt: Date.now(),
-			title: result.message.includes('Meeting') ? result.message.split("'")[1] : meetingTitle
+			title: meetingTitle
 		})
 		
 		console.log(`Successfully auto-processed meeting ${meetingId}`)

@@ -11,6 +11,10 @@ export const config = {
     if (typeof window !== 'undefined' && (window as any).API_BASE_URL) {
       return (window as any).API_BASE_URL
     }
+    // In development, use proxy to avoid CORS issues
+    if (import.meta.env.DEV) {
+      return '/api-proxy'
+    }
     return import.meta.env.VITE_API_BASE_URL || 'http://95.111.244.159:8000/api'
   })(),
   

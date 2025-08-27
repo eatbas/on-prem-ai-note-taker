@@ -18,7 +18,10 @@ import { AppShell, RecordingProvider } from './components/app'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { NotificationContainer } from './components/common'
 
-const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
+const isElectron = typeof navigator !== 'undefined' && 
+                  navigator.userAgent.toLowerCase().includes('electron') &&
+                  typeof window !== 'undefined' && 
+                  !!(window as any).electronAPI
 const Router = isElectron ? HashRouter : BrowserRouter
 
 export default function App() {

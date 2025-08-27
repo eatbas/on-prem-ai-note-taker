@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { createMeeting, autoProcessMeetingRecordingWithWhisperOptimization, db } from '../../services'
 import { globalRecordingManager, GlobalRecordingState } from '../../stores/globalRecordingManager'
 import { useAudioRecorder } from '../../hooks/useAudioRecorder'
+import { useToast } from '../common'
 
 // Import our new components
 import RecordingControls from './RecordingControls'
@@ -62,6 +63,9 @@ export default function Recorder({
 
   // Audio recorder hook
   const { state: recorderState, startRecording, stopRecording, cleanup } = useAudioRecorder()
+  
+  // Toast notifications
+  const { showToast } = useToast()
 
   // Derived state
   const isRecording = globalRecordingState.isRecording
@@ -151,9 +155,8 @@ export default function Recorder({
         setShowModal(false)
         onCreated(meetingId)
 
-        // Start global recording manager (we handle MediaRecorder in the hook, so pass a dummy recorder)
-        const dummyRecorder = new MediaRecorder(new MediaStream())
-        globalRecordingManager.startRecording(meetingId, dummyRecorder)
+        // Start global recording manager for timer and UI state (audio handling is in useAudioRecorder)
+        globalRecordingManager.startRecording(meetingId)
 
         // Notify Electron
         if (window.electronAPI) {
@@ -256,17 +259,46 @@ export default function Recorder({
         console.error('Auto-processing failed:', error)
         setSyncStatus('failed')
 
-        // Auto-retry logic
+        // Auto-retry logic with proper state management
         if (retryCount < 3) {
+          const nextRetryCount = retryCount + 1
           const delay = Math.min(1000 * Math.pow(2, retryCount), 10000)
-          console.log(`Auto-retry in ${delay / 1000} seconds... (attempt ${retryCount + 1}/3)`)
-          setTimeout(() => {
-            setRetryCount(prev => prev + 1)
+          console.log(`Auto-retry in ${delay / 1000} seconds... (attempt ${nextRetryCount}/3)`)
+          
+          setRetryCount(nextRetryCount)
+          
+          setTimeout(async () => {
+            console.log(`🔄 Retry ${nextRetryCount}/3: Starting auto-processing...`)
             setSyncStatus('syncing')
-            processMeeting(meetingId) // Recursive retry
+            
+            try {
+              await autoProcessMeetingRecordingWithWhisperOptimization(meetingId)
+              console.log('✅ Retry successful!')
+              setSyncStatus('success')
+              setRetryCount(0)
+              showToast('✅ Meeting processed successfully!', 'success')
+              setTimeout(() => setSyncStatus('idle'), 3000)
+            } catch (retryError) {
+              console.error(`❌ Retry ${nextRetryCount}/3 failed:`, retryError)
+              if (nextRetryCount >= 3) {
+                console.log('❌ Max retries reached - giving up')
+                setSyncStatus('failed')
+                showToast(`❌ Auto-processing failed after 3 attempts. Please try processing manually.`, 'error')
+                setTimeout(() => {
+                  setSyncStatus('idle')
+                  setRetryCount(0)
+                }, 5000)
+              } else {
+                // Let the next iteration handle the retry
+                setSyncStatus('failed')
+                showToast(`⚠️ Processing failed, retrying... (${nextRetryCount}/3)`, 'warning')
+              }
+            }
           }, delay)
         } else {
-          console.log('Max retries reached')
+          console.log('❌ Max retries reached - stopping')
+          setSyncStatus('failed')
+          showToast(`❌ Auto-processing failed after 3 attempts. Please try processing manually.`, 'error')
           setTimeout(() => {
             setSyncStatus('idle')
             setRetryCount(0)
@@ -298,35 +330,29 @@ export default function Recorder({
 
 
 
-      {/* Sync Status */}
-      {syncStatus !== 'idle' && (
+      {/* Processing Status - only show syncing, errors go to notifications */}
+      {syncStatus === 'syncing' && (
         <div style={{
           padding: '12px 16px',
           borderRadius: '8px',
           display: 'flex',
           alignItems: 'center',
           gap: '12px',
-          backgroundColor: syncStatus === 'syncing' ? '#fef3c7' :
-            syncStatus === 'success' ? '#dcfce7' : '#fee2e2',
-          border: syncStatus === 'syncing' ? '1px solid #f59e0b' :
-            syncStatus === 'success' ? '1px solid #22c55e' : '1px solid #ef4444'
+          backgroundColor: '#fef3c7',
+          border: '1px solid #f59e0b'
         }}>
           <div style={{
             width: '12px',
             height: '12px',
             borderRadius: '50%',
-            backgroundColor: syncStatus === 'syncing' ? '#f59e0b' :
-              syncStatus === 'success' ? '#22c55e' : '#ef4444',
-            animation: syncStatus === 'syncing' ? 'pulse 1.5s infinite' : 'none'
+            backgroundColor: '#f59e0b',
+            animation: 'pulse 1.5s infinite'
           }} />
           <span style={{
             fontWeight: 'bold',
-            color: syncStatus === 'syncing' ? '#92400e' :
-              syncStatus === 'success' ? '#166534' : '#991b1b'
+            color: '#92400e'
           }}>
-            {syncStatus === 'syncing' && `🔄 Processing meeting with AI...${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}`}
-            {syncStatus === 'success' && '✅ Meeting processed successfully!'}
-            {syncStatus === 'failed' && `❌ Auto-processing failed${retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}`}
+            🔄 Processing meeting with AI...{retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}
           </span>
         </div>
       )}

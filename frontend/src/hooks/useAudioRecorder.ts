@@ -103,18 +103,24 @@ export function useAudioRecorder() {
       // Create microphone recorder
       const micRecorder = new MediaRecorder(micStream, recordingOptions)
       micRecorder.ondataavailable = async (event) => {
+        console.log(`🎤 Mic data available: ${event.data?.size || 0} bytes`)
+        
         if (event.data && event.data.size > 0 && currentMeetingIdRef.current) {
           try {
             await addChunk(
               currentMeetingIdRef.current, 
               event.data, 
-              micChunkIndexRef.current++, 
+              micChunkIndexRef.current, 
               'microphone'
             )
-            console.log(`✅ Mic chunk saved (${event.data.size} bytes)`)
+            console.log(`✅ Mic chunk ${micChunkIndexRef.current} saved: ${event.data.size} bytes`)
+            micChunkIndexRef.current++
           } catch (error) {
             console.error('❌ Failed to save mic chunk:', error)
+            setError(`Failed to save audio: ${error}`)
           }
+        } else {
+          console.warn(`⚠️ Empty mic data: ${event.data?.size || 0} bytes`)
         }
       }
 
@@ -123,28 +129,52 @@ export function useAudioRecorder() {
       if (speakerStream) {
         speakerRecorder = new MediaRecorder(speakerStream, recordingOptions)
         speakerRecorder.ondataavailable = async (event) => {
+          console.log(`🔊 Speaker data available: ${event.data?.size || 0} bytes`)
+          
           if (event.data && event.data.size > 0 && currentMeetingIdRef.current) {
             try {
               await addChunk(
                 currentMeetingIdRef.current, 
                 event.data, 
-                speakerChunkIndexRef.current++, 
+                speakerChunkIndexRef.current, 
                 'speaker'
               )
-              console.log(`✅ Speaker chunk saved (${event.data.size} bytes)`)
+              console.log(`✅ Speaker chunk ${speakerChunkIndexRef.current} saved: ${event.data.size} bytes`)
+              speakerChunkIndexRef.current++
             } catch (error) {
               console.error('❌ Failed to save speaker chunk:', error)
+              // Don't fail recording for speaker issues
             }
+          } else {
+            console.warn(`⚠️ Empty speaker data: ${event.data?.size || 0} bytes`)
           }
         }
       }
 
-      // Get chunk interval from config
-      const chunkMs = config.audioChunkMs || 30000
+      // Use short chunks like AudioTest for reliability
+      const chunkMs = 1000  // 1 second chunks like AudioTest
 
-      // Start recording
+      // Start recording with short intervals for reliable data capture
+      console.log(`🎙️ Starting recording with ${chunkMs}ms chunks`)
       micRecorder.start(chunkMs)
-      speakerRecorder?.start(chunkMs)
+      if (speakerRecorder) {
+        speakerRecorder.start(chunkMs)
+      }
+      
+      // Force data capture every 5 seconds as backup (like AudioTest frequency)
+      const forceDataInterval = setInterval(() => {
+        if (micRecorder.state === 'recording') {
+          console.log('🔄 Forcing mic data capture...')
+          micRecorder.requestData()
+        }
+        if (speakerRecorder && speakerRecorder.state === 'recording') {
+          console.log('🔄 Forcing speaker data capture...')
+          speakerRecorder.requestData()
+        }
+      }, 5000)
+      
+      // Store interval for cleanup
+      ;(micRecorder as any)._forceDataInterval = forceDataInterval
 
       // Update state
       setState({
@@ -181,6 +211,8 @@ export function useAudioRecorder() {
 
       // Stop recorders (only if they're not already inactive)
       if (state.micRecorder && state.micRecorder.state !== 'inactive') {
+        // Clear force data interval
+        clearInterval((state.micRecorder as any)._forceDataInterval)
         state.micRecorder.stop()
       }
       if (state.speakerRecorder && state.speakerRecorder.state !== 'inactive') {

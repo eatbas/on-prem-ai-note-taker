@@ -381,17 +381,25 @@ app.whenReady().then(async () => {
 			}
 		)
 		
-		// Handle response headers
+		// Handle response headers - only modify if CORS headers are missing
 		session.defaultSession.webRequest.onHeadersReceived(
 			{ urls: ['http://95.111.244.159:8000/*'] },
 			(details, callback) => {
-				// Ensure CORS headers are present in response
-				details.responseHeaders['Access-Control-Allow-Origin'] = ['*']
-				details.responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS']
-				details.responseHeaders['Access-Control-Allow-Headers'] = ['*']
-				details.responseHeaders['Access-Control-Allow-Credentials'] = ['true']
+				// Only add CORS headers if they're not already present (to avoid duplicates)
+				if (!details.responseHeaders['Access-Control-Allow-Origin']) {
+					details.responseHeaders['Access-Control-Allow-Origin'] = ['electron://app']
+				}
+				if (!details.responseHeaders['Access-Control-Allow-Methods']) {
+					details.responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS']
+				}
+				if (!details.responseHeaders['Access-Control-Allow-Headers']) {
+					details.responseHeaders['Access-Control-Allow-Headers'] = ['*']
+				}
+				if (!details.responseHeaders['Access-Control-Allow-Credentials']) {
+					details.responseHeaders['Access-Control-Allow-Credentials'] = ['true']
+				}
 				
-				console.log('🔧 Modified response headers for:', details.url)
+				console.log('🔧 CORS headers checked for:', details.url)
 				callback({ responseHeaders: details.responseHeaders })
 			}
 		)

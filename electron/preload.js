@@ -204,7 +204,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 	}
 })
 
-// CORS debugging functionality
+// CORS debugging functionality  
 contextBridge.exposeInMainWorld('corsDebug', {
 	testConnection: async () => {
 		try {
@@ -214,25 +214,31 @@ contextBridge.exposeInMainWorld('corsDebug', {
 			if (!username || !password) {
 				throw new Error('Authentication credentials not configured in environment variables')
 			}
+			
+			console.log('🔧 Testing CORS connection to VPS backend...')
 			const response = await fetch('http://95.111.244.159:8000/api/health', {
 				method: 'GET',
 				headers: {
 					'Authorization': 'Basic ' + btoa(`${username}:${password}`),
-					'Content-Type': 'application/json'
+					'Content-Type': 'application/json',
+					'Origin': 'electron://app'
 				}
 			})
 			
 			console.log('🔧 CORS Test Response:', response.status, response.statusText)
+			console.log('🔧 Response Headers:', [...response.headers.entries()])
 			
 			if (response.ok) {
 				const data = await response.json()
-				console.log('🔧 CORS Test Data:', data)
+				console.log('✅ CORS Test SUCCESS - Backend connection working!')
+				console.log('🔧 Backend Data:', data)
 				return { success: true, data }
 			} else {
+				console.log('❌ CORS Test FAILED - HTTP Error:', response.status)
 				return { success: false, error: `HTTP ${response.status}` }
 			}
 		} catch (error) {
-			console.error('🔧 CORS Test Error:', error)
+			console.error('❌ CORS Test FAILED - Network Error:', error)
 			return { success: false, error: error.message }
 		}
 	}

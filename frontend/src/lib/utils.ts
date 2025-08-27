@@ -251,7 +251,11 @@ export function roundToDecimals(value: number, decimals: number): number {
 
 // Browser/Environment Detection
 export function isElectron(): boolean {
-  return typeof window !== 'undefined' && !!(window as any).electronAPI
+  // Check multiple indicators to ensure we're actually in Electron
+  return typeof window !== 'undefined' && 
+         !!(window as any).electronAPI &&
+         typeof navigator !== 'undefined' && 
+         navigator.userAgent.toLowerCase().includes('electron')
 }
 
 export function isSecureContext(): boolean {

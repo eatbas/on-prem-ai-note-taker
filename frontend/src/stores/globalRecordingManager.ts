@@ -115,8 +115,8 @@ class GlobalRecordingManager {
 		this.listeners.forEach(listener => listener(state))
 	}
 
-	// Start recording with MediaRecorder instance
-	startRecording(meetingId: string, mediaRecorder: MediaRecorder) {
+	// Start recording timer and state management (audio handling is done separately in useAudioRecorder)
+	startRecording(meetingId: string, mediaRecorder?: MediaRecorder) {
 		console.log('🎙️ Global Recording Manager: Starting recording for meeting:', meetingId)
 		
 		// Clear any previous saved recording state when starting new recording
@@ -124,38 +124,13 @@ class GlobalRecordingManager {
 		
 		this.state.isRecording = true
 		this.state.meetingId = meetingId
-		this.state.mediaRecorder = mediaRecorder
+		this.state.mediaRecorder = mediaRecorder || null
 		this.state.recordingTime = 0
 		this.state.chunkIndex = 0
 		this.state.startTime = Date.now()
 
-		// Set up data handler
-		mediaRecorder.ondataavailable = async (e: BlobEvent) => {
-			console.log('🎵 MediaRecorder ondataavailable event fired:', {
-				hasData: !!e.data,
-				dataSize: e.data?.size || 0,
-				currentChunkIndex: this.state.chunkIndex,
-				meetingId: meetingId.slice(0, 8) + '...'
-			})
-			
-			if (e.data && e.data.size > 0) {
-				try {
-					// For now, use 'mixed' audioType for backward compatibility
-					// This will be updated when dual recording is fully implemented
-					await addChunk(meetingId, e.data, this.state.chunkIndex++, 'mixed')
-					console.log(`📁 Global Recording Manager: Successfully saved chunk ${this.state.chunkIndex - 1} (${e.data.size} bytes)`)
-					// Save state after each chunk
-					this.saveState()
-				} catch (error) {
-					console.error(`❌ Failed to save chunk ${this.state.chunkIndex}:`, error)
-				}
-			} else {
-				console.warn('⚠️ ondataavailable fired but no valid data:', {
-					hasData: !!e.data,
-					dataSize: e.data?.size || 0
-				})
-			}
-		}
+		// Note: Audio data handling is done in useAudioRecorder hook, not here
+		// This manager only handles timer and UI state
 
 		// Start recording timer
 		this.state.recordingInterval = window.setInterval(() => {
@@ -169,17 +144,7 @@ class GlobalRecordingManager {
 			}
 		}, 1000)
 
-		// Safety: periodically force data flush in case timeslice is ignored by platform
-		try {
-			const fallbackMs = 10000
-			this.state.dataRequestInterval = window.setInterval(() => {
-				try {
-					if (this.state.mediaRecorder && this.state.mediaRecorder.state === 'recording') {
-						this.state.mediaRecorder.requestData()
-					}
-				} catch {}
-			}, fallbackMs)
-		} catch {}
+		// Note: Data handling is managed by useAudioRecorder hook
 
 		// Save initial state
 		this.saveState()
