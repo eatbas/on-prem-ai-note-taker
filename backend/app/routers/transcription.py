@@ -180,6 +180,12 @@ async def transcribe_and_summarize(
     
     sem = get_transcribe_semaphore()
     async with sem:
+        # Validate language parameter
+        try:
+            validated_language = validate_language(language)
+        except Exception:
+            validated_language = "auto"
+        
         # Get or create user
         user = get_or_create_user(db)
         

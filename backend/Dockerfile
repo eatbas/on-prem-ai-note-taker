@@ -8,10 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /app
 
-COPY requirements.txt ./
+COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY backend/app ./app
+
+# Copy .env file to make it accessible for the application
+COPY .env ./.env
 
 ENV APP_HOST=0.0.0.0 \
 	APP_PORT=8000 \
