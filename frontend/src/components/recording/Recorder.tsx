@@ -163,6 +163,13 @@ export default function Recorder({
         // Start global recording manager for timer and UI state (audio handling is in useAudioRecorder)
         globalRecordingManager.startRecording(meetingId)
 
+        // Show system audio reminder notification
+        showNotification(
+          '🔊 Starting automatic system audio capture... Check console for details if no system audio is recorded.',
+          'info',
+          6000
+        )
+
         // Notify Electron
         if (window.electronAPI) {
           window.electronAPI.sendRecordingState(true)

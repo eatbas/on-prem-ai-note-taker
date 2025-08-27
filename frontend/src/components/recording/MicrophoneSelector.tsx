@@ -54,6 +54,62 @@ export default function MicrophoneSelector({
     }
   }, [])
 
+  // Global cleanup function to be called when recording stops
+  const forceCleanupAllStreams = () => {
+    console.log('🚨 MicrophoneSelector: Force cleanup of all monitoring streams...')
+    
+    // Stop all monitoring immediately
+    setIsMonitoring(false)
+    
+    if (monitorAnimationRef.current) {
+      cancelAnimationFrame(monitorAnimationRef.current)
+      monitorAnimationRef.current = null
+    }
+
+    // Force stop all streams
+    Object.entries(monitorStreamsRef.current).forEach(([deviceId, stream]) => {
+      try { 
+        console.log(`🚨 Force stopping monitoring stream for device ${deviceId}`)
+        stream.getTracks().forEach((track) => {
+          if (track.readyState !== 'ended') {
+            track.stop()
+            console.log(`🚨 Force stopped track for device ${deviceId}`)
+          }
+        })
+      } catch (e) { 
+        console.warn(`⚠️ Failed to force stop stream for device ${deviceId}:`, e)
+      }
+    })
+
+    // Force close all contexts
+    Object.entries(monitorContextsRef.current).forEach(([deviceId, context]) => {
+      try { 
+        if (context.state !== 'closed') {
+          context.close()
+          console.log(`🚨 Force closed audio context for device ${deviceId}`)
+        }
+      } catch (e) { 
+        console.warn(`⚠️ Failed to force close context for device ${deviceId}:`, e)
+      }
+    })
+
+    // Clear all refs
+    monitorContextsRef.current = {}
+    monitorAnalysersRef.current = {}
+    monitorStreamsRef.current = {}
+    setMicUsageLevels({})
+    
+    console.log('✅ MicrophoneSelector: Force cleanup completed')
+  }
+
+  // Expose cleanup function globally for emergency cleanup
+  useEffect(() => {
+    (window as any).forceMicCleanup = forceCleanupAllStreams
+    return () => {
+      delete (window as any).forceMicCleanup
+    }
+  }, [])
+
   const loadDevices = async () => {
     try {
       setIsLoadingDevices(true)

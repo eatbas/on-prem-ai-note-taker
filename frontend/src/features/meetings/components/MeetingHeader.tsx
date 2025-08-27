@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { TagsManager } from '../../../components/common'
 
 interface MeetingHeaderProps {
   meeting: any
@@ -8,7 +7,6 @@ interface MeetingHeaderProps {
   onSync: () => void
   sending: boolean
   isRemote: boolean
-  onTagsUpdate: (tags: string[]) => void
   onDelete: () => void
   search: string
   onSearchChange: (search: string) => void
@@ -23,7 +21,6 @@ export default function MeetingHeader({
   onSync,
   sending,
   isRemote,
-  onTagsUpdate,
   onDelete,
   search,
   onSearchChange,
@@ -193,16 +190,7 @@ export default function MeetingHeader({
         </div>
       </div>
 
-      {/* Tags */}
-      <div style={{ marginBottom: '20px' }}>
-        <TagsManager
-          meetingId={meeting?.id}
-          currentTags={meeting?.tags || []}
-          onTagsUpdate={onTagsUpdate}
-          online={true}
-          vpsUp={true}
-        />
-      </div>
+
 
       {/* Search and Tabs */}
       <div style={{ 

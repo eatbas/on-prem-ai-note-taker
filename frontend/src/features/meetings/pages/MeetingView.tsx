@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { db, syncMeeting, updateMeetingTags, assembleFilesByAudioType, deleteMeetingLocally, deleteAudioChunksLocally } from '../../../services'
-import { useToast } from '../../../components/common'
+import { useToast, TagsManager } from '../../../components/common'
 import { formatDuration } from '../../../utils'
 import config from '../../../utils/envLoader'
 
@@ -256,7 +256,6 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
         onSync={handleSync}
         sending={sending}
         isRemote={isRemote}
-        onTagsUpdate={handleTagsUpdate}
         onDelete={handleDelete}
         search={search}
         onSearchChange={setSearch}
@@ -266,6 +265,26 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
 
       <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
         {renderTabContent()}
+      </div>
+
+      {/* Tags - positioned after meeting details */}
+      <div style={{ 
+        maxWidth: '1200px', 
+        margin: '20px auto', 
+        padding: '0 24px',
+        backgroundColor: '#ffffff',
+        borderRadius: '8px',
+        border: '1px solid #e5e7eb'
+      }}>
+        <div style={{ padding: '20px' }}>
+          <TagsManager
+            meetingId={meeting?.id}
+            currentTags={meeting?.tags || []}
+            onTagsUpdate={handleTagsUpdate}
+            online={true}
+            vpsUp={true}
+          />
+        </div>
       </div>
 
       {/* Delete Confirmation Modal */}

@@ -69,34 +69,146 @@ export function useAudioRecorder() {
       const micStream = await navigator.mediaDevices.getUserMedia(micConstraints)
       console.log('✅ Microphone stream obtained')
 
-      // Get speaker/system audio stream
+      // Get speaker/system audio stream using multiple methods
       let speakerStream: MediaStream | null = null
-      try {
-        // Try to get system audio via screen capture with audio
-        const screenStream = await navigator.mediaDevices.getDisplayMedia({
-          video: false,
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: false,
-            sampleRate: 44100,
-            channelCount: 2
-          } as any
-        })
-        
-        // Extract only audio tracks
-        const audioTracks = screenStream.getAudioTracks()
-        if (audioTracks.length > 0) {
-          speakerStream = new MediaStream(audioTracks)
-          console.log('✅ Speaker/system audio stream obtained')
-        } else {
-          console.warn('⚠️ No audio tracks in screen capture')
+      
+      // Method 1: Try Electron-specific system audio capture (automatic)
+      if ((window as any).desktopCapture) {
+        try {
+          console.log('🔊 Attempting automatic system audio capture via Electron...')
+          speakerStream = await (window as any).desktopCapture.captureSystemAudio()
+          if (speakerStream) {
+            console.log('✅ Automatic system audio capture successful!')
+          }
+        } catch (err) {
+          console.warn('⚠️ Automatic system audio capture failed:', err)
         }
-        
-        // Stop video tracks if any
-        screenStream.getVideoTracks().forEach(track => track.stop())
-      } catch (err) {
-        console.warn('⚠️ Could not capture system audio:', err)
+      }
+      
+      // Method 2: Try desktop capturer for system audio (Electron-specific, automatic)
+      if (!speakerStream && (window as any).desktopCapture) {
+        try {
+          console.log('🔊 Trying desktop capturer for system audio...')
+          speakerStream = await (window as any).desktopCapture.captureDesktopAudio()
+          if (speakerStream) {
+            console.log('✅ Desktop capturer system audio successful!')
+          }
+        } catch (err) {
+          console.warn('⚠️ Desktop capturer system audio failed:', err)
+        }
+      }
+      
+      // Method 2.5: Try Electron loopback device detection (automatic)
+      if (!speakerStream && (window as any).desktopCapture) {
+        try {
+          console.log('🔊 Trying Electron loopback device detection...')
+          speakerStream = await (window as any).desktopCapture.captureLoopbackAudio()
+          if (speakerStream) {
+            console.log('✅ Electron loopback device detection successful!')
+          }
+        } catch (err) {
+          console.warn('⚠️ Electron loopback device detection failed:', err)
+        }
+      }
+      
+      // Method 3: Try automatic loopback device detection
+      if (!speakerStream) {
+        try {
+          console.log('🔊 Attempting automatic loopback device detection...')
+          const devices = await navigator.mediaDevices.enumerateDevices()
+          
+          // Look for system audio loopback devices
+          const loopbackDevice = devices.find(device => 
+            device.kind === 'audioinput' && (
+              device.label.toLowerCase().includes('stereo mix') ||
+              device.label.toLowerCase().includes('what u hear') ||
+              device.label.toLowerCase().includes('loopback') ||
+              device.label.toLowerCase().includes('system audio') ||
+              device.label.toLowerCase().includes('monitor') ||
+              device.label.toLowerCase().includes('desktop audio')
+            )
+          )
+          
+          if (loopbackDevice) {
+            console.log('🔊 Found loopback device:', loopbackDevice.label)
+            speakerStream = await navigator.mediaDevices.getUserMedia({
+              audio: {
+                deviceId: { exact: loopbackDevice.deviceId },
+                echoCancellation: false,
+                noiseSuppression: false,
+                autoGainControl: false,
+                sampleRate: 44100,
+                channelCount: 2
+              }
+            })
+            console.log('✅ Loopback device system audio successful!')
+          } else {
+            console.log('📍 No loopback devices found. Available audio input devices:')
+            devices.filter(d => d.kind === 'audioinput').forEach(device => {
+              console.log(`  - ${device.label} (${device.deviceId.slice(0, 20)}...)`)
+            })
+          }
+        } catch (err) {
+          console.warn('⚠️ Loopback device detection failed:', err)
+        }
+      }
+      
+      // Method 4: Last resort - try traditional screen capture (requires user interaction)
+      if (!speakerStream) {
+        try {
+          console.log('🔊 Fallback: Requesting system audio via screen capture...')
+          
+          const screenStream = await navigator.mediaDevices.getDisplayMedia({
+            video: false, // Try audio-only first  
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+              sampleRate: 44100,
+              channelCount: 2
+            } as any
+          })
+          
+          console.log('🖥️ Display media stream obtained, checking for audio tracks...')
+          
+          // Extract only audio tracks
+          const audioTracks = screenStream.getAudioTracks()
+          console.log(`🔊 Found ${audioTracks.length} audio tracks in screen capture`)
+          
+          if (audioTracks.length > 0) {
+            speakerStream = new MediaStream(audioTracks)
+            console.log('✅ Screen capture system audio successful!')
+            console.log('🔊 Audio track details:', audioTracks.map(track => ({
+              kind: track.kind,
+              label: track.label,
+              enabled: track.enabled,
+              readyState: track.readyState
+            })))
+          }
+          
+          // Stop video tracks if any
+          const videoTracks = screenStream.getVideoTracks()
+          if (videoTracks.length > 0) {
+            console.log(`📹 Stopping ${videoTracks.length} video tracks...`)
+            videoTracks.forEach(track => track.stop())
+          }
+          
+        } catch (err) {
+          console.warn('⚠️ Screen capture system audio failed:', err)
+        }
+      }
+      
+      // Summary of system audio capture attempt
+      if (speakerStream) {
+        const tracks = speakerStream.getAudioTracks()
+        console.log('🎉 System audio capture successful!', {
+          trackCount: tracks.length,
+          trackLabels: tracks.map(t => t.label),
+          trackStates: tracks.map(t => t.readyState)
+        })
+      } else {
+        console.warn('❌ All system audio capture methods failed')
+        console.warn('💡 System audio will not be recorded')
       }
 
       // Recording options
@@ -334,6 +446,24 @@ export function useAudioRecorder() {
 
       // Clear meeting reference
       currentMeetingIdRef.current = null
+
+      // Force additional cleanup to ensure microphone is released
+      console.log('🧹 Performing additional cleanup to ensure microphone release...')
+      
+      // Call global mic cleanup if available (from MicrophoneSelector)
+      if ((window as any).forceMicCleanup) {
+        console.log('🚨 Calling emergency microphone cleanup...')
+        try {
+          (window as any).forceMicCleanup()
+        } catch (e) {
+          console.warn('⚠️ Emergency mic cleanup failed:', e)
+        }
+      }
+      
+      // Give a moment for all streams to be properly released
+      setTimeout(() => {
+        console.log('🔍 Final microphone status check completed')
+      }, 500)
 
       console.log('✅ Dual recording stopped successfully - microphone should be released')
     } catch (error) {

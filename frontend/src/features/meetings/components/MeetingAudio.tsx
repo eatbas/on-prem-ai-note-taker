@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 
 interface MeetingAudioProps {
   audioUrls: {
@@ -32,11 +32,58 @@ export default function MeetingAudio({
     system: 'stopped'
   })
 
+  // Sync playback state with audio elements
+  useEffect(() => {
+    const micAudio = micAudioRef.current
+    const systemAudio = systemAudioRef.current
+
+    const updatePlaybackState = (audio: HTMLAudioElement, type: 'microphone' | 'system') => {
+      if (audio.paused) {
+        setPlaybackState(prev => ({ ...prev, [type]: audio.currentTime === 0 ? 'stopped' : 'paused' }))
+      } else {
+        setPlaybackState(prev => ({ ...prev, [type]: 'playing' }))
+      }
+    }
+
+    const micPlayHandler = () => updatePlaybackState(micAudio!, 'microphone')
+    const micPauseHandler = () => updatePlaybackState(micAudio!, 'microphone')
+    const micEndedHandler = () => setPlaybackState(prev => ({ ...prev, microphone: 'stopped' }))
+
+    const systemPlayHandler = () => updatePlaybackState(systemAudio!, 'system')
+    const systemPauseHandler = () => updatePlaybackState(systemAudio!, 'system')
+    const systemEndedHandler = () => setPlaybackState(prev => ({ ...prev, system: 'stopped' }))
+
+    if (micAudio) {
+      micAudio.addEventListener('play', micPlayHandler)
+      micAudio.addEventListener('pause', micPauseHandler)
+      micAudio.addEventListener('ended', micEndedHandler)
+    }
+
+    if (systemAudio) {
+      systemAudio.addEventListener('play', systemPlayHandler)
+      systemAudio.addEventListener('pause', systemPauseHandler)
+      systemAudio.addEventListener('ended', systemEndedHandler)
+    }
+
+    return () => {
+      if (micAudio) {
+        micAudio.removeEventListener('play', micPlayHandler)
+        micAudio.removeEventListener('pause', micPauseHandler)
+        micAudio.removeEventListener('ended', micEndedHandler)
+      }
+      if (systemAudio) {
+        systemAudio.removeEventListener('play', systemPlayHandler)
+        systemAudio.removeEventListener('pause', systemPauseHandler)
+        systemAudio.removeEventListener('ended', systemEndedHandler)
+      }
+    }
+  }, [micAudioRef, systemAudioRef, audioUrls])
+
   const handlePlay = (type: 'microphone' | 'system') => {
     const audio = type === 'microphone' ? micAudioRef.current : systemAudioRef.current
     if (audio) {
       audio.play()
-      setPlaybackState(prev => ({ ...prev, [type]: 'playing' }))
+      // State will be updated by event listeners
     }
   }
 
@@ -44,7 +91,7 @@ export default function MeetingAudio({
     const audio = type === 'microphone' ? micAudioRef.current : systemAudioRef.current
     if (audio) {
       audio.pause()
-      setPlaybackState(prev => ({ ...prev, [type]: 'paused' }))
+      // State will be updated by event listeners
     }
   }
 
@@ -205,10 +252,35 @@ export default function MeetingAudio({
                 src={audioUrls[activeAudioType] || ''}
                 controls
                 style={{ width: '100%', marginBottom: '16px' }}
-                onPlay={() => setPlaybackState(prev => ({ ...prev, [activeAudioType]: 'playing' }))}
-                onPause={() => setPlaybackState(prev => ({ ...prev, [activeAudioType]: 'paused' }))}
-                onEnded={() => setPlaybackState(prev => ({ ...prev, [activeAudioType]: 'stopped' }))}
+                preload="metadata"
               />
+            )}
+
+            {/* System Audio Warning */}
+            {activeAudioType === 'system' && dualAudioInfo.system.chunks === 0 && (
+              <div style={{
+                backgroundColor: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: '6px',
+                padding: '12px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
+                <div style={{ fontSize: '20px' }}>⚠️</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: '600', color: '#92400e', marginBottom: '4px' }}>
+                    No System Audio Captured
+                  </div>
+                  <div style={{ fontSize: '14px', color: '#92400e' }}>
+                    System audio capture may have failed. Try these solutions:
+                    <br />• <strong>Windows:</strong> Enable "Stereo Mix" in Sound Control Panel
+                    <br />• <strong>Mac:</strong> Use apps like BlackHole or Loopback for system audio routing
+                    <br />• <strong>All:</strong> Check console logs for specific error messages
+                  </div>
+                </div>
+              </div>
             )}
 
             {/* Audio Info */}
