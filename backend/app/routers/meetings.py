@@ -410,6 +410,36 @@ async def auto_process_meeting(
     return await service.auto_process_meeting(file, language, title, x_user_id, db)
 
 
+@router.post("/{meeting_id}/process-dual")
+async def process_dual_meeting(
+    meeting_id: str,
+    microphone_audio: Optional[UploadFile] = File(None),
+    speaker_audio: Optional[UploadFile] = File(None),
+    language: Optional[str] = Form(default="auto"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    _: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Process dual audio files (microphone and speaker) for a meeting"""
+    from ..services.meeting_service import MeetingService
+    
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    
+    if not microphone_audio and not speaker_audio:
+        raise HTTPException(status_code=400, detail="At least one audio file (microphone or speaker) is required")
+    
+    # Get meeting from database
+    meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+    if not meeting:
+        raise HTTPException(status_code=404, detail="Meeting not found")
+    
+    service = MeetingService()
+    return await service.auto_process_dual_meeting(
+        microphone_audio, speaker_audio, language, meeting.title, x_user_id, db
+    )
+
+
 @router.get("/{meeting_id}/speakers", response_model=List[Dict[str, Any]])
 async def get_meeting_speakers(
     meeting_id: str,

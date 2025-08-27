@@ -13,12 +13,12 @@ export interface JobStatus {
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {
-	return apiRequest<JobStatus>(`/jobs/${jobId}`)
+	return apiRequest<JobStatus>(`/jobs/${jobId}/status`)
 }
 
 export async function cancelJob(jobId: string): Promise<{ success: boolean; message: string }> {
-	return apiRequest<{ success: boolean; message: string }>(`/jobs/${jobId}`, {
-		method: 'DELETE'
+	return apiRequest<{ success: boolean; message: string }>(`/jobs/${jobId}/cancel`, {
+		method: 'POST'
 	})
 }
 
@@ -28,7 +28,7 @@ export function createJobProgressStream(jobId: string): EventSource {
 		throw new Error('User ID not found')
 	}
 
-	const url = new URL(`${apiBase}/jobs/${jobId}/progress`)
+	const url = new URL(`${apiBase}/jobs/${jobId}/stream`)
 	url.searchParams.set('user_id', userId)
 
 	const eventSource = new EventSource(url.toString())

@@ -5,7 +5,7 @@ export async function getMeetings() {
 }
 
 export async function getVpsMeetings() {
-	return apiRequest<any>('/vps/meetings')
+	return apiRequest<any>('/meetings')
 }
 
 export async function getMeeting(meetingId: string) {

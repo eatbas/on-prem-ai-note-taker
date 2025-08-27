@@ -375,12 +375,10 @@ app.whenReady().then(async () => {
 					details.requestHeaders['Authorization'] = `Basic ${credentials}`
 				}
 				
-				// Only set Origin if it's not already present (avoid duplicates)
-				if (!details.requestHeaders['Origin']) {
-					details.requestHeaders['Origin'] = 'electron://app'
-				}
+				// ALWAYS override Origin for Electron app (don't check if present)
+				details.requestHeaders['Origin'] = 'electron://app'
 				
-				console.log('🔧 Modified request headers for:', details.url)
+				console.log('🔧 Modified request headers for:', details.url, 'Origin:', details.requestHeaders['Origin'])
 				callback({ requestHeaders: details.requestHeaders })
 			}
 		)

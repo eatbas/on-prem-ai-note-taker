@@ -27,11 +27,11 @@ export async function getQueueStats(): Promise<QueueStats> {
 }
 
 export async function getQueueTaskStatus(taskId: string): Promise<any> {
-	return apiRequest<any>(`/queue/status/${taskId}`)
+	return apiRequest<any>(`/queue/task/${taskId}/status`)
 }
 
 export async function getQueueTaskResult(taskId: string): Promise<any> {
-	return apiRequest<any>(`/queue/result/${taskId}`)
+	return apiRequest<any>(`/queue/task/${taskId}/result`)
 }
 
 export async function getProgressStats(): Promise<ProgressStats> {
