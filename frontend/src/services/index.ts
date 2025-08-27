@@ -28,6 +28,9 @@ export {
   updateMeetingTags as updateMeetingTagsOffline
 } from './offline'
 
+// Background Processing Services
+export * from './backgroundProcessor'
+
 // Legacy Types (to be moved to lib/types.ts)
 export interface JobStatusResponse {
   status: string

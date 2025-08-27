@@ -20,6 +20,8 @@ import { apiStateManager } from './stores/api'
 import { AppShell, RecordingProvider } from './components/app'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { NotificationContainer } from './components/common'
+import { initializeBackgroundProcessor } from './services/backgroundProcessor'
+import './services/cleanupJobs' // Import cleanup utilities for emergency use
 
 const isElectron = typeof navigator !== 'undefined' && 
                   navigator.userAgent.toLowerCase().includes('electron') &&
@@ -79,6 +81,11 @@ export default function App() {
 
     // Delay to ensure app is loaded
     setTimeout(checkVpsHealth, 2000)
+  }, [])
+
+  // Initialize background processor on app startup
+  useEffect(() => {
+    initializeBackgroundProcessor()
   }, [])
 
   // Subscribe to global recording state

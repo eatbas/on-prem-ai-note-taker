@@ -40,7 +40,10 @@ export default function MeetingCard({
     switch (status) {
       case 'complete': return '#22c55e'
       case 'processing': return '#f59e0b'
+      case 'queued': return '#f59e0b'  // Show queued as processing
       case 'uploaded': return '#3b82f6'
+      case 'recording': return '#dc2626'
+      case 'sent': return '#22c55e'
       case 'local': return '#6b7280'
       default: return '#6b7280'
     }
@@ -50,7 +53,10 @@ export default function MeetingCard({
     switch (status) {
       case 'complete': return '✅'
       case 'processing': return '⏳'
+      case 'queued': return '⏳'  // Show queued as processing
       case 'uploaded': return '☁️'
+      case 'recording': return '🎙️'
+      case 'sent': return '☁️'
       case 'local': return '💾'
       default: return '❓'
     }
@@ -110,7 +116,7 @@ export default function MeetingCard({
               gap: '4px',
               color: getStatusColor(meeting.status)
             }}>
-              {getStatusIcon(meeting.status)} {meeting.status || 'local'}
+              {getStatusIcon(meeting.status)} {meeting.status === 'recording' ? 'Recording...' : meeting.status === 'queued' ? 'Processing...' : (meeting.status || 'local')}
             </span>
             <span>•</span>
             <span>📅 {formatDate(meeting.createdAt)}</span>

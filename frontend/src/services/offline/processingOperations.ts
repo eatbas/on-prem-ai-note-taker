@@ -58,6 +58,25 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(meeting
 		throw new Error('Meeting not found')
 	}
 	
+	// 🚨 CRITICAL: Check if meeting is already processed to prevent duplicate sending
+	if (meeting.status === 'sent') {
+		console.log(`✅ Meeting ${meetingId} already processed (status: sent). Skipping to prevent duplicate.`)
+		return
+	}
+	
+	// Check if meeting is currently being processed (status: queued means processing)
+	if (meeting.status === 'queued') {
+		console.log(`⏳ Meeting ${meetingId} is already being processed (status: queued). Skipping to prevent duplicate.`)
+		return
+	}
+	
+	// Mark as queued to prevent other instances from processing it
+	await db.meetings.update(meetingId, { 
+		status: 'queued', 
+		updatedAt: Date.now() 
+	})
+	console.log(`🔄 Marked meeting ${meetingId} as queued (processing)`)
+	
 	let file = await assembleFileFromChunks(meetingId)
 	console.log(`📁 Assembled file: ${file.name}, size: ${file.size} bytes`)
 	
@@ -169,11 +188,15 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(meeting
 	} catch (e: any) {
 		console.error(`❌ Auto-processing failed for ${meetingId}:`, e)
 		
-		// Update meeting status to show processing failed
-		await db.meetings.update(meetingId, { 
-			status: 'local', // Back to local status so user can retry
-			updatedAt: Date.now() 
-		})
+		// Update meeting status to show processing failed (back to local for retry)
+		try {
+			await db.meetings.update(meetingId, { 
+				status: 'local', // Back to local status so user can retry
+				updatedAt: Date.now() 
+			})
+		} catch (updateError) {
+			console.error('Failed to update meeting status to local:', updateError)
+		}
 		
 		// Enhance error messages for better user experience
 		if (e && typeof e === 'object' && e.message) {

@@ -157,7 +157,7 @@ export default function Dashboard({
 		try {
 			if (online) {
 				// Always load local meetings first so user sees something immediately
-				const localMeetings = await listMeetings({ text, tag, excludeRecordingInProgress: true })
+				const localMeetings = await listMeetings({ text, tag, excludeRecordingInProgress: false })
 				console.log('📁 Loaded local meetings:', localMeetings.length)
 				setMeetings(localMeetings)
 				
@@ -205,14 +205,14 @@ export default function Dashboard({
 			} else {
 				// Use local data when offline
 				console.log('📱 Offline mode - using local data only')
-				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: true }))
+				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: false }))
 			}
 		} catch (err) {
 			console.error('❌ Failed to load meetings:', err)
 			setError(`Failed to load meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
 			// Try to load any local data as last resort
 			try {
-				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: true }))
+				setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: false }))
 			} catch (localErr) {
 				console.error('❌ Even local data failed:', localErr)
 				setMeetings([])
@@ -465,11 +465,28 @@ export default function Dashboard({
 		}
 	}, [tags, onTagsChange])
 
+	// Process meetings to mark recording status and sort
+	const processedMeetings = useMemo(() => {
+		return meetings.map(m => {
+			// Mark the currently recording meeting
+			if (isRecording && recordingMeetingId === m.id) {
+				return { ...m, status: 'recording', title: m.title || 'Meeting in Progress...' }
+			}
+			return m
+		}).sort((a, b) => {
+			// Recording meeting always goes first
+			if (a.status === 'recording') return -1
+			if (b.status === 'recording') return 1
+			// Then sort by creation date (newest first)
+			return (b.createdAt || b.created_at || 0) - (a.createdAt || a.created_at || 0)
+		})
+	}, [meetings, isRecording, recordingMeetingId])
+	
 	// Pagination logic
-	const totalPages = Math.ceil(meetings.length / meetingsPerPage)
+	const totalPages = Math.ceil(processedMeetings.length / meetingsPerPage)
 	const startIndex = (currentPage - 1) * meetingsPerPage
 	const endIndex = startIndex + meetingsPerPage
-	const currentMeetings = meetings.slice(startIndex, endIndex)
+	const currentMeetings = processedMeetings.slice(startIndex, endIndex)
 
 	// Auto-adjust page if current page is beyond available pages
 	useEffect(() => {
@@ -681,192 +698,395 @@ export default function Dashboard({
 
 					{/* Recording in progress indicator - Removed as requested */}
 
-					{/* Local meetings list */}
-					<ul style={{ listStyle: 'none', padding: 0 }}>
-						{currentMeetings.map(m => (
-							<li key={m.id} 
-								onClick={() => onOpen(m.id)}
-								onContextMenu={(e) => handleContextMenu(e, m.id, m.title)}
-								style={{ 
-									display: 'flex', 
-									gap: 12, 
-									padding: 16, 
-									borderBottom: '1px solid #eee',
-									backgroundColor: '#fafafa',
-									marginBottom: 8,
-									borderRadius: 4,
-									cursor: 'pointer',
-									transition: 'all 0.2s ease',
-									border: '1px solid transparent',
-									position: 'relative'
-								}}
-								onMouseEnter={(e) => {
-									e.currentTarget.style.backgroundColor = '#f0f0f0'
-									e.currentTarget.style.transform = 'translateY(-1px)'
-									e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
-									e.currentTarget.style.borderColor = '#d1d5db'
-								}}
-								onMouseLeave={(e) => {
-									e.currentTarget.style.backgroundColor = '#fafafa'
-									e.currentTarget.style.transform = 'translateY(0)'
-									e.currentTarget.style.boxShadow = 'none'
-									e.currentTarget.style.borderColor = 'transparent'
-								}}
-							>
-								<div style={{ flex: 1 }}>
-									<div style={{ 
-										display: 'flex', 
-										alignItems: 'center', 
-										gap: '8px',
-										marginBottom: 4 
+					{/* Local meetings list - Table view for small counts, List view for larger counts */}
+					{processedMeetings.length <= meetingsPerPage ? (
+						// Table view for small number of meetings
+						<>
+							<div style={{
+								marginBottom: '12px',
+								padding: '8px 16px',
+								backgroundColor: '#f0f9ff',
+								border: '1px solid #0ea5e9',
+								borderRadius: '8px',
+								fontSize: '13px',
+								color: '#0c4a6e',
+								textAlign: 'center'
+							}}>
+								📊 Table View • {processedMeetings.length} meeting{processedMeetings.length !== 1 ? 's' : ''}
+							</div>
+							<div style={{
+								backgroundColor: 'white',
+								borderRadius: '12px',
+								border: '1px solid #e2e8f0',
+								overflow: 'hidden',
+								boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+								overflowX: 'auto' // Make table horizontally scrollable on small screens
+							}}>
+							<table style={{
+								width: '100%',
+								borderCollapse: 'collapse',
+								fontSize: '14px',
+								minWidth: '600px' // Ensure table doesn't get too cramped
+							}}>
+								<thead>
+									<tr style={{
+										backgroundColor: '#f8fafc',
+										borderBottom: '2px solid #e2e8f0'
 									}}>
-										<div style={{ fontWeight: 600, fontSize: 18 }}>
-											<InlineEditableTitle id={m.id} title={m.title || 'Untitled Meeting'} onSaved={refresh} />
-										</div>
-										<span style={{ 
-											fontSize: '12px', 
-											color: '#6b7280',
-											opacity: 0.7,
-											fontStyle: 'italic'
+										<th style={{
+											padding: '16px',
+											textAlign: 'left',
+											fontWeight: '600',
+											color: '#374151',
+											fontSize: '15px',
+											width: '40%'
 										}}>
-											👆 Click to open
-										</span>
-									</div>
-									<div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
-										📅 {new Date(m.created_at || m.createdAt).toLocaleString()}
-										{m.duration && (
-											<span style={{ 
-												backgroundColor: '#f3f4f6', 
-												padding: '2px 6px', 
-												borderRadius: '10px',
-												marginLeft: '8px',
-												fontWeight: '500',
-												color: '#374151'
+											📝 Meeting
+										</th>
+										<th style={{
+											padding: '16px',
+											textAlign: 'left',
+											fontWeight: '600',
+											color: '#374151',
+											fontSize: '15px',
+											width: '25%'
+										}}>
+											📅 Date & Duration
+										</th>
+										<th style={{
+											padding: '16px',
+											textAlign: 'left',
+											fontWeight: '600',
+											color: '#374151',
+											fontSize: '15px',
+											width: '20%'
+										}}>
+											📊 Status
+										</th>
+										<th style={{
+											padding: '16px',
+											textAlign: 'center',
+											fontWeight: '600',
+											color: '#374151',
+											fontSize: '15px',
+											width: '15%'
+										}}>
+											⚡ Actions
+										</th>
+									</tr>
+								</thead>
+								<tbody>
+									{processedMeetings.map(m => (
+										<tr key={m.id}
+											onClick={() => onOpen(m.id)}
+											onContextMenu={(e) => handleContextMenu(e, m.id, m.title)}
+											style={{
+												cursor: 'pointer',
+												transition: 'all 0.2s ease',
+												borderBottom: '1px solid #f1f5f9'
+											}}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.backgroundColor = '#f8fafc'
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.backgroundColor = 'transparent'
+											}}
+										>
+											<td style={{
+												padding: '16px',
+												verticalAlign: 'top'
 											}}>
-												⏱️ {Math.round(m.duration / 60)} min
-											</span>
-										)}
-										{!m.duration && m.status === 'sent' && (
+												<div style={{
+													fontWeight: '600',
+													fontSize: '16px',
+													marginBottom: '4px',
+													color: '#1e293b'
+												}}>
+													<InlineEditableTitle id={m.id} title={m.title || 'Untitled Meeting'} onSaved={refresh} />
+												</div>
+												{m.summary && (
+													<div style={{
+														fontSize: '13px',
+														color: '#64748b',
+														marginTop: '8px',
+														lineHeight: '1.4'
+													}}>
+														{m.summary.slice(0, 120)}...
+													</div>
+												)}
+											</td>
+											<td style={{
+												padding: '16px',
+												verticalAlign: 'top'
+											}}>
+												<div style={{
+													fontSize: '14px',
+													color: '#374151',
+													marginBottom: '4px'
+												}}>
+													{new Date(m.created_at || m.createdAt).toLocaleDateString()}
+												</div>
+												<div style={{
+													fontSize: '13px',
+													color: '#6b7280'
+												}}>
+													{new Date(m.created_at || m.createdAt).toLocaleTimeString()}
+												</div>
+												{m.duration && (
+													<div style={{
+														marginTop: '4px'
+													}}>
+														<span style={{
+															backgroundColor: '#f3f4f6',
+															padding: '2px 8px',
+															borderRadius: '12px',
+															fontSize: '12px',
+															fontWeight: '500',
+															color: '#374151'
+														}}>
+															⏱️ {Math.round(m.duration / 60)} min
+														</span>
+													</div>
+												)}
+											</td>
+											<td style={{
+												padding: '16px',
+												verticalAlign: 'top'
+											}}>
+												<span style={{
+													display: 'inline-block',
+													padding: '4px 12px',
+													borderRadius: '12px',
+													fontSize: '12px',
+													fontWeight: '500',
+													backgroundColor: m.status === 'recording' ? '#fef3c7' : 
+																	m.status === 'sent' ? '#dcfce7' : '#fee2e2',
+													color: m.status === 'recording' ? '#92400e' : 
+														   m.status === 'sent' ? '#166534' : '#dc2626'
+												}}>
+													{m.status === 'recording' ? '🔴 Recording' : 
+													 m.status === 'sent' ? '✅ Sent' : '⏳ Local'}
+												</span>
+											</td>
+											<td style={{
+												padding: '16px',
+												textAlign: 'center',
+												verticalAlign: 'top'
+											}}>
+												{m.status !== 'sent' && (
+													<button 
+														onClick={(e) => {
+															createRippleEffect(e)
+															e.stopPropagation()
+															retry(m.id)
+														}} 
+														disabled={!online || sendingMeetings.has(m.id)} 
+														style={{ 
+															padding: '6px 12px',
+															backgroundColor: sendingMeetings.has(m.id) ? '#9ca3af' : '#10b981',
+															color: 'white',
+															border: 'none',
+															borderRadius: '6px',
+															cursor: (online && !sendingMeetings.has(m.id)) ? 'pointer' : 'not-allowed',
+															fontWeight: '500',
+															opacity: online ? 1 : 0.6,
+															transition: 'all 0.2s ease',
+															transform: 'scale(1)',
+															fontSize: '12px'
+														}}
+														onMouseDown={(e) => {
+															if (online && !sendingMeetings.has(m.id)) {
+																e.currentTarget.style.transform = 'scale(0.95)'
+																e.currentTarget.style.backgroundColor = '#059669'
+															}
+														}}
+														onMouseUp={(e) => {
+															if (online && !sendingMeetings.has(m.id)) {
+																e.currentTarget.style.transform = 'scale(1)'
+																e.currentTarget.style.backgroundColor = '#10b981'
+															}
+														}}
+														onMouseLeave={(e) => {
+															if (online && !sendingMeetings.has(m.id)) {
+																e.currentTarget.style.transform = 'scale(1)'
+																e.currentTarget.style.backgroundColor = '#10b981'
+															}
+														}}
+													>
+														{sendingMeetings.has(m.id) ? '⏳' : '📤'}
+													</button>
+												)}
+												{m.status === 'sent' && (
+													<span style={{
+														fontSize: '12px',
+														color: '#64748b'
+													}}>
+														✅ Synced
+													</span>
+												)}
+											</td>
+										</tr>
+									))}
+								</tbody>
+							</table>
+						</div>
+					</>
+					) : (
+						// List view for larger number of meetings
+						<ul style={{ listStyle: 'none', padding: 0 }}>
+							{currentMeetings.map(m => (
+								<li key={m.id} 
+									onClick={() => onOpen(m.id)}
+									onContextMenu={(e) => handleContextMenu(e, m.id, m.title)}
+									style={{ 
+										display: 'flex', 
+										gap: 12, 
+										padding: 16, 
+										borderBottom: '1px solid #eee',
+										backgroundColor: '#fafafa',
+										marginBottom: 8,
+										borderRadius: 4,
+										cursor: 'pointer',
+										transition: 'all 0.2s ease',
+										border: '1px solid transparent',
+										position: 'relative'
+									}}
+									onMouseEnter={(e) => {
+										e.currentTarget.style.backgroundColor = '#f0f0f0'
+										e.currentTarget.style.transform = 'translateY(-1px)'
+										e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
+										e.currentTarget.style.borderColor = '#d1d5db'
+									}}
+									onMouseLeave={(e) => {
+										e.currentTarget.style.backgroundColor = '#fafafa'
+										e.currentTarget.style.transform = 'translateY(0)'
+										e.currentTarget.style.boxShadow = 'none'
+										e.currentTarget.style.borderColor = 'transparent'
+									}}
+								>
+									<div style={{ flex: 1 }}>
+										<div style={{ 
+											display: 'flex', 
+											alignItems: 'center', 
+											gap: '8px',
+											marginBottom: 4 
+										}}>
+											<div style={{ fontWeight: 600, fontSize: 18 }}>
+												<InlineEditableTitle id={m.id} title={m.title || 'Untitled Meeting'} onSaved={refresh} />
+											</div>
 											<span style={{ 
-												backgroundColor: '#fef3c7', 
+												fontSize: '12px', 
+												color: '#6b7280',
+												opacity: 0.7,
+												fontStyle: 'italic'
+											}}>
+												👆 Click to open
+											</span>
+										</div>
+										<div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
+											📅 {new Date(m.created_at || m.createdAt).toLocaleString()}
+											{m.duration && (
+												<span style={{ 
+													backgroundColor: '#f3f4f6', 
+													padding: '2px 6px', 
+													borderRadius: '10px',
+													marginLeft: '8px',
+													fontWeight: '500',
+													color: '#374151'
+												}}>
+													⏱️ {Math.round(m.duration / 60)} min
+												</span>
+											)}
+											{!m.duration && m.status === 'sent' && (
+												<span style={{ 
+													backgroundColor: '#fef3c7', 
+													padding: '2px 6px', 
+													borderRadius: '10px',
+													marginLeft: '8px',
+													fontSize: '12px',
+													color: '#92400e'
+												}}>
+													⏱️ Duration not recorded
+												</span>
+											)}
+											{/* Debug: Show actual status value */}
+											<span style={{ 
+												backgroundColor: '#fee', 
 												padding: '2px 6px', 
 												borderRadius: '10px',
 												marginLeft: '8px',
 												fontSize: '12px',
-												color: '#92400e'
+												color: '#dc2626'
 											}}>
-												⏱️ Duration not recorded
+												🔍 Status: {m.status === 'recording' ? 'Recording in Progress' : (m.status || 'undefined')}
 											</span>
-										)}
-										{/* Debug: Show actual status value */}
-										<span style={{ 
-											backgroundColor: '#fee', 
-											padding: '2px 6px', 
-											borderRadius: '10px',
-											marginLeft: '8px',
-											fontSize: '12px',
-											color: '#dc2626'
-										}}>
-											🔍 Status: {m.status || 'undefined'}
-										</span>
-									</div>
-									{m.summary && (
-										<div style={{ 
-											fontSize: 14, 
-											opacity: 0.9, 
-											backgroundColor: '#f0f9ff',
-											padding: 8,
-											borderRadius: 4,
-											marginTop: 8,
-											border: '1px solid #0ea5e9'
-										}}>
-											<strong>Summary:</strong> {m.summary.slice(0, 200)}...
 										</div>
-									)}
-								</div>
-								<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-									<button 
-										onClick={(e) => {
-											createRippleEffect(e)
-											e.stopPropagation()
-											onOpen(m.id)
-										}} 
-										style={{ 
-											padding: '8px 16px',
-											backgroundColor: '#3b82f6',
-											color: 'white',
-											border: 'none',
-											borderRadius: '4px',
-											cursor: 'pointer',
-											fontWeight: '500',
-											transition: 'all 0.2s ease',
-											transform: 'scale(1)'
-										}}
-										onMouseDown={(e) => {
-											e.currentTarget.style.transform = 'scale(0.95)'
-											e.currentTarget.style.backgroundColor = '#2563eb'
-										}}
-										onMouseUp={(e) => {
-											e.currentTarget.style.transform = 'scale(1)'
-											e.currentTarget.style.backgroundColor = '#3b82f6'
-										}}
-										onMouseLeave={(e) => {
-											e.currentTarget.style.transform = 'scale(1)'
-											e.currentTarget.style.backgroundColor = '#3b82f6'
-										}}
-									>
-										📄 Open
-									</button>
-									{m.status !== 'sent' && (
-										<button 
-											onClick={(e) => {
-												createRippleEffect(e)
-												e.stopPropagation()
-												retry(m.id)
-											}} 
-											disabled={!online || sendingMeetings.has(m.id)} 
-											style={{ 
-												padding: '8px 16px',
-												backgroundColor: sendingMeetings.has(m.id) ? '#9ca3af' : '#10b981',
-												color: 'white',
-												border: 'none',
-												borderRadius: '4px',
-												cursor: (online && !sendingMeetings.has(m.id)) ? 'pointer' : 'not-allowed',
-												fontWeight: '500',
-												opacity: online ? 1 : 0.6,
-												transition: 'all 0.2s ease',
-												transform: 'scale(1)',
-												minWidth: '80px'
-											}}
-											onMouseDown={(e) => {
-												if (online && !sendingMeetings.has(m.id)) {
-													e.currentTarget.style.transform = 'scale(0.95)'
-													e.currentTarget.style.backgroundColor = '#059669'
-												}
-											}}
-											onMouseUp={(e) => {
-												if (online && !sendingMeetings.has(m.id)) {
-													e.currentTarget.style.transform = 'scale(1)'
-													e.currentTarget.style.backgroundColor = '#10b981'
-												}
-											}}
-											onMouseLeave={(e) => {
-												if (online && !sendingMeetings.has(m.id)) {
-													e.currentTarget.style.transform = 'scale(1)'
-													e.currentTarget.style.backgroundColor = '#10b981'
-												}
-											}}
-										>
-											{sendingMeetings.has(m.id) ? '⏳ Sending...' : '📤 Send'}
-										</button>
-									)}
-								</div>
-							</li>
-						))}
-					</ul>
+										{m.summary && (
+											<div style={{ 
+												fontSize: 14, 
+												opacity: 0.9, 
+												backgroundColor: '#f0f9ff',
+												padding: 8,
+												borderRadius: 4,
+												marginTop: 8,
+												border: '1px solid #0ea5e9'
+											}}>
+												<strong>Summary:</strong> {m.summary.slice(0, 200)}...
+											</div>
+										)}
+									</div>
+									<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+										{m.status !== 'sent' && (
+											<button 
+												onClick={(e) => {
+													createRippleEffect(e)
+													e.stopPropagation()
+													retry(m.id)
+												}} 
+												disabled={!online || sendingMeetings.has(m.id)} 
+												style={{ 
+													padding: '8px 16px',
+													backgroundColor: sendingMeetings.has(m.id) ? '#9ca3af' : '#10b981',
+													color: 'white',
+													border: 'none',
+													borderRadius: '4px',
+													cursor: (online && !sendingMeetings.has(m.id)) ? 'pointer' : 'not-allowed',
+													fontWeight: '500',
+													opacity: online ? 1 : 0.6,
+													transition: 'all 0.2s ease',
+													transform: 'scale(1)',
+													minWidth: '80px'
+												}}
+												onMouseDown={(e) => {
+													if (online && !sendingMeetings.has(m.id)) {
+														e.currentTarget.style.transform = 'scale(0.95)'
+														e.currentTarget.style.backgroundColor = '#059669'
+													}
+												}}
+												onMouseUp={(e) => {
+													if (online && !sendingMeetings.has(m.id)) {
+														e.currentTarget.style.transform = 'scale(1)'
+														e.currentTarget.style.backgroundColor = '#10b981'
+													}
+												}}
+												onMouseLeave={(e) => {
+													if (online && !sendingMeetings.has(m.id)) {
+														e.currentTarget.style.transform = 'scale(1)'
+														e.currentTarget.style.backgroundColor = '#10b981'
+													}
+												}}
+											>
+												{sendingMeetings.has(m.id) ? '⏳ Sending...' : '📤 Send'}
+											</button>
+										)}
+									</div>
+								</li>
+							))}
+						</ul>
+					)}
 
-					{/* Pagination Controls - Moved to bottom */}
-					{!loading && meetings.length > 0 && (
+					{/* Pagination Controls - Only show for list view (when meetings > meetingsPerPage) */}
+					{!loading && meetings.length > 0 && processedMeetings.length > meetingsPerPage && (
 						<div style={{ 
 							display: 'flex', 
 							justifyContent: 'space-between', 
@@ -1222,23 +1442,6 @@ export default function Dashboard({
 										)}
 									</div>
 									<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-										<button 
-											onClick={(e) => {
-												e.stopPropagation()
-												onOpen(m.id)
-											}} 
-											style={{ 
-												padding: '8px 16px',
-												backgroundColor: '#0ea5e9',
-												color: 'white',
-												border: 'none',
-												borderRadius: '4px',
-												cursor: 'pointer',
-												fontWeight: '500'
-											}}
-										>
-											📄 Open
-										</button>
 									</div>
 								</li>
 							))}

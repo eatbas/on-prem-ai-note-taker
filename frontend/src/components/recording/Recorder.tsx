@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { createMeeting, autoProcessMeetingRecordingWithWhisperOptimization, db } from '../../services'
+import { db } from '../../services'
 import { globalRecordingManager, GlobalRecordingState } from '../../stores/globalRecordingManager'
-import { useAudioRecorder } from '../../hooks/useAudioRecorder'
+import { queueMeetingProcessing } from '../../services/backgroundProcessor'
 import { useToast } from '../common'
 import { useNotification } from '../../contexts/NotificationContext'
 
@@ -9,7 +9,7 @@ import { useNotification } from '../../contexts/NotificationContext'
 import RecordingControls from './RecordingControls'
 import RecordingModal, { RecordingConfig } from './RecordingModal'
 
-import { InputModal } from '../common'
+// InputModal no longer needed - removed naming step
 
 // CSS animations for the component
 const styles = `
@@ -56,14 +56,12 @@ export default function Recorder({
   
   // Local state
   const [showModal, setShowModal] = useState(false)
-  const [showNamingModal, setShowNamingModal] = useState(false)
-  const [pendingMeetingId, setPendingMeetingId] = useState<string | null>(null)
+  // No longer need naming modal - meetings are created immediately with timestamp names
 
-  const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle')
-  const [retryCount, setRetryCount] = useState(0)
+  // const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle') // No longer needed
+  // const [retryCount, setRetryCount] = useState(0) // No longer needed
 
-  // Audio recorder hook
-  const { state: recorderState, startRecording, stopRecording, cleanup } = useAudioRecorder()
+  // No longer using local audio recorder hook - audio is handled by global recording manager
   
   // Notification system
   const { showNotification, removeNotification } = useNotification()
@@ -123,12 +121,14 @@ export default function Recorder({
     }
   }, [isRecording])
 
-  // Cleanup on unmount
+  // Cleanup on unmount - but DO NOT stop recording during navigation
   useEffect(() => {
     return () => {
-      cleanup()
+      // Do not stop recording on component unmount - that was the bug!
+      // Recording should persist across navigation
+      console.log('🎙️ Recorder component unmounting - preserving recording state')
     }
-  }, [cleanup])
+  }, [])
 
   const handleStartRecording = () => {
     setShowModal(true)
@@ -136,32 +136,16 @@ export default function Recorder({
 
   const handleModalStartRecording = async (config: RecordingConfig) => {
     try {
-      // Create meeting
-      const now = new Date()
-      const human = now.toLocaleString()
-      const meeting = await createMeeting(`Meeting ${human}`, [], config.language)
-      const meetingId = meeting.id
-
-      console.log('📝 Meeting created:', {
-        id: meetingId.slice(0, 8) + '...',
-        title: meeting.title,
-        language: config.language
-      })
-
-      // Start audio recording
-      const success = await startRecording(meetingId, {
+      // Start recording - this will create the meeting automatically with timestamp name
+      const result = await globalRecordingManager.startRecording({
         micDeviceId: config.micDeviceId,
         speakerDeviceId: config.speakerDeviceId,
         language: config.language
       })
 
-      if (success) {
-
+      if (result.success && result.meetingId) {
         setShowModal(false)
-        onCreated(meetingId)
-
-        // Start global recording manager for timer and UI state (audio handling is in useAudioRecorder)
-        globalRecordingManager.startRecording(meetingId)
+        onCreated(result.meetingId)
 
         // Show system audio reminder notification
         showNotification(
@@ -174,7 +158,7 @@ export default function Recorder({
         if (window.electronAPI) {
           window.electronAPI.sendRecordingState(true)
           window.electronAPI.sendRecordingStarted({
-            meetingId,
+            meetingId: result.meetingId,
             recordingTime: 0,
             showFloating: config.showFloatingWidget
           })
@@ -190,11 +174,8 @@ export default function Recorder({
   const handleStopRecording = async () => {
     console.log('🛑 Stopping recording...')
 
-    // Stop audio recording
-    await stopRecording()
-
-    // Stop global recording manager
-    const stoppedMeetingId = globalRecordingManager.stopRecording()
+    // Stop recording using global recording manager (handles both audio and state)
+    const stoppedMeetingId = await globalRecordingManager.stopRecording()
     console.log(`🎯 Recording stopped, meetingId from globalRecordingManager: ${stoppedMeetingId}`)
 
     // Notify Electron
@@ -208,152 +189,57 @@ export default function Recorder({
       onStopped(stoppedMeetingId)
     }
 
-    // Process the meeting
+    // Queue meeting for background processing (no user interaction needed)
     if (stoppedMeetingId) {
-      await processMeeting(stoppedMeetingId)
+      await queueBackgroundProcessing(stoppedMeetingId)
     }
-
-
   }
 
-  const processMeeting = async (meetingId: string) => {
-    // Show modal to ask for meeting name
-    setPendingMeetingId(meetingId)
-    setShowNamingModal(true)
-  }
-
-  const handleMeetingNameConfirm = async (title: string) => {
-    if (pendingMeetingId && title.trim()) {
-      await db.meetings.update(pendingMeetingId, {
-        title: title.trim(),
-        updatedAt: Date.now(),
-        duration: recordingTime
+  // Queue meeting for background processing (persistent across navigation)
+  const queueBackgroundProcessing = async (meetingId: string) => {
+    try {
+      console.log('🚀 Queuing meeting for background processing:', meetingId)
+      
+      // Update meeting duration
+      await db.meetings.update(meetingId, {
+        duration: recordingTime,
+        updatedAt: Date.now()
       })
-    }
-    setShowNamingModal(false)
-    
-    // Continue with auto-processing if we have a meeting ID
-    if (pendingMeetingId) {
-      continueProcessing(pendingMeetingId)
-    }
-    setPendingMeetingId(null)
-  }
-
-  const handleMeetingNameCancel = () => {
-    setShowNamingModal(false)
-    // Continue with auto-processing with default name if we have a meeting ID
-    if (pendingMeetingId) {
-      continueProcessing(pendingMeetingId)
-    }
-    setPendingMeetingId(null)
-  }
-
-  const continueProcessing = async (meetingId: string) => {
-
-    // Auto-process the meeting
-    setTimeout(async () => {
-      try {
-        console.log(`🚀 Auto-processing meeting with ID: ${meetingId}`)
-        setSyncStatus('syncing')
-        
-        // Show processing notification (persistent until manually removed)
-        const notificationId = showNotification('🔄 Processing meeting with AI...', 'info', 0)
-        currentNotificationId.current = notificationId
-        
-        await autoProcessMeetingRecordingWithWhisperOptimization(meetingId)
-        console.log('Meeting auto-processed successfully!')
-        setSyncStatus('success')
-        setRetryCount(0)
-
-        // Remove processing notification and show success
-        if (currentNotificationId.current) {
-          removeNotification(currentNotificationId.current)
-          currentNotificationId.current = null
-        }
-
-        // Reset success status after 3 seconds
-        setTimeout(() => setSyncStatus('idle'), 3000)
-
-        // Final callback after processing
-        if (onStopped) {
-          console.log('🔄 Final onStopped callback after processing')
-          onStopped(meetingId)
-        }
-      } catch (error) {
-        console.error('Auto-processing failed:', error)
-        setSyncStatus('failed')
-
-        // Remove processing notification
-        if (currentNotificationId.current) {
-          removeNotification(currentNotificationId.current)
-          currentNotificationId.current = null
-        }
-
-        // Auto-retry logic with proper state management
-        if (retryCount < 3) {
-          const nextRetryCount = retryCount + 1
-          const delay = Math.min(1000 * Math.pow(2, retryCount), 10000)
-          console.log(`Auto-retry in ${delay / 1000} seconds... (attempt ${nextRetryCount}/3)`)
-          
-          setRetryCount(nextRetryCount)
-          
-          setTimeout(async () => {
-            console.log(`🔄 Retry ${nextRetryCount}/3: Starting auto-processing...`)
-            setSyncStatus('syncing')
-            
-            // Show retry notification (persistent until manually removed)
-            const notificationId = showNotification(`🔄 Processing meeting with AI... (Retry ${nextRetryCount}/3)`, 'warning', 0)
-            currentNotificationId.current = notificationId
-            
-            try {
-              await autoProcessMeetingRecordingWithWhisperOptimization(meetingId)
-              console.log('✅ Retry successful!')
-              setSyncStatus('success')
-              setRetryCount(0)
-              
-              // Remove retry notification
-              if (currentNotificationId.current) {
-                removeNotification(currentNotificationId.current)
-                currentNotificationId.current = null
-              }
-              
-              showToast('✅ Meeting processed successfully!', 'success')
-              setTimeout(() => setSyncStatus('idle'), 3000)
-            } catch (retryError) {
-              console.error(`❌ Retry ${nextRetryCount}/3 failed:`, retryError)
-              
-              // Remove retry notification
-              if (currentNotificationId.current) {
-                removeNotification(currentNotificationId.current)
-                currentNotificationId.current = null
-              }
-              
-              if (nextRetryCount >= 3) {
-                console.log('❌ Max retries reached - giving up')
-                setSyncStatus('failed')
-                showToast(`❌ Auto-processing failed after 3 attempts. Please try processing manually.`, 'error')
-                setTimeout(() => {
-                  setSyncStatus('idle')
-                  setRetryCount(0)
-                }, 5000)
-              } else {
-                // Let the next iteration handle the retry
-                setSyncStatus('failed')
-                showToast(`⚠️ Processing failed, retrying... (${nextRetryCount}/3)`, 'info')
-              }
-            }
-          }, delay)
-        } else {
-          console.log('❌ Max retries reached - stopping')
-          setSyncStatus('failed')
-          showToast(`❌ Auto-processing failed after 3 attempts. Please try processing manually.`, 'error')
-          setTimeout(() => {
-            setSyncStatus('idle')
-            setRetryCount(0)
-          }, 5000)
-        }
+      
+      // Queue for background processing - this will persist across navigation
+      const jobId = await queueMeetingProcessing(meetingId, recordingTime)
+      
+      // Handle different queue results to prevent duplicates
+      if (jobId === 'already_processed') {
+        showToast('✅ Recording saved! Meeting was already processed.', 'success')
+        return
       }
-    }, 1000)
+      
+      if (jobId === 'already_processing') {
+        showToast('⏳ Recording saved! Meeting is already being processed.', 'info')
+        return
+      }
+      
+      if (jobId === 'already_queued') {
+        showToast('⚠️ Recording saved! Meeting is already queued for processing.', 'info')
+        return
+      }
+      
+      // Successfully queued - show notification that processing has started
+      showNotification(
+        '🔄 Meeting queued for processing. Processing will continue in background even if you navigate away.',
+        'info',
+        8000
+      )
+      
+      showToast('✅ Recording saved! Processing started in background.', 'success')
+      
+      console.log('✅ Meeting queued successfully with job ID:', jobId)
+      
+    } catch (error) {
+      console.error('❌ Failed to queue meeting for processing:', error)
+      showToast(`❌ Failed to start processing: ${error}`, 'error')
+    }
   }
 
   return (
@@ -371,9 +257,9 @@ export default function Recorder({
         onStart={handleStartRecording}
         onStop={handleStopRecording}
         showStopButton={showStopButton}
-        error={recorderState.error}
-        micStream={recorderState.micStream}
-        speakerStream={recorderState.speakerStream}
+        error={globalRecordingState.error}
+        micStream={globalRecordingState.micStream}
+        speakerStream={globalRecordingState.speakerStream}
       />
 
 
@@ -388,15 +274,7 @@ export default function Recorder({
         isRecording={isRecording}
       />
 
-      {/* Meeting Naming Modal */}
-      <InputModal
-        isOpen={showNamingModal}
-        title="Name this meeting"
-        placeholder="Enter meeting name..."
-        defaultValue="New meeting"
-        onConfirm={handleMeetingNameConfirm}
-        onCancel={handleMeetingNameCancel}
-      />
+      {/* No longer need naming modal - meetings are created with timestamp names and can be renamed later */}
     </div>
   )
 }
