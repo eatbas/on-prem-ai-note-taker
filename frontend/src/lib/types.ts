@@ -29,7 +29,7 @@ export interface DevicePermissions {
 // Recording Types
 export interface RecordingConfig {
   micDeviceId: string
-  speakerDeviceId: string
+  speakerDeviceId?: string // Optional - system audio is captured automatically
   language: Language
   showFloatingWidget: boolean
 }

@@ -10,7 +10,7 @@ interface RecordingModalProps {
 
 export interface RecordingConfig {
   micDeviceId: string
-  speakerDeviceId: string
+  speakerDeviceId?: string // Optional - system audio is captured automatically
   language: 'tr' | 'en' | 'auto'
   showFloatingWidget: boolean
 }
@@ -22,8 +22,7 @@ export default function RecordingModal({
   isRecording = false
 }: RecordingModalProps) {
   const [selectedMicId, setSelectedMicId] = useState('')
-  const [selectedSpeakerId, setSelectedSpeakerId] = useState('')
-  const [language, setLanguage] = useState<'tr' | 'en' | 'auto'>('auto')
+  const [language, setLanguage] = useState<'tr' | 'en' | 'auto'>('tr')
   const [showFloatingWidget, setShowFloatingWidget] = useState(true)
 
   const handleStartRecording = () => {
@@ -31,7 +30,6 @@ export default function RecordingModal({
 
     onStartRecording({
       micDeviceId: selectedMicId,
-      speakerDeviceId: selectedSpeakerId,
       language,
       showFloatingWidget
     })
@@ -105,9 +103,7 @@ export default function RecordingModal({
         <div style={{ marginBottom: '24px' }}>
           <DeviceSelector
             selectedMicId={selectedMicId}
-            selectedSpeakerId={selectedSpeakerId}
             onMicChange={setSelectedMicId}
-            onSpeakerChange={setSelectedSpeakerId}
             showUsageLevels={!isRecording}
           />
         </div>
@@ -125,13 +121,13 @@ export default function RecordingModal({
           </label>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+            gridTemplateColumns: 'repeat(3, 1fr)',
             gap: '8px'
           }}>
             {[
-              { value: 'auto', label: 'Auto (TR default)', desc: 'Detects language automatically' },
               { value: 'tr', label: 'Türkçe', desc: 'Turkish language' },
-              { value: 'en', label: 'English', desc: 'English language' }
+              { value: 'en', label: 'English', desc: 'English language' },
+              { value: 'auto', label: 'Auto', desc: 'Automatically detects' }
             ].map((option) => (
               <button
                 key={option.value}
@@ -175,54 +171,6 @@ export default function RecordingModal({
             ))}
           </div>
         </div>
-
-        {/* Recording Options */}
-        <div style={{ marginBottom: '24px' }}>
-          <label style={{
-            display: 'block',
-            marginBottom: '12px',
-            fontSize: '16px',
-            fontWeight: '600',
-            color: '#374151'
-          }}>
-            ⚙️ Recording Options
-          </label>
-
-          {/* Floating Widget Option */}
-          <label style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px', 
-            padding: '12px',
-            backgroundColor: '#f8fafc',
-            border: '1px solid #e2e8f0',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            color: '#374151'
-          }}>
-            <input 
-              type="checkbox" 
-              checked={showFloatingWidget}
-              onChange={(e) => setShowFloatingWidget(e.target.checked)}
-              style={{
-                width: '16px',
-                height: '16px',
-                accentColor: '#3b82f6'
-              }}
-            />
-            <div>
-              <div style={{ fontWeight: '500', marginBottom: '2px' }}>
-                Show floating recorder
-              </div>
-              <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                Display a floating window with recording controls while recording
-              </div>
-            </div>
-          </label>
-        </div>
-
-
 
         {/* Action Buttons */}
         <div style={{
@@ -301,6 +249,89 @@ export default function RecordingModal({
               </>
             )}
           </button>
+        </div>
+
+        {/* Recording Options */}
+        <div style={{ marginTop: '16px', marginBottom: '16px' }}>
+          <label style={{
+            display: 'block',
+            marginBottom: '12px',
+            fontSize: '16px',
+            fontWeight: '600',
+            color: '#374151'
+          }}>
+            ⚙️ Recording Options
+          </label>
+
+          {/* Floating Widget Option */}
+          <label style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '12px', 
+            padding: '12px',
+            backgroundColor: '#f8fafc',
+            border: '1px solid #e2e8f0',
+            borderRadius: '8px',
+            cursor: 'pointer',
+            fontSize: '14px',
+            color: '#374151'
+          }}>
+            <input 
+              type="checkbox" 
+              checked={showFloatingWidget}
+              onChange={(e) => setShowFloatingWidget(e.target.checked)}
+              style={{
+                width: '16px',
+                height: '16px',
+                accentColor: '#3b82f6'
+              }}
+            />
+            <div>
+              <div style={{ fontWeight: '500', marginBottom: '2px' }}>
+                Show floating recorder
+              </div>
+              <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                Display a floating window with recording controls while recording
+              </div>
+            </div>
+          </label>
+        </div>
+
+        {/* System Audio Information */}
+        <div style={{
+          marginTop: '16px',
+          padding: '12px',
+          backgroundColor: '#f0f9ff',
+          border: '1px solid #0ea5e9',
+          borderRadius: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
+        }}>
+          <div style={{
+            fontSize: '16px',
+            color: '#0ea5e9'
+          }}>
+            🔊
+          </div>
+          <div style={{
+            fontSize: '14px',
+            color: '#374151',
+            flex: 1
+          }}>
+            <div style={{ fontWeight: '500', marginBottom: '2px' }}>
+              System Audio Capture
+            </div>
+            <div style={{ fontSize: '12px', color: '#6b7280' }}>
+              Automatically capturing system sound from all applications
+            </div>
+          </div>
+          <div style={{
+            fontSize: '16px',
+            color: '#22c55e'
+          }}>
+            ✓
+          </div>
         </div>
       </div>
     </div>
