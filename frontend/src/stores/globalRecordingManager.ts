@@ -151,27 +151,20 @@ class GlobalRecordingManager {
 		this.notifyListeners()
 	}
 
-	// Stop recording
+	// Stop recording (only manages timer and state, not audio streams)
 	stopRecording(): string | null {
 		console.log('⏹️ Global Recording Manager: Stopping recording')
 		
-		if (this.state.mediaRecorder && this.state.mediaRecorder.state !== 'inactive') {
-			const recorder = this.state.mediaRecorder
-			const stream = recorder.stream
-			// Ensure the final dataavailable fires before releasing tracks
-			try { recorder.requestData() } catch {}
-			// Release tracks only after recorder has fully stopped
-			recorder.addEventListener('stop', () => {
-				try { stream.getTracks().forEach(track => track.stop()) } catch {}
-			}, { once: true })
-			recorder.stop()
-		}
-
+		// NOTE: Audio stream cleanup is handled by useAudioRecorder hook, not here
+		// This manager only handles timer and UI state
+		
 		if (this.state.recordingInterval) {
 			clearInterval(this.state.recordingInterval)
+			console.log('🧹 Global Recording Manager: Cleared recording timer')
 		}
 		if (this.state.dataRequestInterval) {
 			clearInterval(this.state.dataRequestInterval)
+			console.log('🧹 Global Recording Manager: Cleared data request interval')
 		}
 
 		const meetingId = this.state.meetingId
@@ -179,16 +172,17 @@ class GlobalRecordingManager {
 		// Clear saved state
 		this.clearSavedState()
 		
-		// Reset state
+		// Reset state (but don't touch mediaRecorder - that's handled by useAudioRecorder)
 		this.state.isRecording = false
 		this.state.meetingId = null
-		this.state.mediaRecorder = null
+		this.state.mediaRecorder = null // Just clear reference, don't manipulate
 		this.state.recordingTime = 0
 		this.state.chunkIndex = 0
 		this.state.recordingInterval = null
 		this.state.startTime = null
 		this.state.dataRequestInterval = null
 
+		console.log('⏹️ Global Recording Manager: State reset, returning meetingId:', meetingId)
 		this.notifyListeners()
 		return meetingId
 	}

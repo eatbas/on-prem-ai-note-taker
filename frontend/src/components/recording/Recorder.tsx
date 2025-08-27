@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { createMeeting, autoProcessMeetingRecordingWithWhisperOptimization, db } from '../../services'
 import { globalRecordingManager, GlobalRecordingState } from '../../stores/globalRecordingManager'
 import { useAudioRecorder } from '../../hooks/useAudioRecorder'
 import { useToast } from '../common'
+import { useNotification } from '../../contexts/NotificationContext'
 
 // Import our new components
 import RecordingControls from './RecordingControls'
@@ -63,6 +64,10 @@ export default function Recorder({
 
   // Audio recorder hook
   const { state: recorderState, startRecording, stopRecording, cleanup } = useAudioRecorder()
+  
+  // Notification system
+  const { showNotification, removeNotification } = useNotification()
+  const currentNotificationId = useRef<string | null>(null)
   
   // Toast notifications
   const { showToast } = useToast()
@@ -183,6 +188,7 @@ export default function Recorder({
 
     // Stop global recording manager
     const stoppedMeetingId = globalRecordingManager.stopRecording()
+    console.log(`🎯 Recording stopped, meetingId from globalRecordingManager: ${stoppedMeetingId}`)
 
     // Notify Electron
     if (window.electronAPI) {
@@ -240,12 +246,23 @@ export default function Recorder({
     // Auto-process the meeting
     setTimeout(async () => {
       try {
-        console.log('Auto-processing meeting...')
+        console.log(`🚀 Auto-processing meeting with ID: ${meetingId}`)
         setSyncStatus('syncing')
+        
+        // Show processing notification (persistent until manually removed)
+        const notificationId = showNotification('🔄 Processing meeting with AI...', 'info', 0)
+        currentNotificationId.current = notificationId
+        
         await autoProcessMeetingRecordingWithWhisperOptimization(meetingId)
         console.log('Meeting auto-processed successfully!')
         setSyncStatus('success')
         setRetryCount(0)
+
+        // Remove processing notification and show success
+        if (currentNotificationId.current) {
+          removeNotification(currentNotificationId.current)
+          currentNotificationId.current = null
+        }
 
         // Reset success status after 3 seconds
         setTimeout(() => setSyncStatus('idle'), 3000)
@@ -259,6 +276,12 @@ export default function Recorder({
         console.error('Auto-processing failed:', error)
         setSyncStatus('failed')
 
+        // Remove processing notification
+        if (currentNotificationId.current) {
+          removeNotification(currentNotificationId.current)
+          currentNotificationId.current = null
+        }
+
         // Auto-retry logic with proper state management
         if (retryCount < 3) {
           const nextRetryCount = retryCount + 1
@@ -271,15 +294,33 @@ export default function Recorder({
             console.log(`🔄 Retry ${nextRetryCount}/3: Starting auto-processing...`)
             setSyncStatus('syncing')
             
+            // Show retry notification (persistent until manually removed)
+            const notificationId = showNotification(`🔄 Processing meeting with AI... (Retry ${nextRetryCount}/3)`, 'warning', 0)
+            currentNotificationId.current = notificationId
+            
             try {
               await autoProcessMeetingRecordingWithWhisperOptimization(meetingId)
               console.log('✅ Retry successful!')
               setSyncStatus('success')
               setRetryCount(0)
+              
+              // Remove retry notification
+              if (currentNotificationId.current) {
+                removeNotification(currentNotificationId.current)
+                currentNotificationId.current = null
+              }
+              
               showToast('✅ Meeting processed successfully!', 'success')
               setTimeout(() => setSyncStatus('idle'), 3000)
             } catch (retryError) {
               console.error(`❌ Retry ${nextRetryCount}/3 failed:`, retryError)
+              
+              // Remove retry notification
+              if (currentNotificationId.current) {
+                removeNotification(currentNotificationId.current)
+                currentNotificationId.current = null
+              }
+              
               if (nextRetryCount >= 3) {
                 console.log('❌ Max retries reached - giving up')
                 setSyncStatus('failed')
@@ -330,32 +371,7 @@ export default function Recorder({
 
 
 
-      {/* Processing Status - only show syncing, errors go to notifications */}
-      {syncStatus === 'syncing' && (
-        <div style={{
-          padding: '12px 16px',
-          borderRadius: '8px',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-          backgroundColor: '#fef3c7',
-          border: '1px solid #f59e0b'
-        }}>
-          <div style={{
-            width: '12px',
-            height: '12px',
-            borderRadius: '50%',
-            backgroundColor: '#f59e0b',
-            animation: 'pulse 1.5s infinite'
-          }} />
-          <span style={{
-            fontWeight: 'bold',
-            color: '#92400e'
-          }}>
-            🔄 Processing meeting with AI...{retryCount > 0 ? ` (Retry ${retryCount}/3)` : ''}
-          </span>
-        </div>
-      )}
+
 
       {/* Recording Modal */}
       <RecordingModal

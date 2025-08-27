@@ -50,6 +50,7 @@ export const autoProcessMeetingRecording = autoProcessMeetingRecordingWithWhispe
 
 export async function autoProcessMeetingRecordingWithWhisperOptimization(meetingId: string, title?: string): Promise<void> {
 	console.log(`🚀 Auto-processing meeting ${meetingId} with Whisper optimization...`)
+	console.log(`🔍 Full meetingId being processed: ${meetingId}`)
 	
 	const meeting = await getMeeting(meetingId)
 	if (!meeting) {
@@ -57,8 +58,34 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(meeting
 		throw new Error('Meeting not found')
 	}
 	
-	const file = await assembleFileFromChunks(meetingId)
+	let file = await assembleFileFromChunks(meetingId)
 	console.log(`📁 Assembled file: ${file.name}, size: ${file.size} bytes`)
+	
+	// If no file found with exact meeting ID, try to find chunks with similar meeting IDs
+	if (file.size === 0) {
+		console.log(`🔍 No chunks found for exact meetingId: ${meetingId}. Checking for similar meeting IDs...`)
+		
+		const allChunks = await db.chunks.toArray()
+		const chunksByMeeting = allChunks.reduce((acc, chunk) => {
+			acc[chunk.meetingId] = (acc[chunk.meetingId] || 0) + 1
+			return acc
+		}, {} as Record<string, number>)
+		
+		// Look for a meeting ID that might be the same but with slight differences
+		const availableIds = Object.keys(chunksByMeeting)
+		let bestMatch: string | null = null
+		
+		// Try to find the most recent meeting with chunks
+		if (availableIds.length > 0) {
+			// Sort by most chunks (likely the current recording)
+			bestMatch = availableIds.sort((a, b) => chunksByMeeting[b] - chunksByMeeting[a])[0]
+			console.log(`🎯 Trying best match: ${bestMatch} (${chunksByMeeting[bestMatch]} chunks)`)
+			
+			// Try to assemble file with the best match
+			file = await assembleFileFromChunks(bestMatch)
+			console.log(`📁 Assembled file with best match: ${file.name}, size: ${file.size} bytes`)
+		}
+	}
 	
 	if (file.size === 0) {
 		// Let's check if we have chunks in the database
@@ -86,6 +113,16 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(meeting
 					return acc
 				}, {} as Record<string, number>)
 				console.error('📋 Chunks by meeting:', chunksByMeeting)
+				console.error('🔍 Looking for meetingId:', meetingId)
+				console.error('🔍 Available meeting IDs in chunks:', Object.keys(chunksByMeeting))
+				
+				// Check for close matches
+				const availableIds = Object.keys(chunksByMeeting)
+				availableIds.forEach(id => {
+					if (id.includes(meetingId.slice(8, 16)) || meetingId.includes(id.slice(8, 16))) {
+						console.error(`🔍 Potential match found: ${id} vs ${meetingId}`)
+					}
+				})
 			}
 		}
 		

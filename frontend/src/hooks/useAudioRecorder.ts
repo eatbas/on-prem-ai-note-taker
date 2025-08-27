@@ -47,10 +47,10 @@ export function useAudioRecorder() {
       speakerChunkIndexRef.current = 0
       currentMeetingIdRef.current = meetingId
 
-      // Get microphone stream
+      // Get microphone stream with proper device constraints
       const micConstraints: MediaStreamConstraints = {
         audio: {
-          deviceId: options.micDeviceId && options.micDeviceId !== 'default' 
+          deviceId: options.micDeviceId 
             ? { exact: options.micDeviceId } 
             : undefined,
           echoCancellation: false,
@@ -60,6 +60,11 @@ export function useAudioRecorder() {
           channelCount: 2
         }
       }
+
+      console.log('🎤 Using microphone constraints:', {
+        deviceId: options.micDeviceId,
+        hasConstraint: !!options.micDeviceId
+      })
 
       const micStream = await navigator.mediaDevices.getUserMedia(micConstraints)
       console.log('✅ Microphone stream obtained')
@@ -107,6 +112,7 @@ export function useAudioRecorder() {
         
         if (event.data && event.data.size > 0 && currentMeetingIdRef.current) {
           try {
+            console.log(`💾 Saving mic chunk ${micChunkIndexRef.current} with meetingId: ${currentMeetingIdRef.current}`)
             await addChunk(
               currentMeetingIdRef.current, 
               event.data, 
@@ -120,7 +126,7 @@ export function useAudioRecorder() {
             setError(`Failed to save audio: ${error}`)
           }
         } else {
-          console.warn(`⚠️ Empty mic data: ${event.data?.size || 0} bytes`)
+          console.warn(`⚠️ Empty mic data: ${event.data?.size || 0} bytes, meetingId: ${currentMeetingIdRef.current}`)
         }
       }
 
@@ -133,6 +139,7 @@ export function useAudioRecorder() {
           
           if (event.data && event.data.size > 0 && currentMeetingIdRef.current) {
             try {
+              console.log(`💾 Saving speaker chunk ${speakerChunkIndexRef.current} with meetingId: ${currentMeetingIdRef.current}`)
               await addChunk(
                 currentMeetingIdRef.current, 
                 event.data, 
@@ -146,7 +153,7 @@ export function useAudioRecorder() {
               // Don't fail recording for speaker issues
             }
           } else {
-            console.warn(`⚠️ Empty speaker data: ${event.data?.size || 0} bytes`)
+            console.warn(`⚠️ Empty speaker data: ${event.data?.size || 0} bytes, meetingId: ${currentMeetingIdRef.current}`)
           }
         }
       }
@@ -201,35 +208,119 @@ export function useAudioRecorder() {
     console.log('🛑 Stopping dual recording...')
 
     try {
-      // Request final data from recorders (only if they're recording)
-      if (state.micRecorder && state.micRecorder.state === 'recording') {
-        state.micRecorder.requestData()
-      }
-      if (state.speakerRecorder && state.speakerRecorder.state === 'recording') {
-        state.speakerRecorder.requestData()
+      // Get current state to avoid stale closures
+      const currentState = state
+      
+      console.log('🔍 Current recording state:', {
+        isRecording: currentState.isRecording,
+        hasMicRecorder: !!currentState.micRecorder,
+        hasSpeakerRecorder: !!currentState.speakerRecorder,
+        hasMicStream: !!currentState.micStream,
+        hasSpeakerStream: !!currentState.speakerStream,
+        micRecorderState: currentState.micRecorder?.state,
+        speakerRecorderState: currentState.speakerRecorder?.state
+      })
+
+      const stopPromises: Promise<void>[] = []
+
+      // Stop microphone recorder with proper cleanup
+      if (currentState.micRecorder) {
+        console.log('🎤 Stopping microphone recorder...')
+        
+        // Clear force data interval first
+        if ((currentState.micRecorder as any)._forceDataInterval) {
+          clearInterval((currentState.micRecorder as any)._forceDataInterval)
+          console.log('🧹 Cleared mic force data interval')
+        }
+
+        if (currentState.micRecorder.state === 'recording') {
+          // Request final data
+          currentState.micRecorder.requestData()
+          
+          // Create promise that resolves when recorder stops
+          const micStopPromise = new Promise<void>((resolve) => {
+            const handleStop = () => {
+              console.log('🎤 Microphone recorder stopped')
+              currentState.micRecorder?.removeEventListener('stop', handleStop)
+              resolve()
+            }
+            currentState.micRecorder?.addEventListener('stop', handleStop, { once: true })
+            
+            // Add timeout to prevent hanging
+            setTimeout(() => {
+              console.warn('⚠️ Microphone recorder stop timeout')
+              currentState.micRecorder?.removeEventListener('stop', handleStop)
+              resolve()
+            }, 5000)
+          })
+          
+          stopPromises.push(micStopPromise)
+          currentState.micRecorder.stop()
+        }
       }
 
-      // Stop recorders (only if they're not already inactive)
-      if (state.micRecorder && state.micRecorder.state !== 'inactive') {
-        // Clear force data interval
-        clearInterval((state.micRecorder as any)._forceDataInterval)
-        state.micRecorder.stop()
-      }
-      if (state.speakerRecorder && state.speakerRecorder.state !== 'inactive') {
-        state.speakerRecorder.stop()
+      // Stop speaker recorder with proper cleanup  
+      if (currentState.speakerRecorder) {
+        console.log('🔊 Stopping speaker recorder...')
+        
+        if (currentState.speakerRecorder.state === 'recording') {
+          // Request final data
+          currentState.speakerRecorder.requestData()
+          
+          // Create promise that resolves when recorder stops
+          const speakerStopPromise = new Promise<void>((resolve) => {
+            const handleStop = () => {
+              console.log('🔊 Speaker recorder stopped')
+              currentState.speakerRecorder?.removeEventListener('stop', handleStop)
+              resolve()
+            }
+            currentState.speakerRecorder?.addEventListener('stop', handleStop, { once: true })
+            
+            // Add timeout to prevent hanging
+            setTimeout(() => {
+              console.warn('⚠️ Speaker recorder stop timeout')
+              currentState.speakerRecorder?.removeEventListener('stop', handleStop)
+              resolve()
+            }, 5000)
+          })
+          
+          stopPromises.push(speakerStopPromise)
+          currentState.speakerRecorder.stop()
+        }
       }
 
-      // Stop streams
-      state.micStream?.getTracks().forEach(track => {
-        if (track.readyState !== 'ended') {
-          track.stop()
-        }
-      })
-      state.speakerStream?.getTracks().forEach(track => {
-        if (track.readyState !== 'ended') {
-          track.stop()
-        }
-      })
+      // Wait for all recorders to stop properly
+      if (stopPromises.length > 0) {
+        console.log('⏳ Waiting for recorders to stop...')
+        await Promise.all(stopPromises)
+        console.log('✅ All recorders stopped')
+      }
+
+      // Now safely stop all media streams
+      console.log('🔌 Stopping media streams...')
+      
+      if (currentState.micStream) {
+        currentState.micStream.getTracks().forEach((track, index) => {
+          console.log(`🎤 Stopping mic track ${index}: ${track.kind}, state: ${track.readyState}`)
+          if (track.readyState !== 'ended') {
+            track.stop()
+            console.log(`✅ Mic track ${index} stopped`)
+          }
+        })
+      }
+      
+      if (currentState.speakerStream) {
+        currentState.speakerStream.getTracks().forEach((track, index) => {
+          console.log(`🔊 Stopping speaker track ${index}: ${track.kind}, state: ${track.readyState}`)
+          if (track.readyState !== 'ended') {
+            track.stop()
+            console.log(`✅ Speaker track ${index} stopped`)
+          }
+        })
+      }
+
+      // Small delay to ensure cleanup is complete
+      await new Promise(resolve => setTimeout(resolve, 100))
 
       // Reset state
       setState({
@@ -244,10 +335,25 @@ export function useAudioRecorder() {
       // Clear meeting reference
       currentMeetingIdRef.current = null
 
-      console.log('✅ Dual recording stopped successfully')
+      console.log('✅ Dual recording stopped successfully - microphone should be released')
     } catch (error) {
       console.error('❌ Error stopping recording:', error)
       setError('Failed to stop recording properly')
+      
+      // Force cleanup even on error
+      try {
+        setState({
+          isRecording: false,
+          micStream: null,
+          speakerStream: null,
+          micRecorder: null,
+          speakerRecorder: null,
+          error: null
+        })
+        currentMeetingIdRef.current = null
+      } catch (e) {
+        console.error('❌ Failed to force cleanup:', e)
+      }
     }
   }, [state, setError])
 
