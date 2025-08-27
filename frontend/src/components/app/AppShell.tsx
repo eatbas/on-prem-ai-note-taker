@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Recorder, FloatingRecorder } from '../../features/recording'
 import { useToast } from '../common'
 import { globalRecordingManager } from '../../stores/globalRecordingManager'
+import dgMeetsLogo from '../../../../logo/dgMeets-512.png'
 
 interface AppShellProps {
   text: string
@@ -120,23 +121,21 @@ export default function AppShell({
               }}
               onClick={() => navigate('/')}
             >
-              <div style={{ 
-                fontSize: '32px',
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                fontWeight: 'bold'
-              }}>
-                🎙️
-              </div>
+              <img 
+                src={dgMeetsLogo} 
+                alt="dgMeets Logo" 
+                style={{ 
+                  width: '48px',
+                  height: '48px',
+                  objectFit: 'contain'
+                }}
+              />
               <div>
                 <h1 style={{ 
                   fontSize: '24px', 
                   fontWeight: 'bold', 
                   margin: 0,
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent'
+                  color: '#2563eb'
                 }}>
                   dgMeets
                 </h1>
@@ -146,7 +145,7 @@ export default function AppShell({
                   margin: 0,
                   fontWeight: '500'
                 }}>
-                  AI-Powered Meeting Notes
+                  On-Prem AI-Powered Meeting Notes
                 </p>
               </div>
             </div>
@@ -261,23 +260,21 @@ export default function AppShell({
                 }}
                 onClick={() => navigate('/')}
               >
-                <div style={{ 
-                  fontSize: '24px',
-                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                  WebkitBackgroundClip: 'text',
-                  WebkitTextFillColor: 'transparent',
-                  fontWeight: 'bold'
-                }}>
-                  🎙️
-                </div>
+                <img 
+                  src={dgMeetsLogo} 
+                  alt="dgMeets Logo" 
+                  style={{ 
+                    width: '36px',
+                    height: '36px',
+                    objectFit: 'contain'
+                  }}
+                />
                 <div>
                   <h1 style={{ 
                     fontSize: '18px', 
                     fontWeight: 'bold', 
                     margin: 0,
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    WebkitBackgroundClip: 'text',
-                    WebkitTextFillColor: 'transparent'
+                    color: '#2563eb'
                   }}>
                     dgMeets
                   </h1>

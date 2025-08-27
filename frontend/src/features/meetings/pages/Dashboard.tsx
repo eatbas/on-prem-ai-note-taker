@@ -416,7 +416,21 @@ export default function Dashboard({
 			setError(null)
 			// Add loading state for this specific meeting
 			setSendingMeetings(prev => new Set(prev).add(meetingId))
+			
+			// 🚨 IMPORTANT: Immediately update meeting status to 'queued' to prevent duplicate processing
+			// and show processing status in UI
+			await db.meetings.update(meetingId, { 
+				status: 'queued', 
+				updatedAt: Date.now() 
+			})
+			
+			// Force refresh the UI to show the updated status immediately
+			await refresh()
+			
+			// Now start the actual sync process
 			await syncMeeting(meetingId)
+			
+			// Refresh again to get the final status
 			await refresh()
 			showToast('Meeting sent successfully! 🎉', 'success')
 		} catch (err) {
@@ -860,12 +874,15 @@ export default function Dashboard({
 													fontSize: '12px',
 													fontWeight: '500',
 													backgroundColor: m.status === 'recording' ? '#fef3c7' : 
-																	m.status === 'sent' ? '#dcfce7' : '#fee2e2',
+																	m.status === 'sent' ? '#dcfce7' : 
+																	m.status === 'queued' ? '#fef3c7' : '#fee2e2',
 													color: m.status === 'recording' ? '#92400e' : 
-														   m.status === 'sent' ? '#166534' : '#dc2626'
+														   m.status === 'sent' ? '#166534' : 
+														   m.status === 'queued' ? '#92400e' : '#dc2626'
 												}}>
 													{m.status === 'recording' ? '🔴 Recording' : 
-													 m.status === 'sent' ? '✅ Sent' : '⏳ Local'}
+													 m.status === 'sent' ? '✅ Sent' : 
+													 m.status === 'queued' ? '⏳ Processing' : '📝 Local'}
 												</span>
 											</td>
 											<td style={{
@@ -880,14 +897,14 @@ export default function Dashboard({
 															e.stopPropagation()
 															retry(m.id)
 														}} 
-														disabled={!online || sendingMeetings.has(m.id)} 
+														disabled={!online || sendingMeetings.has(m.id) || m.status === 'queued'} 
 														style={{ 
 															padding: '6px 12px',
-															backgroundColor: sendingMeetings.has(m.id) ? '#9ca3af' : '#10b981',
+															backgroundColor: (sendingMeetings.has(m.id) || m.status === 'queued') ? '#9ca3af' : '#10b981',
 															color: 'white',
 															border: 'none',
 															borderRadius: '6px',
-															cursor: (online && !sendingMeetings.has(m.id)) ? 'pointer' : 'not-allowed',
+															cursor: (online && !sendingMeetings.has(m.id) && m.status !== 'queued') ? 'pointer' : 'not-allowed',
 															fontWeight: '500',
 															opacity: online ? 1 : 0.6,
 															transition: 'all 0.2s ease',
@@ -895,25 +912,25 @@ export default function Dashboard({
 															fontSize: '12px'
 														}}
 														onMouseDown={(e) => {
-															if (online && !sendingMeetings.has(m.id)) {
+															if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
 																e.currentTarget.style.transform = 'scale(0.95)'
 																e.currentTarget.style.backgroundColor = '#059669'
 															}
 														}}
 														onMouseUp={(e) => {
-															if (online && !sendingMeetings.has(m.id)) {
+															if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
 																e.currentTarget.style.transform = 'scale(1)'
 																e.currentTarget.style.backgroundColor = '#10b981'
 															}
 														}}
 														onMouseLeave={(e) => {
-															if (online && !sendingMeetings.has(m.id)) {
+															if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
 																e.currentTarget.style.transform = 'scale(1)'
 																e.currentTarget.style.backgroundColor = '#10b981'
 															}
 														}}
 													>
-														{sendingMeetings.has(m.id) ? '⏳' : '📤'}
+														{(sendingMeetings.has(m.id) || m.status === 'queued') ? '⏳' : '📤'}
 													</button>
 												)}
 												{m.status === 'sent' && (
@@ -1043,14 +1060,14 @@ export default function Dashboard({
 													e.stopPropagation()
 													retry(m.id)
 												}} 
-												disabled={!online || sendingMeetings.has(m.id)} 
+												disabled={!online || sendingMeetings.has(m.id) || m.status === 'queued'} 
 												style={{ 
 													padding: '8px 16px',
-													backgroundColor: sendingMeetings.has(m.id) ? '#9ca3af' : '#10b981',
+													backgroundColor: (sendingMeetings.has(m.id) || m.status === 'queued') ? '#9ca3af' : '#10b981',
 													color: 'white',
 													border: 'none',
 													borderRadius: '4px',
-													cursor: (online && !sendingMeetings.has(m.id)) ? 'pointer' : 'not-allowed',
+													cursor: (online && !sendingMeetings.has(m.id) && m.status !== 'queued') ? 'pointer' : 'not-allowed',
 													fontWeight: '500',
 													opacity: online ? 1 : 0.6,
 													transition: 'all 0.2s ease',
@@ -1058,25 +1075,25 @@ export default function Dashboard({
 													minWidth: '80px'
 												}}
 												onMouseDown={(e) => {
-													if (online && !sendingMeetings.has(m.id)) {
+													if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
 														e.currentTarget.style.transform = 'scale(0.95)'
 														e.currentTarget.style.backgroundColor = '#059669'
 													}
 												}}
 												onMouseUp={(e) => {
-													if (online && !sendingMeetings.has(m.id)) {
+													if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
 														e.currentTarget.style.transform = 'scale(1)'
 														e.currentTarget.style.backgroundColor = '#10b981'
 													}
 												}}
 												onMouseLeave={(e) => {
-													if (online && !sendingMeetings.has(m.id)) {
+													if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
 														e.currentTarget.style.transform = 'scale(1)'
 														e.currentTarget.style.backgroundColor = '#10b981'
 													}
 												}}
 											>
-												{sendingMeetings.has(m.id) ? '⏳ Sending...' : '📤 Send'}
+												{(sendingMeetings.has(m.id) || m.status === 'queued') ? '⏳ Processing...' : '📤 Send'}
 											</button>
 										)}
 									</div>

@@ -139,9 +139,22 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     
     setSending(true)
     try {
+      // 🚨 IMPORTANT: Immediately update meeting status to 'queued' to prevent duplicate processing
+      // and show processing status in UI
+      await db.meetings.update(meetingId, { 
+        status: 'queued', 
+        updatedAt: Date.now() 
+      })
+      
+      // Force reload to show the updated status immediately
+      await loadMeeting()
+      
+      // Now start the actual sync process
       await syncMeeting(meetingId)
       showToast('Meeting processed successfully', 'success')
-      await loadMeeting() // Reload to get updated data
+      
+      // Reload again to get the final status
+      await loadMeeting()
     } catch (error) {
       console.error('Failed to process meeting:', error)
       showToast('Failed to process meeting', 'error')

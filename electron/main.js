@@ -39,7 +39,7 @@ function createWindow() {
 			// Enable clipboard access if needed
 			enableClipboardRead: false
 		},
-		icon: path.join(__dirname, 'dgMeets-512.png')
+		icon: path.join(__dirname, 'dgMeets-48.png')
 	})
 
 	// Try to load from dev server first (for development)

@@ -140,31 +140,31 @@ export default function MeetingCard({
               e.stopPropagation()
               onSync(meeting.id)
             }}
-            disabled={sending}
+            disabled={sending || meeting.status === 'queued' || meeting.status === 'sent'}
             style={{
               padding: '6px 12px',
-              backgroundColor: sending ? '#9ca3af' : '#3b82f6',
+              backgroundColor: (sending || meeting.status === 'queued' || meeting.status === 'sent') ? '#9ca3af' : '#3b82f6',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
               fontSize: '12px',
               fontWeight: '500',
-              cursor: sending ? 'not-allowed' : 'pointer',
-              opacity: sending ? 0.6 : 1,
+              cursor: (sending || meeting.status === 'queued' || meeting.status === 'sent') ? 'not-allowed' : 'pointer',
+              opacity: (sending || meeting.status === 'queued' || meeting.status === 'sent') ? 0.6 : 1,
               transition: 'all 0.2s ease'
             }}
             onMouseEnter={(e) => {
-              if (!sending) {
+              if (!sending && meeting.status !== 'queued' && meeting.status !== 'sent') {
                 e.currentTarget.style.backgroundColor = '#2563eb'
               }
             }}
             onMouseLeave={(e) => {
-              if (!sending) {
+              if (!sending && meeting.status !== 'queued' && meeting.status !== 'sent') {
                 e.currentTarget.style.backgroundColor = '#3b82f6'
               }
             }}
           >
-            {sending ? '⏳' : '🔄'} Process
+            {(sending || meeting.status === 'queued') ? '⏳' : meeting.status === 'sent' ? '✅' : '🔄'} {meeting.status === 'sent' ? 'Sent' : (sending || meeting.status === 'queued') ? 'Processing' : 'Process'}
           </button>
 
           <button

@@ -59,7 +59,7 @@
 				"nsis"
 			],
 			"artifactName": "dgMeets-Setup-${version}.exe",
-			"icon": "dgMeets.ico"
+			"icon": "dgMeets-512.png"
 		},
 		"nsis": {
 			"oneClick": false,
@@ -75,7 +75,7 @@
 				"dmg"
 			],
 			"artifactName": "dgMeets-${version}.dmg",
-			"icon": "dgMeets.png"
+			"icon": "dgMeets-512.png"
 		},
 		"linux": {
 			"target": [
@@ -83,7 +83,7 @@
 				"deb"
 			],
 			"artifactName": "dgMeets-${version}.${ext}",
-			"icon": "dgMeets.png",
+			"icon": "dgMeets-512.png",
 			"category": "Office"
 		}
 	},

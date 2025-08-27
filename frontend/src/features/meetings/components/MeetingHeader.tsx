@@ -156,20 +156,22 @@ export default function MeetingHeader({
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button
             onClick={onSync}
-            disabled={sending}
+            disabled={sending || meeting?.status === 'queued' || meeting?.status === 'sent'}
             style={{
               padding: '8px 16px',
-              backgroundColor: sending ? '#9ca3af' : '#3b82f6',
+              backgroundColor: (sending || meeting?.status === 'queued' || meeting?.status === 'sent') ? '#9ca3af' : '#3b82f6',
               color: 'white',
               border: 'none',
               borderRadius: '6px',
               fontSize: '14px',
               fontWeight: '600',
-              cursor: sending ? 'not-allowed' : 'pointer',
-              opacity: sending ? 0.6 : 1
+              cursor: (sending || meeting?.status === 'queued' || meeting?.status === 'sent') ? 'not-allowed' : 'pointer',
+              opacity: (sending || meeting?.status === 'queued' || meeting?.status === 'sent') ? 0.6 : 1
             }}
           >
-            {sending ? '⏳ Processing...' : (isRemote ? '🔄 Re-process' : '📤 Process Meeting')}
+            {sending || meeting?.status === 'queued' ? '⏳ Processing...' : 
+             meeting?.status === 'sent' ? '✅ Already Sent' : 
+             (isRemote ? '🔄 Re-process' : '📤 Process Meeting')}
           </button>
           
           <button
