@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 
 interface ToastProps {
 	message: string
@@ -117,14 +117,14 @@ export function useToast() {
 		type: 'success' | 'error' | 'info'
 	}>>([])
 
-	const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+	const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
 		const id = Math.random().toString(36).substr(2, 9)
 		setToasts(prev => [...prev, { id, message, type }])
-	}
+	}, [])
 
-	const removeToast = (id: string) => {
+	const removeToast = useCallback((id: string) => {
 		setToasts(prev => prev.filter(toast => toast.id !== id))
-	}
+	}, [])
 
 	const ToastContainer = () => (
 		<>

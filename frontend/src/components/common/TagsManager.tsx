@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { getTags, updateMeetingTags, type Tag } from '../../services'
 
 interface TagsManagerProps {
@@ -45,39 +45,51 @@ export default function TagsManager({
 		loadTags()
 	}, [online, vpsUp])
 
-	// Update selected tags when currentTags prop changes
+	// Update selected tags when currentTags prop changes (only if they're actually different)
 	useEffect(() => {
-		setSelectedTags(currentTags)
-	}, [currentTags])
-
-	const addTag = (tagName: string) => {
-		if (!tagName.trim() || selectedTags.includes(tagName.trim())) return
-		
-		const newTags = [...selectedTags, tagName.trim()]
-		setSelectedTags(newTags)
-		
-		if (!readonly && onTagsUpdate) {
-			onTagsUpdate(newTags)
+		if (JSON.stringify(currentTags) !== JSON.stringify(selectedTags)) {
+			setSelectedTags(currentTags)
 		}
-	}
+	}, [currentTags, selectedTags])
 
-	const removeTag = (tagName: string) => {
-		const newTags = selectedTags.filter(tag => tag !== tagName)
-		setSelectedTags(newTags)
+	const addTag = useCallback((tagName: string) => {
+		if (!tagName.trim()) return
 		
-		if (!readonly && onTagsUpdate) {
-			onTagsUpdate(newTags)
-		}
-	}
+		setSelectedTags(prevTags => {
+			if (prevTags.includes(tagName.trim())) return prevTags
+			
+			const newTags = [...prevTags, tagName.trim()]
+			
+			// Call onTagsUpdate in the next tick to avoid infinite loops
+			if (!readonly && onTagsUpdate) {
+				setTimeout(() => onTagsUpdate(newTags), 0)
+			}
+			
+			return newTags
+		})
+	}, [readonly, onTagsUpdate])
 
-	const handleAddNewTag = () => {
+	const removeTag = useCallback((tagName: string) => {
+		setSelectedTags(prevTags => {
+			const newTags = prevTags.filter(tag => tag !== tagName)
+			
+			// Call onTagsUpdate in the next tick to avoid infinite loops
+			if (!readonly && onTagsUpdate) {
+				setTimeout(() => onTagsUpdate(newTags), 0)
+			}
+			
+			return newTags
+		})
+	}, [readonly, onTagsUpdate])
+
+	const handleAddNewTag = useCallback(() => {
 		if (newTag.trim()) {
 			addTag(newTag.trim())
 			setNewTag('')
 		}
-	}
+	}, [newTag, addTag])
 
-	const handleSaveTags = async () => {
+	const handleSaveTags = useCallback(async () => {
 		if (!meetingId || readonly) return
 
 		try {
@@ -92,7 +104,7 @@ export default function TagsManager({
 		} finally {
 			setSaving(false)
 		}
-	}
+	}, [meetingId, readonly, selectedTags, onTagsUpdate])
 
 	const canEdit = online && vpsUp && !readonly
 
