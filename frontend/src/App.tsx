@@ -13,6 +13,9 @@ import { watchOnline } from './services'
 import { globalRecordingManager } from './stores/globalRecordingManager'
 import { useVpsHealth } from './stores/apiStateManager'
 
+// Import API state manager to ensure it initializes
+import { apiStateManager } from './stores/api'
+
 // Import App components
 import { AppShell, RecordingProvider } from './components/app'
 import { NotificationProvider } from './contexts/NotificationContext'
@@ -39,12 +42,43 @@ export default function App() {
   const { showToast } = useToast()
   const vpsHealth = useVpsHealth()
 
+  // Ensure API state manager is referenced so it gets imported and initialized
+  console.log('🔗 API State Manager loaded:', !!apiStateManager)
+
   // Watch online status
   useEffect(() => {
     return watchOnline((isOnline: boolean) => {
       setOnline(isOnline)
       console.log(`📶 Online status: ${isOnline ? 'Connected' : 'Disconnected'}`)
     })
+  }, [])
+
+  // TEMP FIX: Manually check VPS health on startup to fix AI status
+  useEffect(() => {
+    const checkVpsHealth = async () => {
+      try {
+        const { getVpsHealth } = await import('./services/api/diagnostics')
+        const healthResult = await getVpsHealth()
+        console.log('✅ Manual VPS health check successful:', healthResult)
+        
+        // Force update the API state manager
+        if (apiStateManager) {
+          apiStateManager.updateState({
+            vpsHealth: {
+              status: 'ok',
+              data: healthResult,
+              lastUpdated: Date.now()
+            }
+          })
+          console.log('🔄 VPS health state updated manually')
+        }
+      } catch (error) {
+        console.error('❌ Manual VPS health check failed:', error)
+      }
+    }
+
+    // Delay to ensure app is loaded
+    setTimeout(checkVpsHealth, 2000)
   }, [])
 
   // Subscribe to global recording state

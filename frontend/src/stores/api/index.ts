@@ -35,13 +35,17 @@ export class CombinedApiStateManager extends ApiStateManager {
    */
   initialize(): void {
     console.log('🚀 Initializing Combined API State Manager...')
+    console.log('🌐 Current state:', { online: this.getState().online, isPollingEnabled: this.isPollingEnabled })
     
     // Initialize event listeners
     this.eventManager.initialize()
     
     // Start initial polling if online
     if (this.shouldPoll()) {
+      console.log('✅ shouldPoll() passed, starting polling...')
       this.pollingManager.startPolling()
+    } else {
+      console.log('❌ shouldPoll() failed, not starting polling')
     }
     
     console.log('✅ Combined API State Manager initialized')
@@ -86,6 +90,7 @@ const apiStateManager = new CombinedApiStateManager({
 })
 
 // Initialize when first imported
+console.log('📦 API State Manager module loaded, calling initialize()...')
 apiStateManager.initialize()
 
 // Export singleton and types

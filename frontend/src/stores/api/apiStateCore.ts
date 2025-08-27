@@ -105,7 +105,9 @@ export class ApiStateManager {
    * Check if we should poll (online and polling enabled)
    */
   shouldPoll(): boolean {
-    return this.state.online && this.isPollingEnabled
+    const result = this.state.online && this.isPollingEnabled
+    console.log(`🤔 shouldPoll(): online=${this.state.online}, enabled=${this.isPollingEnabled}, result=${result}`)
+    return result
   }
 
   /**
@@ -119,7 +121,9 @@ export class ApiStateManager {
 
       switch (type) {
         case 'vpsHealth':
+          console.log('🏥 Polling VPS health...')
           result = await getVpsHealth()
+          console.log('✅ VPS health result:', result)
           this.updateState({
             vpsHealth: {
               status: 'ok',
@@ -179,6 +183,7 @@ export class ApiStateManager {
       // Update state with error
       const errorUpdate: Partial<ApiState> = {}
       if (type === 'vpsHealth') {
+        console.log('❌ VPS health check failed:', error.message)
         errorUpdate.vpsHealth = {
           status: 'error',
           data: null,

@@ -29,7 +29,7 @@ function createWindow() {
 			nodeIntegration: false,
 			contextIsolation: true,
 			preload: path.join(__dirname, 'preload.js'),
-			webSecurity: true, // Keep web security enabled for better security
+			webSecurity: false, // Disable web security for development to bypass CORS
 			allowRunningInsecureContent: false, // Don't allow insecure content by default
 			experimentalFeatures: true, // Enable experimental web features
 			// Enable system audio capture permissions
@@ -234,7 +234,7 @@ function createFloatingRecorderWindow() {
 			nodeIntegration: false,
 			contextIsolation: true,
 			preload: path.join(__dirname, 'preload.js'),
-			webSecurity: true, // Keep web security enabled for better security
+			webSecurity: false, // Disable web security for development to bypass CORS
 			allowRunningInsecureContent: false, // Don't allow insecure content by default
 			experimentalFeatures: true, // Enable experimental web features
 			// Allow media access for audio recording
@@ -354,10 +354,12 @@ app.whenReady().then(async () => {
 			callback({ responseHeaders: details.responseHeaders })
 		})
 		
-		// Intercept and modify requests to VPS
+		// Intercept and modify requests to VPS (including from localhost dev server)
 		session.defaultSession.webRequest.onBeforeSendHeaders(
-			{ urls: ['http://95.111.244.159:8000/*'] },
+			{ urls: ['http://95.111.244.159:8000/*', 'https://95.111.244.159:8000/*'] },
 			(details, callback) => {
+				console.log('🔧 Intercepting request from:', details.initiator, 'to:', details.url)
+				
 				// Set User-Agent to identify Electron app
 				details.requestHeaders['User-Agent'] = 'ElectronApp/1.0'
 				
@@ -373,23 +375,27 @@ app.whenReady().then(async () => {
 					}
 					const credentials = Buffer.from(`${username}:${password}`).toString('base64')
 					details.requestHeaders['Authorization'] = `Basic ${credentials}`
+					console.log('✅ Added authentication header')
 				}
 				
-				// ALWAYS override Origin for Electron app (don't check if present)
+				// ALWAYS override Origin for Electron app (regardless of source)
 				details.requestHeaders['Origin'] = 'electron://app'
 				
 				console.log('🔧 Modified request headers for:', details.url, 'Origin:', details.requestHeaders['Origin'])
+				console.log('🔧 Request headers:', Object.keys(details.requestHeaders))
 				callback({ requestHeaders: details.requestHeaders })
 			}
 		)
 		
 		// Handle response headers - let backend handle CORS properly
 		session.defaultSession.webRequest.onHeadersReceived(
-			{ urls: ['http://95.111.244.159:8000/*'] },
+			{ urls: ['http://95.111.244.159:8000/*', 'https://95.111.244.159:8000/*'] },
 			(details, callback) => {
-				// Log response for debugging but don't modify headers
-				// Let the backend's CORS middleware handle everything properly
+				// Log response for debugging
 				console.log('📡 Response received from:', details.url, 'Status:', details.statusCode)
+				console.log('📡 Response headers:', Object.keys(details.responseHeaders))
+				
+				// Let the backend's CORS middleware handle everything properly
 				callback({ responseHeaders: details.responseHeaders })
 			}
 		)

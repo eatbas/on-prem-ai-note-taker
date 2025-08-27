@@ -165,30 +165,41 @@ export default function Dashboard({
 				try {
 					console.log('🌐 Attempting to fetch from VPS backend...')
 					const backendMeetings = await getMeetings()
-					console.log('☁️ Loaded VPS meetings:', backendMeetings.length)
+					console.log('☁️ Loaded VPS meetings:', Array.isArray(backendMeetings) ? backendMeetings.length : 'Invalid response')
+					
 					const byId = new Map<string, any>()
 					// Start with local meetings to preserve any unsent ones
 					for (const m of localMeetings) byId.set(m.id, m)
-					// Overlay with backend data
-					for (const m of backendMeetings as any[]) {
-						const existing = byId.get(m.id)
-						// Merge backend data with local data, preferring backend for processed content
-						byId.set(m.id, { 
-							...existing, 
-							...m, 
-							// Keep local status if it's more recent or unsent
-							status: existing?.status === 'local' ? existing.status : m.status || 'sent',
-							// Keep local tags and title if they exist
-							tags: existing?.tags || [],
-							title: existing?.title || m.title
-						})
+					
+					// Only merge if we have a valid array
+					if (Array.isArray(backendMeetings)) {
+						// Overlay with backend data
+						for (const m of backendMeetings as any[]) {
+							const existing = byId.get(m.id)
+							// Merge backend data with local data, preferring backend for processed content
+							byId.set(m.id, { 
+								...existing, 
+								...m, 
+								// Keep local status if it's more recent or unsent
+								status: existing?.status === 'local' ? existing.status : m.status || 'sent',
+								// Keep local tags and title if they exist
+								tags: existing?.tags || [],
+								title: existing?.title || m.title
+							})
+						}
 					}
+					
 					const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
 					console.log('🔄 Merged meetings:', mergedMeetings.length)
 					setMeetings(mergedMeetings)
+					
+					// Clear any previous errors on success
+					setError(null)
+					console.log('✅ Successfully loaded VPS meetings without errors')
+					
 				} catch (backendErr) {
 					// Backend failed, but we still have local data
-					console.warn('❌ Backend fetch failed, using local data:', backendErr)
+					console.error('❌ Backend fetch failed with error:', backendErr)
 					setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
 				}
 			} else {

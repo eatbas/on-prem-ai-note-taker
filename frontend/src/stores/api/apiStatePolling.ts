@@ -20,7 +20,11 @@ export class ApiPollingManager {
    * Start polling for all data types
    */
   startPolling(): void {
-    if (!this.stateManager.shouldPoll()) return
+    console.log('🎯 Attempting to start polling...')
+    if (!this.stateManager.shouldPoll()) {
+      console.log('❌ Polling blocked by shouldPoll() check')
+      return
+    }
 
     const dataTypes: ApiDataType[] = ['vpsHealth', 'meetings', 'queueStats', 'progressStats']
     dataTypes.forEach(type => {

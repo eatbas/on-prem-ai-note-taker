@@ -101,6 +101,7 @@ export async function handleApiResponse<T>(response: Response): Promise<T> {
 	}
 	
 	const text = await response.text()
+	
 	if (!text.trim()) {
 		return {} as T
 	}

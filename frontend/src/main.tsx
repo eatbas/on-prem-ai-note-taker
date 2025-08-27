@@ -4,7 +4,8 @@ import App from './App'
 import { syncAllQueued, watchOnline } from './services'
 import { ErrorBoundary } from './components/common'
 // Initialize centralized API state manager early
-import './stores/apiStateManager'
+import { apiStateManager } from './stores/api'
+console.log('🎯 MAIN: API State Manager singleton imported at startup:', !!apiStateManager)
 
 const rootEl = document.getElementById('root')!
 createRoot(rootEl).render(
