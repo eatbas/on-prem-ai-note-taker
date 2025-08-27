@@ -390,7 +390,7 @@ frontend/logs/
 # Electron build outputs
 **/dist-electron/
 **/release/
-**/app/
+electron/app/
 **/*.app/
 **/*.exe
 **/*.dmg
