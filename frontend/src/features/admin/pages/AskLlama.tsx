@@ -143,7 +143,9 @@ export default function AskLlama({ online, vpsUp }: AskLlamaProps) {
         console.log('🔄 Chat history cleared')
     }
 
-    const isDisabled = !online || !vpsUp || loading || !prompt.trim()
+    // Input should only be disabled for connection issues, not empty text
+    const isInputDisabled = !online || !vpsUp || loading
+    const isSubmitDisabled = isInputDisabled || !prompt.trim()
 
     const getCurrentResponse = () => {
         if (loading) {
@@ -349,7 +351,7 @@ export default function AskLlama({ online, vpsUp }: AskLlamaProps) {
                             onSubmit={handleSubmit}
                             onCancel={handleCancel}
                             loading={loading}
-                            disabled={isDisabled}
+                            disabled={isInputDisabled}
                             online={online}
                             vpsUp={vpsUp}
                             elapsedSeconds={elapsedSeconds}
