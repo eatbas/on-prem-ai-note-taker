@@ -45,18 +45,18 @@ export default function AppShell({
       setGlobalRecordingState(state)
     }
     
-    globalRecordingManager.subscribe(handleStateChange)
-    return () => globalRecordingManager.unsubscribe(handleStateChange)
+    const unsubscribe = globalRecordingManager.subscribe(handleStateChange)
+    return unsubscribe
   }, [])
 
   const handleRecordingCreated = (meetingId: string) => {
     console.log('🎙️ Recording created:', meetingId)
-    setRefreshSignal(prev => prev + 1)
+    setRefreshSignal(refreshSignal + 1)
   }
 
   const handleRecordingStopped = (meetingId: string) => {
     console.log('🛑 Recording stopped:', meetingId)
-    setRefreshSignal(prev => prev + 1)
+    setRefreshSignal(refreshSignal + 1)
   }
 
   const handleFloatingRecorderStop = () => {

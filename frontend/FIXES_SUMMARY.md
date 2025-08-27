@@ -113,6 +113,42 @@ const handleFloatingRecorderStop = () => {
 
 4. **Testing Integration**: Always test builds after making integration changes to catch missing dependencies early.
 
-## ✅ **Both Issues Fully Resolved**
+### 🎯 **Issue 3: TypeScript Linter Errors in AppShell.tsx**
 
-The app folder is now properly tracked by git, and the FloatingRecorder is fully functional and integrated with the global recording state management system. The fixes maintain the clean architecture achieved during the refactoring while restoring the missing functionality.
+**Problem**: After integrating FloatingRecorder with global state, several TypeScript errors emerged:
+1. `Property 'unsubscribe' does not exist on type 'GlobalRecordingManager'`
+2. `Parameter 'prev' implicitly has an 'any' type`
+3. `Argument of type '(prev: any) => any' is not assignable to parameter of type 'number'`
+
+**Root Causes**:
+1. `globalRecordingManager.subscribe()` returns a cleanup function, not an `unsubscribe` method
+2. `setRefreshSignal` expects a `number` directly, not a React state setter function
+3. Missing explicit type annotations
+
+**Solutions Applied**:
+
+1. **Fixed Subscription Pattern**:
+```tsx
+// Before ❌
+globalRecordingManager.subscribe(handleStateChange)
+return () => globalRecordingManager.unsubscribe(handleStateChange)
+
+// After ✅  
+const unsubscribe = globalRecordingManager.subscribe(handleStateChange)
+return unsubscribe
+```
+
+2. **Fixed RefreshSignal Updates**:
+```tsx
+// Before ❌
+setRefreshSignal(prev => prev + 1)  // Wrong: expects setState pattern
+
+// After ✅
+setRefreshSignal(refreshSignal + 1)  // Correct: direct value assignment
+```
+
+**Result**: ✅ All TypeScript linter errors resolved, component properly typed and functional.
+
+## ✅ **All Issues Fully Resolved**
+
+The app folder is now properly tracked by git, the FloatingRecorder is fully functional and integrated with the global recording state management system, and all TypeScript linter errors have been fixed. The fixes maintain the clean architecture achieved during the refactoring while restoring the missing functionality.
