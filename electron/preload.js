@@ -1,16 +1,10 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
-// Load environment variables from .env file
-const path = require('path')
-const envPath = path.join(__dirname, '..', '.env')
-console.log('🔧 Preload: Loading .env from:', envPath)
-
-try {
-  require('dotenv').config({ path: envPath })
-  console.log('✅ Preload: Environment variables loaded successfully')
-} catch (error) {
-  console.error('❌ Preload: Failed to load environment variables:', error)
-}
+// Environment variables are already loaded by main process
+// Access them directly from process.env
+console.log('🔧 Preload: Environment variables loaded by main process')
+console.log('✅ Preload: BASIC_AUTH_USERNAME:', process.env.BASIC_AUTH_USERNAME ? 'SET' : 'NOT SET')
+console.log('✅ Preload: BASIC_AUTH_PASSWORD:', process.env.BASIC_AUTH_PASSWORD ? 'SET' : 'NOT SET')
 
 contextBridge.exposeInMainWorld('USER_ID', process.env.USERNAME || process.env.USER || '')
 
@@ -220,8 +214,8 @@ contextBridge.exposeInMainWorld('corsDebug', {
 				method: 'GET',
 				headers: {
 					'Authorization': 'Basic ' + btoa(`${username}:${password}`),
-					'Content-Type': 'application/json',
-					'Origin': 'electron://app'
+					'Content-Type': 'application/json'
+					// Origin will be set automatically by browser/Electron
 				}
 			})
 			

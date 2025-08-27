@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../services'
-import AskLlama from './AskLlama'
+import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../../../services'
+import AskLlama from '../../admin/pages/AskLlama'
 
-import { useToast } from '../components/common'
-// import { createRippleEffect } from '../utils' // Not needed for current implementation
+import { useToast } from '../../../components/common'
+import { createRippleEffect } from '../../../utils'
 
 export default function Dashboard({ 
 	onOpen, 

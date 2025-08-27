@@ -36,8 +36,15 @@ export class ElectronApiOptimizer {
    */
   private initializeElectronAPI(): void {
     if (typeof window !== 'undefined' && (window as any).electronAPI) {
-      this.electronAPI = (window as any).electronAPI
-      console.log('🔌 Electron API detected - enabling optimizations')
+      // Check if this is a full electronAPI with recording functions
+      const api = (window as any).electronAPI
+      if (api.sendRecordingState) {
+        this.electronAPI = api
+        console.log('🔌 Electron API detected - enabling optimizations')
+      } else {
+        console.log('🔌 Electron context detected but API incomplete - partial optimization')
+        this.electronAPI = null
+      }
     } else {
       console.log('🌐 Running in browser mode - Electron optimizations disabled')
     }

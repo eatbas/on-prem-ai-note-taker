@@ -18,7 +18,11 @@ createRoot(rootEl).render(
 // background: attempt sync when coming online
 watchOnline(async (online: boolean) => {
 	if (online) {
-		try { await syncAllQueued() } catch {}
+		try { 
+			await syncAllQueued() 
+		} catch (error) {
+			console.log('Background sync failed:', error)
+		}
 	}
 })
 

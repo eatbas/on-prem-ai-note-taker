@@ -358,8 +358,7 @@ app.whenReady().then(async () => {
 		session.defaultSession.webRequest.onBeforeSendHeaders(
 			{ urls: ['http://95.111.244.159:8000/*'] },
 			(details, callback) => {
-				// Add CORS headers to requests
-				details.requestHeaders['Origin'] = 'electron://app'
+				// Set User-Agent to identify Electron app
 				details.requestHeaders['User-Agent'] = 'ElectronApp/1.0'
 				
 				// Ensure auth header is present
@@ -376,30 +375,23 @@ app.whenReady().then(async () => {
 					details.requestHeaders['Authorization'] = `Basic ${credentials}`
 				}
 				
+				// Only set Origin if it's not already present (avoid duplicates)
+				if (!details.requestHeaders['Origin']) {
+					details.requestHeaders['Origin'] = 'electron://app'
+				}
+				
 				console.log('🔧 Modified request headers for:', details.url)
 				callback({ requestHeaders: details.requestHeaders })
 			}
 		)
 		
-		// Handle response headers - only modify if CORS headers are missing
+		// Handle response headers - let backend handle CORS properly
 		session.defaultSession.webRequest.onHeadersReceived(
 			{ urls: ['http://95.111.244.159:8000/*'] },
 			(details, callback) => {
-				// Only add CORS headers if they're not already present (to avoid duplicates)
-				if (!details.responseHeaders['Access-Control-Allow-Origin']) {
-					details.responseHeaders['Access-Control-Allow-Origin'] = ['electron://app']
-				}
-				if (!details.responseHeaders['Access-Control-Allow-Methods']) {
-					details.responseHeaders['Access-Control-Allow-Methods'] = ['GET, POST, PUT, DELETE, OPTIONS']
-				}
-				if (!details.responseHeaders['Access-Control-Allow-Headers']) {
-					details.responseHeaders['Access-Control-Allow-Headers'] = ['*']
-				}
-				if (!details.responseHeaders['Access-Control-Allow-Credentials']) {
-					details.responseHeaders['Access-Control-Allow-Credentials'] = ['true']
-				}
-				
-				console.log('🔧 CORS headers checked for:', details.url)
+				// Log response for debugging but don't modify headers
+				// Let the backend's CORS middleware handle everything properly
+				console.log('📡 Response received from:', details.url, 'Status:', details.statusCode)
 				callback({ responseHeaders: details.responseHeaders })
 			}
 		)
