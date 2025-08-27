@@ -5,6 +5,7 @@ import react from '@vitejs/plugin-react'
 export default defineConfig({
   plugins: [react()],
   base: './', // Use relative paths for Electron
+  envDir: '../', // Load environment variables from parent directory (root)
   server: {
     port: 5173,
     host: true,

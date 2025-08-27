@@ -12,7 +12,7 @@ export type Meeting = {
 	duration?: number
 }
 
-export type AudioType = 'microphone' | 'system' | 'mixed'
+export type AudioType = 'microphone' | 'system' | 'speaker' | 'mixed'
 
 export type Chunk = {
 	id: string

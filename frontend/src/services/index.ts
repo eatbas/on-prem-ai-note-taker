@@ -1,8 +1,16 @@
-// Export all from api except conflicting ones
+/**
+ * Services Index
+ * Centralized exports for all application services
+ */
+
+// API Services
 export * from './api'
-// Export all from db
+export { createJobProgressStream } from './api'
+
+// Database Services
 export * from './db'
-// Export specific items from offline to avoid conflicts
+
+// Offline Services
 export {
   generateId,
   createMeeting,
@@ -20,7 +28,7 @@ export {
   updateMeetingTags as updateMeetingTagsOffline
 } from './offline'
 
-// Export missing types
+// Legacy Types (to be moved to lib/types.ts)
 export interface JobStatusResponse {
   status: string
   progress?: number

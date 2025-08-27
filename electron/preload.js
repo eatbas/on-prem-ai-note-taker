@@ -1,5 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
+// Load environment variables from .env file
+require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') })
+
 contextBridge.exposeInMainWorld('USER_ID', process.env.USERNAME || process.env.USER || '')
 
 contextBridge.exposeInMainWorld('BASIC_AUTH', {
@@ -18,6 +21,95 @@ contextBridge.exposeInMainWorld('desktopCapture', {
 	getSources: async (types) => {
 		const { desktopCapturer } = require('electron')
 		return await desktopCapturer.getSources({ types, fetchWindowIcons: false })
+	},
+	
+	// Modern system audio capture using getDisplayMedia
+	captureSystemAudio: async () => {
+		try {
+			// Use the modern getDisplayMedia API which is more reliable
+			const stream = await navigator.mediaDevices.getDisplayMedia({ 
+				video: false, // We only need audio
+				audio: {
+					echoCancellation: false,
+					noiseSuppression: false,
+					autoGainControl: false,
+					sampleRate: 16000 // Optimize for Whisper
+				}
+			})
+			
+			// Extract only audio tracks
+			const audioTracks = stream.getAudioTracks()
+			if (audioTracks.length === 0) {
+				throw new Error('No audio tracks found in system audio capture')
+			}
+			
+			// Create audio-only stream
+			const audioStream = new MediaStream(audioTracks)
+			
+			console.log('✅ System audio captured successfully:', {
+				trackCount: audioTracks.length,
+				trackIds: audioTracks.map(t => t.id),
+				enabled: audioTracks.map(t => t.enabled),
+				muted: audioTracks.map(t => t.muted)
+			})
+			
+			return audioStream
+		} catch (error) {
+			console.error('❌ Failed to capture system audio:', error)
+			throw error
+		}
+	},
+	
+	// Fallback method using desktopCapturer for Electron-specific sources
+	captureDesktopAudio: async () => {
+		try {
+			const { desktopCapturer } = require('electron')
+			
+			// Get all available sources
+			const sources = await desktopCapturer.getSources({ 
+				types: ['screen', 'window'], 
+				fetchWindowIcons: false 
+			})
+			
+			console.log('🔍 Available desktop sources:', sources.map(s => ({
+				id: s.id,
+				name: s.name,
+				type: s.mediaType
+			})))
+			
+			// Try to capture from the first available source
+			for (const source of sources) {
+				try {
+					console.log(`🧪 Attempting to capture from: ${source.name}`)
+					
+					const stream = await navigator.mediaDevices.getUserMedia({
+						audio: {
+							mandatory: {
+								chromeMediaSource: 'desktop',
+								chromeMediaSourceId: source.id
+							},
+							echoCancellation: false,
+							noiseSuppression: false,
+							autoGainControl: false,
+							sampleRate: 16000
+						}
+					})
+					
+					if (stream.getAudioTracks().length > 0) {
+						console.log(`✅ Successfully captured desktop audio from: ${source.name}`)
+						return stream
+					}
+				} catch (err) {
+					console.log(`⚠️ Failed to capture from ${source.name}:`, err.message)
+					continue
+				}
+			}
+			
+			throw new Error('No desktop audio sources could be captured')
+		} catch (error) {
+			console.error('❌ Desktop audio capture failed:', error)
+			throw error
+		}
 	}
 })
 

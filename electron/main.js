@@ -2,6 +2,9 @@ const { app, BrowserWindow, Tray, nativeImage, ipcMain, screen } = require('elec
 const path = require('path')
 const fs = require('fs')
 
+// Load environment variables from .env file
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') })
+
 // Global error handlers
 process.on('uncaughtException', (error) => {
 	console.error('Uncaught Exception:', error)
@@ -28,9 +31,11 @@ function createWindow() {
 			preload: path.join(__dirname, 'preload.js'),
 			webSecurity: false, // Allow loading local files
 			allowRunningInsecureContent: true, // Allow HTTP content from HTTPS
-			experimentalFeatures: true // Enable experimental web features
+			experimentalFeatures: true, // Enable experimental web features
+			// Enable system audio capture permissions
+			enableWebCodecs: true
 		},
-		icon: path.join(__dirname, 'dgMeets.svg')
+		icon: path.join(__dirname, 'dgMeets-512.png')
 	})
 
 	// Try to load from dev server first (for development)
@@ -91,17 +96,12 @@ function createTray() {
 		let icon
 		
 		try {
-			// Try to load the circular dgMeets icon for tray (works better in small sizes)
-			icon = nativeImage.createFromPath(path.join(__dirname, 'dgMeets-circle.svg'))
+			// Try to load the 16px dgMeets icon for tray (works better in small sizes)
+			icon = nativeImage.createFromPath(path.join(__dirname, 'dgMeets-16.png'))
 		} catch (error) {
 			console.error('Failed to load tray icon:', error)
-			// Try the 16px version
-			try {
-				icon = nativeImage.createFromPath(path.join(__dirname, 'dgMeets-16.svg'))
-			} catch (error2) {
-				// Create a simple default icon if all else fails
-				icon = nativeImage.createFromBuffer(Buffer.from('<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" fill="#00d9ff"/></svg>'))
-			}
+			// Create a simple default icon if all else fails
+			icon = nativeImage.createFromBuffer(Buffer.from('<svg width="16" height="16" xmlns="http://www.w3.org/2000/svg"><rect width="16" height="16" fill="#00d9ff"/></svg>'))
 		}
 		
 		tray = new Tray(icon)
@@ -286,7 +286,7 @@ function stopRecordingDataUpdates() {
 	console.log('🎙️ Stopping recording data updates')
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
 	try {
 		console.log('🚀 App is ready, creating windows...')
 		console.log('📁 Current directory:', __dirname)
@@ -294,8 +294,34 @@ app.whenReady().then(() => {
 		console.log('👤 Auth User:', process.env.BASIC_AUTH_USERNAME || 'Not configured')
 		console.log('🌐 Development Mode: Always connects to VPS for AI services')
 		
+		// Enable system audio capture features
+		console.log('🎵 Enabling system audio capture features...')
+		app.commandLine.appendSwitch('enable-features', 'WebCodecs,WebRtcUseMinMaxVEADimensions')
+		app.commandLine.appendSwitch('disable-features', 'UseChromeOSDirectVideoDecoder')
+		app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+		
+		// Test system audio capture capabilities
+		try {
+			const { testSystemAudioCapture } = require('./system-audio-test.js')
+			await testSystemAudioCapture()
+		} catch (error) {
+			console.log('⚠️ System audio test failed:', error.message)
+		}
+		
 		// Add request interceptor to handle CORS issues
 		const { session } = require('electron')
+		
+		// Set permissions for system audio capture
+		session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
+			const audioPermissions = ['microphone', 'desktop-capture', 'media']
+			if (audioPermissions.includes(permission)) {
+				console.log(`✅ Granting permission: ${permission}`)
+				callback(true)
+			} else {
+				console.log(`❓ Permission request: ${permission}`)
+				callback(false)
+			}
+		})
 		
 		// Intercept and modify requests to VPS
 		session.defaultSession.webRequest.onBeforeSendHeaders(

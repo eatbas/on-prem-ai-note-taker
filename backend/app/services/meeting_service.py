@@ -501,16 +501,35 @@ Using information from both audio sources, create a comprehensive meeting summar
         return prefix + summary
     
     def _perform_speaker_diarization(self, segments, audio_file_path: str) -> list:
-        """Perform speaker diarization on audio segments using pyannote.audio"""
+        """Perform speaker diarization on audio segments using pyannote.audio (CPU-optimized)"""
         try:
             # Try to import speaker diarization library
             from pyannote.audio import Pipeline
             import torch
             
-            # Initialize the speaker diarization pipeline
-            pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+            # Force CPU usage for server without GPU
+            if torch.cuda.is_available():
+                logger.info("🚀 GPU detected, using GPU acceleration for speaker diarization")
+                device = torch.device("cuda")
+            else:
+                logger.info("💻 No GPU detected, using CPU-only speaker diarization (6 CPU, 16GB RAM)")
+                device = torch.device("cpu")
+                # Set CPU thread count for optimal performance within resource limits
+                torch.set_num_threads(6)  # Use 6 CPU cores (leaving 2 for system)
             
-            # Perform diarization
+            # Initialize the speaker diarization pipeline with CPU optimization
+            pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization-3.1")
+            pipeline = pipeline.to(device)
+            
+            # Additional memory optimization for 16GB RAM constraint
+            if device.type == "cpu":
+                # Optimize for memory efficiency
+                import gc
+                gc.collect()  # Clean up memory before processing
+                logger.info("🧹 Memory optimized for 16GB RAM constraint")
+            
+            # Perform diarization with CPU optimization
+            logger.info(f"🔍 Starting speaker diarization on {device} for audio file: {audio_file_path}")
             diarization = pipeline(audio_file_path)
             
             # Create speaker segments with diarization
@@ -565,17 +584,37 @@ Using information from both audio sources, create a comprehensive meeting summar
             return self._simple_speaker_detection(segments)
     
     def _simple_speaker_detection(self, segments) -> list:
-        """Simple speaker detection based on audio characteristics when diarization is not available"""
+        """Enhanced CPU-only speaker detection using audio characteristics and timing patterns"""
         speaker_segments = []
         current_speaker = "SPEAKER_1"
         speaker_counter = 1
-        last_silence_duration = 0
         
+        # Enhanced heuristics for better speaker separation
         for i, segment in enumerate(segments):
-            # Simple heuristic: if there's a long pause, it might be a different speaker
+            segment_duration = segment.end - segment.start
+            
+            # Analyze speech patterns for speaker changes
             if i > 0:
-                silence_duration = segment.start - segments[i-1].end
-                if silence_duration > 2.0:  # 2 second pause
+                prev_segment = segments[i-1]
+                silence_duration = segment.start - prev_segment.end
+                prev_duration = prev_segment.end - prev_segment.start
+                
+                # Multi-factor speaker change detection
+                speaker_change = False
+                
+                # Long pause detection (speaker turn)
+                if silence_duration > 1.5:  # 1.5 second pause
+                    speaker_change = True
+                
+                # Significant duration change (different speaking style)
+                elif abs(segment_duration - prev_duration) > 3.0:  # Very different segment length
+                    speaker_change = True
+                
+                # Text content analysis (basic)
+                elif len(segment.text.split()) < 3 and silence_duration > 0.8:  # Short responses with pause
+                    speaker_change = True
+                
+                if speaker_change:
                     speaker_counter += 1
                     current_speaker = f"SPEAKER_{speaker_counter}"
             
@@ -586,7 +625,7 @@ Using information from both audio sources, create a comprehensive meeting summar
                 "speaker": current_speaker
             })
         
-        logger.info(f"Simple speaker detection: {speaker_counter} speakers estimated")
+        logger.info(f"Enhanced CPU speaker detection: {speaker_counter} speakers estimated using timing and content analysis")
         return speaker_segments
     
     def _combine_multi_speaker_transcripts(self, mic_text_parts: list, system_text_parts_by_speaker: dict) -> str:

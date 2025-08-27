@@ -83,7 +83,22 @@ app.include_router(jobs_router)  # Keep existing jobs router for compatibility
 
 @app.on_event("startup")
 async def startup_event():
-    """Initialize queue manager and register handlers"""
+    """Initialize queue manager and register handlers with resource optimization"""
+    
+    # Optimize for 6 CPU / 16GB RAM constraints
+    import os
+    import torch
+    
+    # Set global CPU optimization
+    if torch.cuda.is_available():
+        logger.info("🚀 GPU detected for acceleration")
+    else:
+        logger.info("💻 CPU-only mode: Optimizing for 6 CPU cores, 16GB RAM")
+        torch.set_num_threads(6)  # Global PyTorch thread limit
+        os.environ['OMP_NUM_THREADS'] = '6'  # OpenMP optimization
+        os.environ['MKL_NUM_THREADS'] = '6'  # Intel MKL optimization
+        logger.info("🔧 Global CPU optimization applied: 6 threads for PyTorch/OpenMP/MKL")
+    
     if settings.use_queue_system:
         # Configure queue manager
         queue_manager.redis_url = settings.redis_url

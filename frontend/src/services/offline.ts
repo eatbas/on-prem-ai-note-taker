@@ -1,5 +1,5 @@
 import { db, Meeting, Chunk, AudioType } from './db'
-import { transcribeAndSummarize, autoProcessMeeting } from './api'
+import { transcribeAndSummarize, autoProcessMeeting, autoProcessDualMeeting } from './api'
 
 export function generateId(prefix = 'id'): string {
 	return `${prefix}_${Math.random().toString(36).slice(2)}_${Date.now()}`
@@ -99,6 +99,7 @@ export async function assembleFileFromChunks(meetingId: string): Promise<File> {
 export async function assembleFilesByAudioType(meetingId: string): Promise<{
 	microphone?: File
 	system?: File
+	speaker?: File
 	mixed?: File
 	hasSeparateStreams: boolean
 }> {
@@ -109,15 +110,17 @@ export async function assembleFilesByAudioType(meetingId: string): Promise<{
 	// Group chunks by audio type
 	const micChunks = allChunks.filter(chunk => chunk.audioType === 'microphone').sort((a, b) => a.index - b.index)
 	const systemChunks = allChunks.filter(chunk => chunk.audioType === 'system').sort((a, b) => a.index - b.index)
+	const speakerChunks = allChunks.filter(chunk => chunk.audioType === 'speaker').sort((a, b) => a.index - b.index)
 	const mixedChunks = allChunks.filter(chunk => chunk.audioType === 'mixed').sort((a, b) => a.index - b.index)
 	
 	const result: {
 		microphone?: File
-		system?: File  
+		system?: File
+		speaker?: File
 		mixed?: File
 		hasSeparateStreams: boolean
 	} = {
-		hasSeparateStreams: micChunks.length > 0 && systemChunks.length > 0
+		hasSeparateStreams: micChunks.length > 0 && (systemChunks.length > 0 || speakerChunks.length > 0)
 	}
 	
 	// Create microphone file if chunks exist
@@ -134,6 +137,13 @@ export async function assembleFilesByAudioType(meetingId: string): Promise<{
 		console.log(`🔊 System audio file: ${systemChunks.length} chunks, ${(result.system.size / 1024).toFixed(2)} KB`)
 	}
 	
+	// Create speaker audio file if chunks exist
+	if (speakerChunks.length > 0) {
+		const speakerBlobs = speakerChunks.map(chunk => chunk.blob)
+		result.speaker = new File(speakerBlobs, `${meetingId}_speaker.webm`, { type: 'audio/webm' })
+		console.log(`🔊 Speaker audio file: ${speakerChunks.length} chunks, ${(result.speaker.size / 1024).toFixed(2)} KB`)
+	}
+	
 	// Create mixed file if chunks exist (fallback compatibility)
 	if (mixedChunks.length > 0) {
 		const mixedBlobs = mixedChunks.map(chunk => chunk.blob)
@@ -142,11 +152,11 @@ export async function assembleFilesByAudioType(meetingId: string): Promise<{
 	}
 	
 	console.log('🎯 Whisper Audio File Analysis:', {
-		hasSeparateStreams: result.hasSeparateStreams,
-		microphoneFile: !!result.microphone,
-		systemFile: !!result.system,
-		mixedFile: !!result.mixed,
-		whisperBenefit: result.hasSeparateStreams ? 'MAXIMUM - Perfect speaker separation!' : 'LIMITED - Single stream only'
+		microphone: result.microphone ? `${(result.microphone.size / 1024).toFixed(2)} KB` : 'None',
+		system: result.system ? `${(result.system.size / 1024).toFixed(2)} KB` : 'None',
+		speaker: result.speaker ? `${(result.speaker.size / 1024).toFixed(2)} KB` : 'None',
+		mixed: result.mixed ? `${(result.mixed.size / 1024).toFixed(2)} KB` : 'None',
+		hasSeparateStreams: result.hasSeparateStreams
 	})
 	
 	return result
@@ -323,46 +333,23 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(
 		console.log('🎯 PERFECT WHISPER SETUP: Processing separate mic and system audio for maximum accuracy!')
 		
 		try {
-			// Process microphone audio (user speech)
-			console.log('🎤 Processing microphone audio (user voice)...')
-			const micResult = await autoProcessMeeting(
+			// Use the dedicated dual audio backend endpoint for speaker diarization
+			console.log('🎯 USING DUAL AUDIO BACKEND: Processing both streams with speaker diarization...')
+			const dualResult = await autoProcessDualMeeting(
 				audioFiles.microphone,
-				language,
-				`${meetingTitle} - User Audio`
-			)
-			
-			// Process system audio (other speakers)
-			console.log('🔊 Processing system audio (other speakers)...')
-			const systemResult = await autoProcessMeeting(
 				audioFiles.system,
 				language,
-				`${meetingTitle} - System Audio`
+				meetingTitle
 			)
 			
-			// Combine transcripts with speaker labels for perfect diarization
-			const combinedTranscript = combineTranscriptsWithSpeakers(
-				micResult.transcript,
-				systemResult.transcript
-			)
+			console.log('🎉 DUAL AUDIO BACKEND SUCCESS:', dualResult)
 			
-			// Enhanced summary with speaker context
-			const enhancedSummary = `## Whisper-Optimized Meeting Summary (Perfect Speaker Separation)
-
-**User (Microphone):**
-${micResult.summary}
-
-**Other Speakers (System Audio):**
-${systemResult.summary}
-
-## Combined Analysis:
-This meeting was processed using dual audio streams for maximum Whisper accuracy, achieving perfect speaker separation.`
-			
-			// Save enhanced results
+			// Save enhanced results from dual audio backend
 			await db.notes.put({ 
 				meetingId, 
-				transcript: combinedTranscript, 
+				transcript: dualResult.transcript || '', 
 				createdAt: Date.now(), 
-				summary: enhancedSummary
+				summary: dualResult.summary || ''
 			})
 			
 			await db.meetings.update(meetingId, { 
@@ -371,7 +358,8 @@ This meeting was processed using dual audio streams for maximum Whisper accuracy
 				title: meetingTitle
 			})
 			
-			console.log('✅ WHISPER DUAL PROCESSING COMPLETE: Maximum accuracy achieved!')
+			console.log('✅ WHISPER OPTIMIZATION SUCCESS: Dual audio backend processing completed!')
+			console.log(`📊 Speaker Analysis: ${dualResult.speaker_separation?.total_speakers || 'Multiple'} speakers identified with ${dualResult.speaker_separation?.accuracy_level || 'standard'} accuracy`)
 			return
 			
 		} catch (error) {

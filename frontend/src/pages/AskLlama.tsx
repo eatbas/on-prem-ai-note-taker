@@ -1,744 +1,376 @@
-import { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { chat } from '../services'
 
-export default function AskLlama({ online, vpsUp }: { online: boolean; vpsUp: boolean | null }) {
-	const [prompt, setPrompt] = useState('')
-	const [chatHistory, setChatHistory] = useState<Array<{
-		id: number
-		question: string
-		answer: string
-		model: string
-		timestamp: Date
-		durationSeconds: number
-	}>>([])
-	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState<string | null>(null)
-	const [model] = useState<string>('qwen2.5:3b-instruct') // Use actual Ollama model name
-	const [requestId, setRequestId] = useState(0)
-	const [activeTab, setActiveTab] = useState<'current' | 'history'>('current')
-	const [elapsedSeconds, setElapsedSeconds] = useState(0)
-	const [lastThinkingSeconds, setLastThinkingSeconds] = useState<number | null>(null)
-	const timerRef = useRef<number | null>(null)
-	const startTimeRef = useRef<number | null>(null)
+// Import chat components
+import ChatInput from '../features/admin/components/ChatInput'
+import ChatHistory from '../features/admin/components/ChatHistory'
+import ChatMessage from '../features/admin/components/ChatMessage'
 
-	// Debug logging for status
-	useEffect(() => {
-		console.log('🔍 AskLlama Debug Status:', { online, vpsUp, loading, error })
-	}, [online, vpsUp, loading, error])
+// Import custom hook
+import { useChatTimer } from '../features/admin/hooks/useChatTimer'
 
-	// Remove the availableModels state and useEffect since we only have one model
+interface ChatEntry {
+    id: number
+    question: string
+    answer: string
+    model: string
+    timestamp: Date
+    durationSeconds: number
+}
 
-	// Handle live timer while loading
-	useEffect(() => {
-		if (loading) {
-			setElapsedSeconds(0)
-			const startedAt = startTimeRef.current ?? Date.now()
-			if (startTimeRef.current == null) startTimeRef.current = startedAt
-			timerRef.current = window.setInterval(() => {
-				setElapsedSeconds(Math.floor((Date.now() - startedAt) / 1000))
-			}, 1000)
-		} else {
-			if (timerRef.current) {
-				clearInterval(timerRef.current)
-				timerRef.current = null
-			}
-		}
-		return () => {
-			if (timerRef.current) {
-				clearInterval(timerRef.current)
-				timerRef.current = null
-			}
-		}
-	}, [loading])
+interface AskLlamaProps {
+    online: boolean
+    vpsUp: boolean | null
+}
 
-	const handleSubmit = async (e: React.FormEvent) => {
-		e.preventDefault()
-		console.log('🚀 Submit attempt:', { prompt: prompt.trim(), online, vpsUp, loading })
-		
-		if (!prompt.trim() || !online || !vpsUp || loading) {
-			console.log('❌ Submit blocked:', { 
-				hasPrompt: !!prompt.trim(), 
-				online, 
-				vpsUp, 
-				loading 
-			})
-			return
-		}
+export default function AskLlama({ online, vpsUp }: AskLlamaProps) {
+    // Chat state
+    const [prompt, setPrompt] = useState('')
+    const [chatHistory, setChatHistory] = useState<ChatEntry[]>([])
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
+    const [model] = useState<string>('qwen2.5:3b-instruct')
+    const [requestId, setRequestId] = useState(0)
+    const [activeTab, setActiveTab] = useState<'current' | 'history'>('current')
 
-		// Increment request ID and clear previous state
-		const currentRequestId = requestId + 1
-		setRequestId(currentRequestId)
-		setError(null)
-		setLoading(true)
-		setLastThinkingSeconds(null)
-		setElapsedSeconds(0)
-		startTimeRef.current = Date.now()
+    // Custom timer hook
+    const {
+        elapsedSeconds,
+        lastThinkingSeconds,
+        getDurationSeconds,
+        resetTimer,
+        recordThinkingTime
+    } = useChatTimer(loading)
 
-		// Store the current prompt to ensure we're setting response for the right request
-		const currentPrompt = prompt.trim()
-		const currentModel = model || undefined
+    // Debug logging for status
+    useEffect(() => {
+        console.log('🔍 AskLlama Debug Status:', { online, vpsUp, loading, error })
+    }, [online, vpsUp, loading, error])
 
-		try {
-			console.log(`[Request ${currentRequestId}] Sending chat request:`, { prompt: currentPrompt, model: currentModel })
-			const result = await chat(currentPrompt, currentModel)
-			console.log(`[Request ${currentRequestId}] Chat response received:`, result)
-			
-			// Only update chat history if this is still the current request
-			if (currentRequestId === requestId + 1) {
-				const durationSeconds = startTimeRef.current ? Math.round((Date.now() - startTimeRef.current) / 1000) : elapsedSeconds
-				setLastThinkingSeconds(durationSeconds)
-				const newChatEntry = {
-					id: currentRequestId,
-					question: currentPrompt,
-					answer: result.response,
-					model: currentModel || 'qwen2.5:3b-instruct',
-					timestamp: new Date(),
-					durationSeconds
-				}
-				setChatHistory(prev => [...prev, newChatEntry])
-				setPrompt('') // Clear the input after successful submission
-				// Keep user in Current Chat; Past Queries will update automatically
-			}
-		} catch (err) {
-			console.error(`[Request ${currentRequestId}] Chat request failed:`, err)
-			// Only update error if this is still the current request
-			if (currentRequestId === requestId + 1) {
-				setError(err instanceof Error ? err.message : 'Failed to get response from AI Assistant')
-			}
-		} finally {
-			// Only update loading if this is still the current request
-			if (currentRequestId === requestId + 1) {
-				setLoading(false)
-			}
-		}
-	}
+    // Load chat history from localStorage on mount
+    useEffect(() => {
+        try {
+            const saved = localStorage.getItem('ask-llama-history')
+            if (saved) {
+                const parsed = JSON.parse(saved)
+                // Convert timestamp strings back to Date objects
+                const withDates = parsed.map((entry: any) => ({
+                    ...entry,
+                    timestamp: new Date(entry.timestamp)
+                }))
+                setChatHistory(withDates)
+            }
+        } catch (err) {
+            console.warn('Failed to load chat history from localStorage:', err)
+        }
+    }, [])
 
-	const handleCancel = () => {
-		setLoading(false)
-		setError('Request cancelled by user')
-	}
+    // Save chat history to localStorage whenever it changes
+    useEffect(() => {
+        try {
+            localStorage.setItem('ask-llama-history', JSON.stringify(chatHistory))
+        } catch (err) {
+            console.warn('Failed to save chat history to localStorage:', err)
+        }
+    }, [chatHistory])
 
-	const isDisabled = !online || !vpsUp || loading || !prompt.trim()
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        
+        if (!prompt.trim() || loading || !online || !vpsUp) {
+            return
+        }
 
-	const resetChat = () => {
-		setChatHistory([])
-		setError(null)
-		setPrompt('')
-		setRequestId(0)
-		setActiveTab('current')
-	}
+        const currentRequestId = requestId + 1
+        setRequestId(currentRequestId)
+        setLoading(true)
+        setError(null)
+        resetTimer()
 
-	return (
-		<div style={{ padding: '24px 0' }}>
-			<div style={{ 
-				textAlign: 'center', 
-				marginBottom: '32px',
-				padding: '24px',
-				backgroundColor: '#f8fafc',
-				borderRadius: '12px',
-				border: '2px solid #e2e8f0'
-			}}>
-				<h2 style={{
-					margin: '0 0 16px 0',
-					fontSize: '1.8rem',
-					fontWeight: '600',
-					color: '#1e293b'
-				}}>
-					🤖 Ask AI Assistant
-				</h2>
-				<p style={{
-					margin: '0',
-					fontSize: '1.1rem',
-					color: '#64748b',
-					lineHeight: '1.6'
-				}}>
-					Ask your AI assistant anything! This AI can help with questions, analysis, writing, and more.
-				</p>
-				
-				{/* Model indicator */}
-				<div style={{
-					marginTop: '12px',
-					padding: '8px 16px',
-					backgroundColor: '#e0f2fe',
-					border: '1px solid #0ea5e9',
-					borderRadius: '8px',
-					display: 'inline-block'
-				}}>
-					<span style={{
-						fontSize: '14px',
-						fontWeight: '600',
-						color: '#0c4a6e'
-					}}>
-						🤖 AI Assistant Ready
-					</span>
-				</div>
-				
-				{/* Status indicators */}
-				<div style={{
-					display: 'flex',
-					justifyContent: 'center',
-					gap: '16px',
-					marginTop: '16px'
-				}}>
-					<span style={{ 
-						fontSize: '14px', 
-						fontWeight: '500',
-						display: 'flex',
-						alignItems: 'center',
-						gap: '8px',
-						padding: '8px 16px',
-						backgroundColor: online ? '#dcfce7' : '#fee2e2',
-						color: online ? '#166534' : '#dc2626',
-						borderRadius: '8px',
-						border: `1px solid ${online ? '#bbf7d0' : '#fecaca'}`
-					}}>
-						{online ? '🟢' : '🔴'} {online ? 'Online' : 'Offline'}
-					</span>
-					<span style={{ 
-						fontSize: '14px',
-						fontWeight: '500',
-						display: 'flex',
-						alignItems: 'center',
-						gap: '8px',
-						padding: '8px 16px',
-						backgroundColor: vpsUp ? '#dcfce7' : vpsUp === null ? '#fef3c7' : '#fee2e2',
-						color: vpsUp ? '#166534' : vpsUp === null ? '#92400e' : '#dc2626',
-						borderRadius: '8px',
-						border: `1px solid ${vpsUp ? '#bbf7d0' : vpsUp === null ? '#fde68a' : '#fecaca'}`
-					}}>
-						{vpsUp === null ? '⏳' : vpsUp ? '🟢' : '🔴'} VPS {vpsUp === null ? 'Checking...' : vpsUp ? 'Connected' : 'Disconnected'}
-					</span>
-					<button
-						onClick={() => window.location.reload()}
-						style={{
-							padding: '8px 16px',
-							backgroundColor: '#3b82f6',
-							color: 'white',
-							border: 'none',
-							borderRadius: '8px',
-							fontSize: '14px',
-							fontWeight: '600',
-							cursor: 'pointer',
-							transition: 'all 0.2s ease',
-							display: 'flex',
-							alignItems: 'center',
-							gap: '8px'
-						}}
-						onMouseEnter={(e) => {
-							e.currentTarget.style.backgroundColor = '#2563eb'
-						}}
-						onMouseLeave={(e) => {
-							e.currentTarget.style.backgroundColor = '#3b82f6'
-						}}
-					>
-						🔄 Refresh Status
-					</button>
-				</div>
-			</div>
+        console.log(`[Request ${currentRequestId}] Starting chat request...`)
 
-			{/* Tab Navigation */}
-			<div style={{
-				display: 'flex',
-				borderBottom: '2px solid #e2e8f0',
-				marginBottom: '24px'
-			}}>
-				<button
-					onClick={() => setActiveTab('current')}
-					style={{
-						padding: '16px 24px',
-						backgroundColor: activeTab === 'current' ? '#3b82f6' : 'transparent',
-						color: activeTab === 'current' ? 'white' : '#64748b',
-						border: 'none',
-						borderRadius: '8px 8px 0 0',
-						fontSize: '16px',
-						fontWeight: '600',
-						cursor: 'pointer',
-						transition: 'all 0.2s ease',
-						borderBottom: activeTab === 'current' ? '2px solid #3b82f6' : 'none'
-					}}
-				>
-					💬 Current Chat
-				</button>
-				<button
-					onClick={() => setActiveTab('history')}
-					style={{
-						padding: '16px 24px',
-						backgroundColor: activeTab === 'history' ? '#3b82f6' : 'transparent',
-						color: activeTab === 'history' ? 'white' : '#64748b',
-						border: 'none',
-						borderRadius: '8px 8px 0 0',
-						fontSize: '16px',
-						fontWeight: '600',
-						cursor: 'pointer',
-						transition: 'all 0.2s ease',
-						borderBottom: activeTab === 'history' ? '2px solid #3b82f6' : 'none'
-					}}
-				>
-					📚 Past Queries ({chatHistory.length})
-				</button>
-			</div>
+        const currentPrompt = prompt.trim()
+        const currentModel = model || undefined
 
-			{/* Current Chat Tab */}
-			{activeTab === 'current' && (
-				<div>
-					{/* Preparing indicator with live timer */}
-					{loading && (
-						<div style={{
-							padding: '12px 16px',
-							backgroundColor: '#dbeafe',
-							border: '1px solid #3b82f6',
-							borderRadius: '8px',
-							marginBottom: '16px',
-							textAlign: 'center',
-							color: '#1e40af',
-							fontWeight: '500'
-						}}>
-							⏳ Preparing your response ( {elapsedSeconds} sec )
-						</div>
-					)}
+        try {
+            console.log(`[Request ${currentRequestId}] Sending prompt to model ${currentModel}:`, currentPrompt)
+            const result = await chat(currentPrompt, currentModel)
+            console.log(`[Request ${currentRequestId}] Chat response received:`, result)
 
-					{/* Last thinking duration after completion */}
-					{!loading && lastThinkingSeconds !== null && (
-						<div style={{
-							padding: '10px 14px',
-							backgroundColor: '#ecfeff',
-							border: '1px solid #06b6d4',
-							borderRadius: '8px',
-							marginBottom: '16px',
-							textAlign: 'center',
-							color: '#155e75',
-							fontWeight: '500'
-						}}>
-							💭 Thinked ( {lastThinkingSeconds} sec )
-						</div>
-					)}
+            // Only process if this is still the current request
+            if (currentRequestId === requestId + 1) {
+                const durationSeconds = recordThinkingTime()
+                
+                const newEntry: ChatEntry = {
+                    id: Date.now(),
+                    question: currentPrompt,
+                    answer: result.response || result.answer || 'No response received',
+                    model: currentModel || 'unknown',
+                    timestamp: new Date(),
+                    durationSeconds: durationSeconds
+                }
 
-					{/* Chat form */}
-					<form onSubmit={handleSubmit} style={{ marginBottom: '24px' }}>
-						<div style={{
-							display: 'flex',
-							flexDirection: 'column',
-							gap: '16px'
-						}}>
-							<textarea
-								value={prompt}
-								onChange={(e) => setPrompt(e.target.value)}
-								placeholder="Ask your AI assistant anything... (e.g., 'Explain quantum computing', 'Write a poem about AI', 'Help me plan a project')"
-								disabled={!online || !vpsUp || loading}
-								style={{
-									width: '100%',
-									minHeight: '120px',
-									padding: '16px',
-									border: '2px solid #d1d5db',
-									borderRadius: '8px',
-									fontSize: '16px',
-									fontFamily: 'inherit',
-									resize: 'vertical',
-									backgroundColor: (!online || !vpsUp || loading) ? '#f3f4f6' : 'white',
-									color: (!online || !vpsUp || loading) ? '#9ca3af' : '#374151'
-								}}
-							/>
-							
-							{/* Button row below text box */}
-							<div style={{
-								display: 'flex',
-								gap: '12px',
-								justifyContent: 'center',
-								flexWrap: 'wrap'
-							}}>
-								<button
-									type="submit"
-									disabled={isDisabled}
-									style={{
-										padding: '16px 24px',
-										backgroundColor: isDisabled ? '#9ca3af' : '#3b82f6',
-										color: 'white',
-										border: 'none',
-										borderRadius: '8px',
-										fontSize: '16px',
-										fontWeight: '600',
-										cursor: isDisabled ? 'not-allowed' : 'pointer',
-										transition: 'all 0.2s ease',
-										whiteSpace: 'nowrap',
-										minWidth: '120px'
-									}}
-									onMouseEnter={(e) => {
-										if (!isDisabled) {
-											e.currentTarget.style.backgroundColor = '#2563eb'
-										}
-									}}
-									onMouseLeave={(e) => {
-										if (!isDisabled) {
-											e.currentTarget.style.backgroundColor = '#3b82f6'
-										}
-									}}
-								>
-									{loading ? '🤔 Thinking...' : '💬 Ask AI Assistant'}
-								</button>
-								
-								{loading && (
-									<button
-										type="button"
-										onClick={handleCancel}
-										style={{
-											padding: '16px 24px',
-											backgroundColor: '#ef4444',
-											color: 'white',
-											border: 'none',
-											borderRadius: '8px',
-											fontSize: '16px',
-											fontWeight: '600',
-											cursor: 'pointer',
-											transition: 'all 0.2s ease',
-											whiteSpace: 'nowrap',
-											minWidth: '120px'
-										}}
-										onMouseEnter={(e) => {
-											e.currentTarget.style.backgroundColor = '#dc2626'
-										}}
-										onMouseLeave={(e) => {
-											e.currentTarget.style.backgroundColor = '#ef4444'
-										}}
-									>
-										⚠️ Cancel Request
-									</button>
-								)}
-							</div>
-						</div>
-					</form>
+                setChatHistory(prev => [...prev, newEntry])
+                setPrompt('')
+                setError(null)
 
-					{/* Error display */}
-					{error && (
-						<div style={{ 
-							padding: '16px', 
-							backgroundColor: '#fee2e2', 
-							border: '1px solid #fecaca',
-							borderRadius: '8px',
-							marginBottom: '24px',
-							color: '#dc2626'
-						}}>
-							⚠️ <strong>Error:</strong> {error}
-						</div>
-					)}
+                console.log(`✅ [Request ${currentRequestId}] Chat completed successfully in ${durationSeconds}s`)
+            } else {
+                console.log(`⚠️ [Request ${currentRequestId}] Request outdated, ignoring response`)
+            }
+        } catch (err) {
+            console.error(`❌ [Request ${currentRequestId}] Chat request failed:`, err)
+            if (currentRequestId === requestId + 1) {
+                setError(err instanceof Error ? err.message : 'An error occurred')
+            }
+        } finally {
+            if (currentRequestId === requestId + 1) {
+                setLoading(false)
+            }
+        }
+    }
 
-					{/* Example prompts */}
-					{online && vpsUp && !loading && (
-						<div style={{
-							padding: '20px',
-							backgroundColor: '#f8fafc',
-							border: '1px solid #e2e8f0',
-							borderRadius: '8px',
-							marginTop: '24px'
-						}}>
-							<h4 style={{
-								margin: '0 0 16px 0',
-								fontSize: '1.1rem',
-								fontWeight: '600',
-								color: '#374151'
-							}}>
-								💡 Example prompts to try:
-							</h4>
-							<div style={{
-								display: 'grid',
-								gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-								gap: '12px'
-							}}>
-								{[
-									'Explain quantum computing in simple terms',
-									'Write a short poem about artificial intelligence',
-									'Help me plan a weekend trip to the mountains',
-									'What are the benefits of meditation?',
-									'Explain how machine learning works',
-									'Give me ideas for a healthy dinner recipe'
-								].map((example, index) => (
-									<button
-										key={index}
-										onClick={() => setPrompt(example)}
-										style={{
-											padding: '12px 16px',
-											backgroundColor: 'white',
-											border: '1px solid #d1d5db',
-											borderRadius: '6px',
-											fontSize: '14px',
-											color: '#374151',
-											cursor: 'pointer',
-											transition: 'all 0.2s ease',
-											textAlign: 'left',
-											lineHeight: '1.4'
-										}}
-										onMouseEnter={(e) => {
-											e.currentTarget.style.backgroundColor = '#f3f4f6'
-											e.currentTarget.style.borderColor = '#9ca3af'
-										}}
-										onMouseLeave={(e) => {
-											e.currentTarget.style.backgroundColor = 'white'
-											e.currentTarget.style.borderColor = '#d1d5db'
-										}}
-									>
-										{example}
-									</button>
-								))}
-							</div>
-						</div>
-					)}
-				</div>
-			)}
+    const handleCancel = () => {
+        console.log('🛑 Chat request cancelled by user')
+        setLoading(false)
+        setError(null)
+        resetTimer()
+    }
 
-			{/* Past Queries Tab */}
-			{activeTab === 'history' && (
-				<div>
-					{/* Header with actions */}
-					<div style={{
-						display: 'flex',
-						justifyContent: 'space-between',
-						alignItems: 'center',
-						marginBottom: '24px'
-					}}>
-						<h3 style={{
-							margin: '0',
-							fontSize: '1.3rem',
-							fontWeight: '600',
-							color: '#0c4a6e'
-						}}>
-							📚 Chat History ({chatHistory.length} conversations)
-						</h3>
-						
-						{chatHistory.length > 0 && (
-							<div style={{
-								display: 'flex',
-								gap: '12px'
-							}}>
-								<button
-									onClick={() => setActiveTab('current')}
-									style={{
-										padding: '12px 20px',
-										backgroundColor: '#10b981',
-										color: 'white',
-										border: 'none',
-										borderRadius: '8px',
-										fontSize: '14px',
-										fontWeight: '600',
-										cursor: 'pointer',
-										transition: 'all 0.2s ease'
-									}}
-									onMouseEnter={(e) => {
-										e.currentTarget.style.backgroundColor = '#059669'
-									}}
-									onMouseLeave={(e) => {
-										e.currentTarget.style.backgroundColor = '#10b981'
-									}}
-								>
-									💬 New Chat
-								</button>
-								<button
-									onClick={resetChat}
-									style={{
-										padding: '12px 20px',
-										backgroundColor: '#6b7280',
-										color: 'white',
-										border: 'none',
-										borderRadius: '8px',
-										fontSize: '14px',
-										fontWeight: '600',
-										cursor: 'pointer',
-										transition: 'all 0.2s ease'
-									}}
-									onMouseEnter={(e) => {
-										e.currentTarget.style.backgroundColor = '#4b5563'
-									}}
-									onMouseLeave={(e) => {
-										e.currentTarget.style.backgroundColor = '#6b7280'
-									}}
-								>
-									🗑️ Clear All
-								</button>
-							</div>
-						)}
-					</div>
+    const resetChat = () => {
+        setChatHistory([])
+        setError(null)
+        console.log('🔄 Chat history cleared')
+    }
 
-					{/* Chat history display */}
-					{chatHistory.length > 0 ? (
-						<div>
-							{chatHistory.map((chat, index) => (
-								<div key={chat.id} style={{
-									marginBottom: '24px',
-									border: '2px solid #e2e8f0',
-									borderRadius: '12px',
-									overflow: 'hidden'
-								}}>
-									{/* Question section */}
-									<div style={{
-										padding: '16px 20px',
-										backgroundColor: '#f8fafc',
-										borderBottom: '1px solid #e2e8f0'
-									}}>
-										<div style={{
-											display: 'flex',
-											justifyContent: 'space-between',
-											alignItems: 'center',
-											marginBottom: '8px'
-										}}>
-											<span style={{
-												fontSize: '14px',
-												fontWeight: '600',
-												color: '#64748b'
-											}}>
-												👤 Your Question #{chat.id}
-											</span>
-											<span style={{
-												fontSize: '12px',
-												color: '#94a3b8',
-												fontStyle: 'italic'
-											}}>
-												{chat.timestamp.toLocaleTimeString()}
-											</span>
-										</div>
-										<div style={{
-											fontSize: '16px',
-											lineHeight: '1.6',
-											color: '#374151',
-											whiteSpace: 'pre-wrap'
-										}}>
-											{chat.question}
-										</div>
-									</div>
-									
-									{/* Answer section */}
-									<div style={{
-										padding: '20px',
-										backgroundColor: '#f0f9ff',
-										borderLeft: '4px solid #0ea5e9'
-									}}>
-										<div style={{
-											display: 'flex',
-											justifyContent: 'space-between',
-											alignItems: 'center',
-											marginBottom: '12px'
-										}}>
-											<span style={{
-												fontSize: '14px',
-												fontWeight: '600',
-												color: '#0c4a6e'
-											}}>
-												🤖 AI Response
-											</span>
-											<div style={{
-												display: 'flex',
-												alignItems: 'center',
-												gap: '8px'
-											}}>
-												<span style={{
-													fontSize: '12px',
-													color: '#0c4a6e',
-													backgroundColor: 'white',
-													padding: '4px 8px',
-													borderRadius: '6px',
-													border: '1px solid #0ea5e9',
-													fontWeight: '500'
-												}}>
-													Model: {chat.model}
-												</span>
-												<span style={{
-													fontSize: '12px',
-													color: '#0c4a6e',
-													backgroundColor: 'white',
-													padding: '4px 8px',
-													borderRadius: '6px',
-													border: '1px solid #0ea5e9',
-													fontWeight: '500'
-												}}>
-													Request #{chat.id}
-												</span>
-												<span style={{
-													fontSize: '12px',
-													color: '#0c4a6e',
-													backgroundColor: 'white',
-													padding: '4px 8px',
-													borderRadius: '6px',
-													border: '1px solid #0ea5e9',
-													fontWeight: '500'
-												}}>
-													⏱️ Thinked: {chat.durationSeconds}s
-												</span>
-											</div>
-										</div>
-										<div style={{
-											fontSize: '16px',
-											lineHeight: '1.7',
-											color: '#0c4a6e',
-											whiteSpace: 'pre-wrap'
-										}}>
-											{chat.answer}
-										</div>
-									</div>
-								</div>
-							))}
-						</div>
-					) : (
-						<div style={{
-							padding: '40px',
-							textAlign: 'center',
-							backgroundColor: '#f8fafc',
-							border: '2px dashed #d1d5db',
-							borderRadius: '12px',
-							color: '#64748b'
-						}}>
-							<p style={{ margin: '0 0 16px 0', fontSize: '18px', fontWeight: '500' }}>
-								📚 No chat history yet
-							</p>
-							<p style={{ margin: '0', fontSize: '14px' }}>
-								Start a conversation in the Current Chat tab to see your queries here!
-							</p>
-							<button
-								onClick={() => setActiveTab('current')}
-								style={{
-									marginTop: '16px',
-									padding: '12px 24px',
-									backgroundColor: '#3b82f6',
-									color: 'white',
-									border: 'none',
-									borderRadius: '8px',
-									fontSize: '14px',
-									fontWeight: '600',
-									cursor: 'pointer',
-									transition: 'all 0.2s ease'
-								}}
-								onMouseEnter={(e) => {
-									e.currentTarget.style.backgroundColor = '#2563eb'
-								}}
-								onMouseLeave={(e) => {
-									e.currentTarget.style.backgroundColor = '#3b82f6'
-								}}
-							>
-								💬 Start Chatting
-							</button>
-						</div>
-					)}
-				</div>
-			)}
+    const isDisabled = !online || !vpsUp || loading || !prompt.trim()
 
-			{/* Help text when offline or VPS down */}
-			{(!online || !vpsUp) && (
-				<div style={{
-					padding: '20px',
-					backgroundColor: '#fef3c7',
-					border: '1px solid #fde68a',
-					borderRadius: '8px',
-					textAlign: 'center',
-					color: '#92400e',
-					marginTop: '24px'
-				}}>
-					<p style={{ margin: '0 0 12px 0', fontWeight: '500' }}>
-						{!online ? '🔴 You are currently offline' : '🔴 VPS connection is down'}
-					</p>
-					<p style={{ margin: '0', fontSize: '14px' }}>
-						{!online 
-							? 'Please check your internet connection to use AI Assistant.'
-							: 'Please check your VPS connection or contact your administrator.'
-						}
-					</p>
-				</div>
-			)}
-		</div>
-	)
+    const getCurrentResponse = () => {
+        if (loading) {
+            return (
+                <div style={{
+                    backgroundColor: '#fffbeb',
+                    border: '2px solid #fbbf24',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '20px',
+                    textAlign: 'center'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '12px',
+                        marginBottom: '12px'
+                    }}>
+                        <div style={{
+                            width: '24px',
+                            height: '24px',
+                            border: '3px solid #fbbf24',
+                            borderTop: '3px solid transparent',
+                            borderRadius: '50%',
+                            animation: 'spin 1s linear infinite'
+                        }} />
+                        <span style={{
+                            fontSize: '18px',
+                            fontWeight: '600',
+                            color: '#92400e'
+                        }}>
+                            🤖 AI is thinking...
+                        </span>
+                    </div>
+                    <div style={{
+                        fontSize: '14px',
+                        color: '#92400e'
+                    }}>
+                        Please wait while we process your question ({elapsedSeconds}s)
+                    </div>
+                    {lastThinkingSeconds && (
+                        <div style={{
+                            fontSize: '12px',
+                            color: '#6b7280',
+                            marginTop: '8px'
+                        }}>
+                            Previous response took {lastThinkingSeconds}s
+                        </div>
+                    )}
+                </div>
+            )
+        }
+
+        if (error) {
+            return (
+                <div style={{
+                    backgroundColor: '#fef2f2',
+                    border: '2px solid #fecaca',
+                    borderRadius: '12px',
+                    padding: '20px',
+                    marginBottom: '20px'
+                }}>
+                    <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        marginBottom: '8px'
+                    }}>
+                        <span style={{ fontSize: '20px' }}>❌</span>
+                        <span style={{
+                            fontSize: '16px',
+                            fontWeight: '600',
+                            color: '#dc2626'
+                        }}>
+                            Error occurred
+                        </span>
+                    </div>
+                    <div style={{
+                        fontSize: '14px',
+                        color: '#dc2626',
+                        lineHeight: '1.5'
+                    }}>
+                        {error}
+                    </div>
+                </div>
+            )
+        }
+
+        return null
+    }
+
+    const tabs = [
+        { key: 'current', label: '💬 Current Chat', description: 'Ask questions here' },
+        { key: 'history', label: `📚 History (${chatHistory.length})`, description: 'View past conversations' }
+    ]
+
+    return (
+        <div style={{
+            maxWidth: '800px',
+            margin: '0 auto',
+            padding: '20px',
+            fontFamily: 'Inter, system-ui, Arial, sans-serif'
+        }}>
+            {/* Header */}
+            <div style={{
+                textAlign: 'center',
+                marginBottom: '32px'
+            }}>
+                <h1 style={{
+                    fontSize: '32px',
+                    fontWeight: 'bold',
+                    margin: '0 0 8px 0',
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent'
+                }}>
+                    🤖 Ask AI Assistant
+                </h1>
+                <p style={{
+                    fontSize: '16px',
+                    color: '#6b7280',
+                    margin: 0
+                }}>
+                    Chat with your AI assistant powered by {model}
+                </p>
+            </div>
+
+            {/* Tab Navigation */}
+            <div style={{
+                display: 'flex',
+                backgroundColor: '#f8fafc',
+                borderRadius: '12px',
+                padding: '6px',
+                marginBottom: '24px',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+            }}>
+                {tabs.map((tab) => (
+                    <button
+                        key={tab.key}
+                        onClick={() => setActiveTab(tab.key as any)}
+                        style={{
+                            flex: 1,
+                            padding: '12px 16px',
+                            backgroundColor: activeTab === tab.key ? '#ffffff' : 'transparent',
+                            color: activeTab === tab.key ? '#1f2937' : '#6b7280',
+                            border: 'none',
+                            borderRadius: '8px',
+                            fontSize: '14px',
+                            fontWeight: activeTab === tab.key ? '600' : '500',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                            boxShadow: activeTab === tab.key ? '0 1px 3px rgba(0, 0, 0, 0.1)' : 'none',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: '4px'
+                        }}
+                    >
+                        <span>{tab.label}</span>
+                        <span style={{
+                            fontSize: '11px',
+                            color: activeTab === tab.key ? '#6b7280' : '#9ca3af'
+                        }}>
+                            {tab.description}
+                        </span>
+                    </button>
+                ))}
+            </div>
+
+            {/* Tab Content */}
+            <div style={{
+                backgroundColor: '#ffffff',
+                borderRadius: '12px',
+                padding: '24px',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                minHeight: '400px'
+            }}>
+                {activeTab === 'current' ? (
+                    <div>
+                        {/* Current Response */}
+                        {getCurrentResponse()}
+
+                        {/* Latest Message */}
+                        {chatHistory.length > 0 && !loading && !error && (
+                            <div style={{ marginBottom: '24px' }}>
+                                <h3 style={{
+                                    fontSize: '16px',
+                                    fontWeight: '600',
+                                    marginBottom: '12px',
+                                    color: '#1f2937'
+                                }}>
+                                    📝 Latest Conversation
+                                </h3>
+                                <ChatMessage entry={chatHistory[chatHistory.length - 1]} />
+                            </div>
+                        )}
+
+                        {/* Chat Input */}
+                        <ChatInput
+                            prompt={prompt}
+                            onPromptChange={setPrompt}
+                            onSubmit={handleSubmit}
+                            onCancel={handleCancel}
+                            loading={loading}
+                            disabled={isDisabled}
+                            online={online}
+                            vpsUp={vpsUp}
+                            elapsedSeconds={elapsedSeconds}
+                        />
+                    </div>
+                ) : (
+                    <ChatHistory
+                        chatHistory={chatHistory}
+                        onClearHistory={resetChat}
+                        loading={loading}
+                    />
+                )}
+            </div>
+
+            {/* CSS Animation */}
+            <style>{`
+                @keyframes spin {
+                    0% { transform: rotate(0deg); }
+                    100% { transform: rotate(360deg); }
+                }
+            `}</style>
+        </div>
+    )
 }

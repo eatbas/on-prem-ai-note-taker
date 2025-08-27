@@ -1,0 +1,18 @@
+Frontend Line Count Report - Wed, Aug 27, 2025  5:18:06 PM
+=====================================
+
+Total files: 94
+Over limit: 10
+Under limit: 84
+
+Files over 350 lines:
+   651 src/components/queue/JobQueue.tsx
+   496 src/stores/apiStateManager.ts
+   468 src/services/offline.ts
+   432 src/components/recording/DeviceSelector.tsx
+   410 src/components/queue/QueueProcessor.tsx
+   376 src/pages/AskLlama.tsx
+   372 src/stores/globalRecordingManager.ts
+   368 src/pages/AdminDashboard.tsx
+   366 src/features/admin/components/AdminMeetings.tsx
+   356 src/components/recording/AudioRecordingTester.tsx

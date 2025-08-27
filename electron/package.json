@@ -34,12 +34,20 @@
 			{
 				"from": "../backend",
 				"to": "backend",
-				"filter": ["**/*", "!__pycache__", "!*.pyc", "!venv", "!.env*"]
+				"filter": [
+					"**/*",
+					"!__pycache__",
+					"!*.pyc",
+					"!venv",
+					"!.env*"
+				]
 			},
 			{
 				"from": "../frontend/dist",
 				"to": "dist",
-				"filter": ["**/*"]
+				"filter": [
+					"**/*"
+				]
 			}
 		],
 		"extraMetadata": {
@@ -47,7 +55,9 @@
 			"version": "1.0.0"
 		},
 		"win": {
-			"target": ["nsis"],
+			"target": [
+				"nsis"
+			],
 			"artifactName": "dgMeets-Setup-${version}.exe",
 			"icon": "dgMeets.ico"
 		},
@@ -61,17 +71,23 @@
 			"shortcutName": "dgMeets"
 		},
 		"mac": {
-			"target": ["dmg"],
+			"target": [
+				"dmg"
+			],
 			"artifactName": "dgMeets-${version}.dmg",
-			"icon": "dgMeets.icns"
+			"icon": "dgMeets.png"
 		},
 		"linux": {
-			"target": ["AppImage", "deb"],
+			"target": [
+				"AppImage",
+				"deb"
+			],
 			"artifactName": "dgMeets-${version}.${ext}",
 			"icon": "dgMeets.png",
 			"category": "Office"
 		}
+	},
+	"dependencies": {
+		"dotenv": "^17.2.1"
 	}
 }
-
-
