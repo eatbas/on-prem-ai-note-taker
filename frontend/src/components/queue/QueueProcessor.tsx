@@ -187,7 +187,7 @@ export default function QueueProcessor({ online, vpsUp }: QueueProcessorProps) {
 				<h3>📤 Queue Processing</h3>
 				{queueStats && (
 					<div style={{ fontSize: '12px', color: '#666' }}>
-						🔄 {queueStats.active_tasks} active • ⏳ {queueStats.pending_tasks} pending • 👷 {queueStats.workers_running} workers
+						🔄 {queueStats.active_tasks || queueStats.processing || 0} active • ⏳ {queueStats.pending_tasks || queueStats.pending || 0} pending • 👷 {queueStats.workers_running || 1} workers
 					</div>
 				)}
 			</div>

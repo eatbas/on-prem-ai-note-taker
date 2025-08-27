@@ -6,7 +6,7 @@ export async function summarize(text: string, language: string = 'auto') {
 	
 	try {
 		const { jobQueueManager } = await import('../../stores/jobQueueManager')
-		jobQueueManager.addJob(jobId, 'summarization', 'processing', 'Generating summary...')
+		  jobQueueManager.addJob(jobId, 'processing', 'Generating summary...')
 	} catch (error) {
 		console.warn('Failed to add job to queue:', error)
 	}
@@ -23,7 +23,7 @@ export async function summarize(text: string, language: string = 'auto') {
 		// Update job status on success
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'completed', 'Summary generated')
+			    jobQueueManager.updateJob(jobId, { status: 'completed', message: 'Summary generated' })
 		} catch (error) {
 			console.warn('Failed to update job status:', error)
 		}
@@ -33,7 +33,7 @@ export async function summarize(text: string, language: string = 'auto') {
 		// Update job status on error
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'failed', `Summarization failed: ${error}`)
+			    jobQueueManager.updateJob(jobId, { status: 'failed', message: `Summarization failed: ${error}` })
 		} catch (queueError) {
 			console.warn('Failed to update job status:', queueError)
 		}

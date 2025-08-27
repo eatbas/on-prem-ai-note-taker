@@ -12,8 +12,8 @@ export { default as AudioLevelMonitor } from '../../components/recording/AudioLe
 export { default as FloatingRecorder } from '../../components/recording/FloatingRecorder'
 
 // Debug Components
-export { default as SystemAudioDebugger } from '../../components/recording/SystemAudioDebugger'
-export { default as AudioRecordingTester } from '../../components/recording/AudioRecordingTester'
+
+
 
 // Hooks
 export { useAudioRecorder } from '../../hooks/useAudioRecorder'

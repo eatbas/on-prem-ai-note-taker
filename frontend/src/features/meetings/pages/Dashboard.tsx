@@ -1,13 +1,13 @@
 import React, { useState } from 'react'
-import AskLlama from './AskLlama'
-import AudioRecordingTester from '../components/recording/AudioRecordingTester'
-import { useToast } from '../components/common'
+import AskLlama from '../../admin/pages/AskLlama'
+
+import { useToast } from '../../../components/common'
 
 // Import the new components
-import MeetingList from '../features/meetings/components/MeetingList'
-import DashboardTabs from '../features/meetings/components/DashboardTabs'
-import SearchAndFilters from '../features/meetings/components/SearchAndFilters'
-import { useDashboard } from '../features/meetings/hooks/useDashboard'
+import MeetingList from '../components/MeetingList'
+import DashboardTabs from '../components/DashboardTabs'
+import SearchAndFilters from '../components/SearchAndFilters'
+import { useDashboard } from '../hooks/useDashboard'
 
 interface DashboardProps {
   onOpen: (meetingId: string) => void
@@ -36,7 +36,7 @@ export default function Dashboard({
 }: DashboardProps) {
   // State
   const [currentPage, setCurrentPage] = useState(1)
-  const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'audio-test'>('local')
+  const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama'>('local')
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const meetingsPerPage = 3
 
@@ -131,10 +131,7 @@ export default function Dashboard({
         )
 
       case 'llama':
-        return <AskLlama />
-
-      case 'audio-test':
-        return <AudioRecordingTester />
+        return <AskLlama online={online} vpsUp={vpsUp} />
 
       default:
         return null

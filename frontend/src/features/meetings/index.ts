@@ -4,8 +4,8 @@
  */
 
 // Pages
-export { default as Dashboard } from '../../pages/Dashboard'
-export { default as MeetingView } from '../../pages/MeetingView'
+export { default as Dashboard } from './pages/Dashboard'
+export { default as MeetingView } from './pages/MeetingView'
 
 // Components
 export { default as MeetingHeader } from './components/MeetingHeader'

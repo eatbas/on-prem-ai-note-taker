@@ -1,13 +1,13 @@
 import React, { useState, useEffect } from 'react'
-import { chat } from '../services'
+import { chat } from '../../../services'
 
 // Import chat components
-import ChatInput from '../features/admin/components/ChatInput'
-import ChatHistory from '../features/admin/components/ChatHistory'
-import ChatMessage from '../features/admin/components/ChatMessage'
+import ChatInput from '../components/ChatInput'
+import ChatHistory from '../components/ChatHistory'
+import ChatMessage from '../components/ChatMessage'
 
 // Import custom hook
-import { useChatTimer } from '../features/admin/hooks/useChatTimer'
+import { useChatTimer } from '../hooks/useChatTimer'
 
 interface ChatEntry {
     id: number

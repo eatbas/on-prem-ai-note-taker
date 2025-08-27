@@ -7,7 +7,7 @@ import { useToast } from '../common'
 // Import our new components
 import RecordingControls from './RecordingControls'
 import RecordingModal, { RecordingConfig } from './RecordingModal'
-import AudioLevelMonitor from './AudioLevelMonitor'
+
 import { InputModal } from '../common'
 
 // CSS animations for the component
@@ -40,12 +40,12 @@ interface RecorderProps {
 export default function Recorder({
   onCreated,
   onStopped,
-  text,
-  setText,
-  tag,
-  setTag,
-  online,
-  vpsUp,
+  text: _text,
+  setText: _setText,
+  tag: _tag,
+  setTag: _setTag,
+  online: _online,
+  vpsUp: _vpsUp,
   showStopButton = true
 }: RecorderProps) {
   // Global recording state
@@ -57,7 +57,7 @@ export default function Recorder({
   const [showModal, setShowModal] = useState(false)
   const [showNamingModal, setShowNamingModal] = useState(false)
   const [pendingMeetingId, setPendingMeetingId] = useState<string | null>(null)
-  const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(null)
+
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle')
   const [retryCount, setRetryCount] = useState(0)
 
@@ -151,7 +151,7 @@ export default function Recorder({
       })
 
       if (success) {
-        setCurrentMeetingId(meetingId)
+
         setShowModal(false)
         onCreated(meetingId)
 
@@ -200,7 +200,7 @@ export default function Recorder({
       await processMeeting(stoppedMeetingId)
     }
 
-    setCurrentMeetingId(null)
+
   }
 
   const processMeeting = async (meetingId: string) => {
@@ -291,7 +291,7 @@ export default function Recorder({
               } else {
                 // Let the next iteration handle the retry
                 setSyncStatus('failed')
-                showToast(`⚠️ Processing failed, retrying... (${nextRetryCount}/3)`, 'warning')
+                showToast(`⚠️ Processing failed, retrying... (${nextRetryCount}/3)`, 'info')
               }
             }
           }, delay)

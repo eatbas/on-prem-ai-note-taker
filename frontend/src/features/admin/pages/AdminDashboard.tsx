@@ -1,13 +1,13 @@
 import React, { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useToast } from '../components/common'
-import { ProgressDashboard, JobQueue } from '../components/queue'
+import { useToast } from '../../../components/common'
+import { ProgressDashboard, JobQueue } from '../../../components/queue'
 
 // Import new admin components
-import AdminStats from '../features/admin/components/AdminStats'
-import AdminUsers from '../features/admin/components/AdminUsers'
-import AdminMeetings from '../features/admin/components/AdminMeetings'
-import AdminTools from '../features/admin/components/AdminTools'
+import AdminStats from '../components/AdminStats'
+import AdminUsers from '../components/AdminUsers'
+import AdminMeetings from '../components/AdminMeetings'
+import AdminTools from '../components/AdminTools'
 
 // Import admin API utilities
 import {
@@ -16,8 +16,8 @@ import {
     loadMeetings,
     deleteUser,
     deleteMeeting
-} from '../features/admin/utils/adminApi'
-import { config } from '../utils/envLoader'
+} from '../utils/adminApi'
+import { config } from '../../../utils/envLoader'
 
 // Types
 interface User {

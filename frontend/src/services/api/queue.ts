@@ -6,6 +6,11 @@ export interface QueueStats {
 	completed: number
 	failed: number
 	total: number
+	active_tasks?: number
+	pending_tasks?: number
+	completed_tasks?: number
+	failed_tasks?: number
+	workers_running?: number
 }
 
 export interface ProgressStats {

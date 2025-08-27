@@ -24,11 +24,8 @@ export * as Hooks from './hooks'
 // Legacy Utils (deprecated - use Lib.* instead)
 export * as Utils from './utils'
 
-// Pages (direct exports for convenience)
-export { default as Dashboard } from './pages/Dashboard'
-export { default as MeetingView } from './pages/MeetingView'
-export { default as AdminDashboard } from './pages/AdminDashboard'
-export { default as AskLlama } from './pages/AskLlama'
+// Pages are now organized under Features
+// Use Features.Meetings.Dashboard, Features.Admin.AdminDashboard, etc.
 
 // Most commonly used exports for convenience
 export { useAudioRecorder, useDebounce, usePageVisibility } from './hooks'

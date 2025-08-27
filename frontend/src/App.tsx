@@ -41,7 +41,7 @@ export default function App() {
 
   // Watch online status
   useEffect(() => {
-    return watchOnline((isOnline) => {
+    return watchOnline((isOnline: boolean) => {
       setOnline(isOnline)
       console.log(`📶 Online status: ${isOnline ? 'Connected' : 'Disconnected'}`)
     })

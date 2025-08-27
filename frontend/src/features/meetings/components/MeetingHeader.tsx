@@ -196,9 +196,11 @@ export default function MeetingHeader({
       {/* Tags */}
       <div style={{ marginBottom: '20px' }}>
         <TagsManager
-          tags={meeting?.tags || []}
-          onTagsChange={onTagsUpdate}
-          placeholder="Add tags..."
+          meetingId={meeting?.id}
+          currentTags={meeting?.tags || []}
+          onTagsUpdate={onTagsUpdate}
+          online={true}
+          vpsUp={true}
         />
       </div>
 

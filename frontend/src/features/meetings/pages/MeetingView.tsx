@@ -1,14 +1,14 @@
 import React, { useEffect, useState, useRef } from 'react'
-import { db, syncMeeting, updateMeetingTags, assembleFilesByAudioType, deleteMeetingLocally, deleteAudioChunksLocally } from '../services'
-import { useToast } from '../components/common'
-import { formatDuration } from '../utils'
-import config from '../utils/envLoader'
+import { db, syncMeeting, updateMeetingTags, assembleFilesByAudioType, deleteMeetingLocally, deleteAudioChunksLocally } from '../../../services'
+import { useToast } from '../../../components/common'
+import { formatDuration } from '../../../utils'
+import config from '../../../utils/envLoader'
 
 // Import our new components
-import MeetingHeader from '../features/meetings/components/MeetingHeader'
-import MeetingSummary from '../features/meetings/components/MeetingSummary'
-import MeetingTranscript from '../features/meetings/components/MeetingTranscript'
-import MeetingAudio from '../features/meetings/components/MeetingAudio'
+import MeetingHeader from '../components/MeetingHeader'
+import MeetingSummary from '../components/MeetingSummary'
+import MeetingTranscript from '../components/MeetingTranscript'
+import MeetingAudio from '../components/MeetingAudio'
 
 export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
   // Core state
@@ -64,7 +64,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
       }
     } catch (error) {
       console.error('Failed to load meeting:', error)
-      showToast('error', 'Failed to load meeting')
+      showToast('Failed to load meeting', 'error')
     }
   }
 
@@ -115,7 +115,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
       }
     } catch (error) {
       console.error('Failed to load audio data:', error)
-      showToast('error', 'Failed to load audio data')
+      showToast('Failed to load audio data', 'error')
     } finally {
       setIsLoadingAudio(false)
     }
@@ -126,11 +126,11 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     
     try {
       await db.meetings.update(meetingId, { title: newTitle.trim() })
-      setMeeting(prev => ({ ...prev, title: newTitle.trim() }))
-      showToast('success', 'Title updated')
+      setMeeting((prev: any) => ({ ...prev, title: newTitle.trim() }))
+      showToast('Title updated', 'success')
     } catch (error) {
       console.error('Failed to update title:', error)
-      showToast('error', 'Failed to update title')
+      showToast('Failed to update title', 'error')
     }
   }
 
@@ -140,11 +140,11 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     setSending(true)
     try {
       await syncMeeting(meetingId)
-      showToast('success', 'Meeting processed successfully')
+      showToast('Meeting processed successfully', 'success')
       await loadMeeting() // Reload to get updated data
     } catch (error) {
       console.error('Failed to process meeting:', error)
-      showToast('error', 'Failed to process meeting')
+      showToast('Failed to process meeting', 'error')
     } finally {
       setSending(false)
     }
@@ -155,11 +155,11 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     
     try {
       await updateMeetingTags(meetingId, tags)
-      setMeeting(prev => ({ ...prev, tags }))
-      showToast('success', 'Tags updated')
+      setMeeting((prev: any) => ({ ...prev, tags }))
+      showToast('Tags updated', 'success')
     } catch (error) {
       console.error('Failed to update tags:', error)
-      showToast('error', 'Failed to update tags')
+      showToast('Failed to update tags', 'error')
     }
   }
 
@@ -176,17 +176,17 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
       if (deleteOperation === 'meeting') {
         await deleteMeetingLocally(meetingId)
         await deleteAudioChunksLocally(meetingId)
-        showToast('success', 'Meeting deleted')
+        showToast('Meeting deleted', 'success')
         if (onBack) onBack()
       } else if (deleteOperation === 'audio') {
         await deleteAudioChunksLocally(meetingId)
-        showToast('success', 'Audio chunks deleted')
+        showToast('Audio chunks deleted', 'success')
         setDualAudioInfo(null)
         setAudioUrls({ microphone: null, system: null })
       }
     } catch (error) {
       console.error('Failed to delete:', error)
-      showToast('error', 'Failed to delete')
+      showToast('Failed to delete', 'error')
     } finally {
       setIsDeleting(false)
       setShowDeleteModal(false)
@@ -206,13 +206,13 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
         a.download = file.name
         a.click()
         URL.revokeObjectURL(url)
-        showToast('success', 'Download started')
+        showToast('Download started', 'success')
       } else {
-        showToast('error', 'No audio file available')
+        showToast('No audio file available', 'error')
       }
     } catch (error) {
       console.error('Failed to download:', error)
-      showToast('error', 'Failed to download audio')
+      showToast('Failed to download audio', 'error')
     }
   }
 

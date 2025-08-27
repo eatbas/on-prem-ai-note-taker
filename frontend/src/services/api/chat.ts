@@ -6,7 +6,7 @@ export async function chat(prompt: string, model?: string) {
 	
 	try {
 		const { jobQueueManager } = await import('../../stores/jobQueueManager')
-		jobQueueManager.addJob(jobId, 'chat', 'processing', 'AI is thinking...')
+		  jobQueueManager.addJob(jobId, 'processing', 'AI is thinking...')
 	} catch (error) {
 		console.warn('Failed to add job to queue:', error)
 	}
@@ -23,7 +23,7 @@ export async function chat(prompt: string, model?: string) {
 		// Update job status on success
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'completed', 'AI response generated')
+			    jobQueueManager.updateJob(jobId, { status: 'completed', message: 'AI response generated' })
 		} catch (error) {
 			console.warn('Failed to update job status:', error)
 		}
@@ -33,7 +33,7 @@ export async function chat(prompt: string, model?: string) {
 		// Update job status on error
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'failed', `Chat failed: ${error}`)
+			    jobQueueManager.updateJob(jobId, { status: 'failed', message: `Chat failed: ${error}` })
 		} catch (queueError) {
 			console.warn('Failed to update job status:', queueError)
 		}

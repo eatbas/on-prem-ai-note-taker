@@ -16,7 +16,7 @@ createRoot(rootEl).render(
 )
 
 // background: attempt sync when coming online
-watchOnline(async (online) => {
+watchOnline(async (online: boolean) => {
 	if (online) {
 		try { await syncAllQueued() } catch {}
 	}

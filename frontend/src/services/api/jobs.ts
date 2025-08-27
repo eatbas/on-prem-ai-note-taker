@@ -3,11 +3,13 @@ import { apiRequest, apiBase, getUserId } from './core'
 export interface JobStatus {
 	job_id: string
 	status: 'pending' | 'processing' | 'completed' | 'failed'
+	phase?: string
 	message?: string
 	result?: any
 	created_at: string
 	updated_at: string
 	progress?: number
+	eta_seconds?: number
 }
 
 export async function getJobStatus(jobId: string): Promise<JobStatus> {

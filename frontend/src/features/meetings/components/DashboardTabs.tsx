@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react'
 
 interface DashboardTabsProps {
-  activeTab: 'local' | 'vps' | 'llama' | 'audio-test'
-  onTabChange: (tab: 'local' | 'vps' | 'llama' | 'audio-test') => void
+  activeTab: 'local' | 'vps' | 'llama'
+  onTabChange: (tab: 'local' | 'vps' | 'llama') => void
   localMeetingsCount: number
   vpsMeetingsCount: number
   vpsUp: boolean
@@ -48,12 +48,6 @@ export default function DashboardTabs({
       icon: '🤖',
       description: 'Chat with AI about your meetings',
       disabled: !vpsUp
-    },
-    {
-      key: 'audio-test' as const,
-      label: 'Audio Test',
-      icon: '🎤',
-      description: 'Test audio recording setup'
     }
   ]
 

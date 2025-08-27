@@ -4,8 +4,8 @@
  */
 
 // Pages
-export { default as AdminDashboard } from '../../pages/AdminDashboard'
-export { default as AskLlama } from '../../pages/AskLlama'
+export { default as AdminDashboard } from './pages/AdminDashboard'
+export { default as AskLlama } from './pages/AskLlama'
 
 // Components
 export { default as AdminStats } from './components/AdminStats'
