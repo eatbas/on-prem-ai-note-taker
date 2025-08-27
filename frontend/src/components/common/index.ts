@@ -1,2 +1,5 @@
 export { default as Toast, useToast } from './Toast'
 export { default as TagsManager } from './TagsManager'
+export { default as NotificationContainer } from './NotificationContainer'
+export { default as InputModal } from './InputModal'
+export { default as ErrorBoundary } from './ErrorBoundary'

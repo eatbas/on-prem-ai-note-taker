@@ -29,11 +29,15 @@ function createWindow() {
 			nodeIntegration: false,
 			contextIsolation: true,
 			preload: path.join(__dirname, 'preload.js'),
-			webSecurity: false, // Allow loading local files
-			allowRunningInsecureContent: true, // Allow HTTP content from HTTPS
+			webSecurity: true, // Keep web security enabled for better security
+			allowRunningInsecureContent: false, // Don't allow insecure content by default
 			experimentalFeatures: true, // Enable experimental web features
 			// Enable system audio capture permissions
-			enableWebCodecs: true
+			enableWebCodecs: true,
+			// Allow media access for audio recording
+			media: true,
+			// Enable clipboard access if needed
+			enableClipboardRead: false
 		},
 		icon: path.join(__dirname, 'dgMeets-512.png')
 	})
@@ -230,9 +234,11 @@ function createFloatingRecorderWindow() {
 			nodeIntegration: false,
 			contextIsolation: true,
 			preload: path.join(__dirname, 'preload.js'),
-			webSecurity: false, // Allow loading local files
-			allowRunningInsecureContent: true, // Allow HTTP content from HTTPS
-			experimentalFeatures: true // Enable experimental web features
+			webSecurity: true, // Keep web security enabled for better security
+			allowRunningInsecureContent: false, // Don't allow insecure content by default
+			experimentalFeatures: true, // Enable experimental web features
+			// Allow media access for audio recording
+			media: true
 		},
 		show: false, // Don't show until recording starts
 		transparent: true, // Allow for rounded corners
@@ -311,16 +317,41 @@ app.whenReady().then(async () => {
 		// Add request interceptor to handle CORS issues
 		const { session } = require('electron')
 		
-		// Set permissions for system audio capture
+		// Set permissions for system audio capture (more restrictive)
 		session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-			const audioPermissions = ['microphone', 'desktop-capture', 'media']
-			if (audioPermissions.includes(permission)) {
+			const allowedPermissions = ['microphone', 'desktop-capture', 'media', 'camera']
+			
+			if (allowedPermissions.includes(permission)) {
 				console.log(`✅ Granting permission: ${permission}`)
 				callback(true)
 			} else {
-				console.log(`❓ Permission request: ${permission}`)
+				console.log(`❌ Denying permission: ${permission}`)
 				callback(false)
 			}
+		})
+
+		// Handle permission check requests
+		session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
+			const allowedPermissions = ['microphone', 'desktop-capture', 'media', 'camera']
+			return allowedPermissions.includes(permission)
+		})
+
+		// Set Content Security Policy for better security
+		session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+			// Only apply CSP to main app, not external resources
+			if (details.url.startsWith('http://localhost:5173') || details.url.startsWith('file://')) {
+				const csp = [
+					"default-src 'self' 'unsafe-inline' 'unsafe-eval'",
+					"connect-src 'self' http://localhost:* http://95.111.244.159:8000 ws://localhost:*",
+					"media-src 'self' blob: data:",
+					"img-src 'self' data: blob:",
+					"script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+					"style-src 'self' 'unsafe-inline'"
+				].join('; ')
+				
+				details.responseHeaders['Content-Security-Policy'] = [csp]
+			}
+			callback({ responseHeaders: details.responseHeaders })
 		})
 		
 		// Intercept and modify requests to VPS

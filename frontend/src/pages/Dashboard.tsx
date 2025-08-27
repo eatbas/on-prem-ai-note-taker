@@ -37,7 +37,18 @@ export default function Dashboard({
   // State
   const [currentPage, setCurrentPage] = useState(1)
   const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'audio-test'>('local')
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
   const meetingsPerPage = 3
+
+  // Handle window resize for responsive design
+  React.useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768)
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Custom hook for dashboard logic
   const {
@@ -65,14 +76,15 @@ export default function Dashboard({
     })
     
     const tags = Array.from(tagCounts.entries()).sort((a, b) => b[1] - a[1])
-    
-    // Notify parent component about tag changes
-    if (onTagsChange) {
-      onTagsChange(tags)
-    }
-    
     return tags
-  }, [meetings, onTagsChange])
+  }, [meetings])
+
+  // Notify parent component about tag changes (separate from useMemo to avoid render-time state updates)
+  React.useEffect(() => {
+    if (onTagsChange) {
+      onTagsChange(availableTags)
+    }
+  }, [availableTags, onTagsChange])
 
   const handleClearFilters = () => {
     setText('')
@@ -131,9 +143,9 @@ export default function Dashboard({
 
   return (
     <div style={{ 
-      maxWidth: '1200px', 
+      maxWidth: isMobile ? '100%' : '1200px', 
       margin: '0 auto',
-      padding: '0 20px'
+      padding: isMobile ? '0 8px' : '0 20px'
     }}>
 
 
@@ -143,8 +155,8 @@ export default function Dashboard({
           backgroundColor: '#fef2f2',
           border: '2px solid #fecaca',
           borderRadius: '12px',
-          padding: '16px',
-          marginBottom: '24px',
+          padding: isMobile ? '12px' : '16px',
+          marginBottom: isMobile ? '16px' : '24px',
           textAlign: 'center'
         }}>
           <div style={{
@@ -152,7 +164,7 @@ export default function Dashboard({
             alignItems: 'center',
             justifyContent: 'center',
             gap: '8px',
-            fontSize: '16px',
+            fontSize: isMobile ? '14px' : '16px',
             fontWeight: '600',
             color: '#dc2626'
           }}>
@@ -168,9 +180,10 @@ export default function Dashboard({
             🎙️ Recording in progress...
           </div>
           <p style={{ 
-            fontSize: '14px', 
+            fontSize: isMobile ? '12px' : '14px', 
             color: '#6b7280', 
-            margin: '8px 0 0 0' 
+            margin: '8px 0 0 0',
+            wordBreak: 'break-all'
           }}>
             Meeting ID: {recordingMeetingId}
           </p>

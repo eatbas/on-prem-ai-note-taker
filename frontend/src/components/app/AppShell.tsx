@@ -38,10 +38,28 @@ export default function AppShell({
   // Check if we're on admin page
   const isAdminPage = location.pathname === '/admin'
   
+  // Mobile navigation state
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768)
+  
   // Global recording state for FloatingRecorder
   const [globalRecordingState, setGlobalRecordingState] = useState(() => 
     globalRecordingManager.getState()
   )
+
+  // Handle window resize for responsive design
+  useEffect(() => {
+    const handleResize = () => {
+      const mobile = window.innerWidth < 768
+      setIsMobile(mobile)
+      if (!mobile) {
+        setIsMobileMenuOpen(false)
+      }
+    }
+    
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Subscribe to global recording state changes
   useEffect(() => {
@@ -72,150 +90,323 @@ export default function AppShell({
     <div style={{ 
       maxWidth: '100%', 
       margin: '0 auto', 
-      padding: '24px',
+      padding: isMobile ? '12px' : '24px',
       fontFamily: 'Inter, system-ui, Arial, sans-serif',
       minHeight: '100vh',
       backgroundColor: '#f9fafb'
     }}>
-      {/* Header */}
-      <header style={{ 
-        display: 'flex', 
-        justifyContent: 'space-between', 
-        alignItems: 'center',
-        marginBottom: '32px',
-        padding: '16px 24px',
+            {/* Responsive Header */}
+      <header style={{
+        marginBottom: isMobile ? '16px' : '32px',
+        padding: isMobile ? '12px 16px' : '16px 24px',
         backgroundColor: '#ffffff',
         borderRadius: '12px',
         boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
       }}>
-        {/* Logo and Title */}
-        <div 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px',
-            cursor: 'pointer'
-          }}
-          onClick={() => navigate('/')}
-        >
-          <div style={{ 
-            fontSize: '32px',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontWeight: 'bold'
+        {/* Desktop Header */}
+        {!isMobile ? (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center'
           }}>
-            🎙️
-          </div>
-          <div>
-            <h1 style={{ 
-              fontSize: '24px', 
-              fontWeight: 'bold', 
-              margin: 0,
-              background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent'
-            }}>
-              dgMeets
-            </h1>
-            <p style={{ 
-              fontSize: '12px', 
-              color: '#6b7280', 
-              margin: 0,
-              fontWeight: '500'
-            }}>
-              AI-Powered Meeting Notes
-            </p>
-          </div>
-        </div>
+            {/* Logo and Title */}
+            <div 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '12px',
+                cursor: 'pointer'
+              }}
+              onClick={() => navigate('/')}
+            >
+              <div style={{ 
+                fontSize: '32px',
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                fontWeight: 'bold'
+              }}>
+                🎙️
+              </div>
+              <div>
+                <h1 style={{ 
+                  fontSize: '24px', 
+                  fontWeight: 'bold', 
+                  margin: 0,
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent'
+                }}>
+                  dgMeets
+                </h1>
+                <p style={{ 
+                  fontSize: '12px', 
+                  color: '#6b7280', 
+                  margin: 0,
+                  fontWeight: '500'
+                }}>
+                  AI-Powered Meeting Notes
+                </p>
+              </div>
+            </div>
 
-        {/* Navigation and Status */}
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '16px' 
-        }}>
-          {/* Connection Status */}
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '8px',
-            fontSize: '12px',
-            color: '#6b7280'
-          }}>
-            <div style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              backgroundColor: online ? '#22c55e' : '#ef4444'
-            }} />
-            {online ? 'Online' : 'Offline'}
-            
-            {vpsUp !== null && (
-              <>
-                <span style={{ margin: '0 4px' }}>•</span>
+            {/* Navigation and Status */}
+            <div style={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: '16px' 
+            }}>
+              {/* Connection Status */}
+              <div style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: '8px',
+                fontSize: '12px',
+                color: '#6b7280'
+              }}>
                 <div style={{
                   width: '8px',
                   height: '8px',
                   borderRadius: '50%',
-                  backgroundColor: vpsUp ? '#22c55e' : '#ef4444'
+                  backgroundColor: online ? '#22c55e' : '#ef4444'
                 }} />
-                AI {vpsUp ? 'Ready' : 'Unavailable'}
-              </>
-            )}
-          </div>
+                {online ? 'Online' : 'Offline'}
+                
+                {vpsUp !== null && (
+                  <>
+                    <span style={{ margin: '0 4px' }}>•</span>
+                    <div style={{
+                      width: '8px',
+                      height: '8px',
+                      borderRadius: '50%',
+                      backgroundColor: vpsUp ? '#22c55e' : '#ef4444'
+                    }} />
+                    AI {vpsUp ? 'Ready' : 'Unavailable'}
+                  </>
+                )}
+              </div>
 
-          {/* Navigation Buttons and Recording Controls */}
-          <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-            {/* Recording Controls - only show on non-admin pages */}
-            {!isAdminPage && (
-              <Recorder
-                onCreated={handleRecordingCreated}
-                onStopped={handleRecordingStopped}
-                text={text}
-                setText={setText}
-                tag={tag}
-                setTag={setTag}
-                online={online}
-                vpsUp={vpsUp}
-                showStopButton={true}
-              />
-            )}
-            
-            {/* Navigation Buttons */}
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <button
-                onClick={() => navigate('/')}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#f3f4f6',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                🏠 Home
-              </button>
-              
-              <button
-                onClick={() => navigate('/admin')}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#f3f4f6',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  cursor: 'pointer',
-                  fontWeight: '500'
-                }}
-              >
-                ⚙️ Admin
-              </button>
+              {/* Navigation Buttons and Recording Controls */}
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                {/* Recording Controls - only show on non-admin pages */}
+                {!isAdminPage && (
+                  <Recorder
+                    onCreated={handleRecordingCreated}
+                    onStopped={handleRecordingStopped}
+                    text={text}
+                    setText={setText}
+                    tag={tag}
+                    setTag={setTag}
+                    online={online}
+                    vpsUp={vpsUp}
+                    showStopButton={true}
+                  />
+                )}
+                
+                {/* Navigation Buttons */}
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    onClick={() => navigate('/')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: location.pathname === '/' ? '#3b82f6' : '#f3f4f6',
+                      color: location.pathname === '/' ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    🏠 Home
+                  </button>
+                  
+                  <button
+                    onClick={() => navigate('/admin')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: location.pathname === '/admin' ? '#3b82f6' : '#f3f4f6',
+                      color: location.pathname === '/admin' ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    ⚙️ Admin
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          /* Mobile Header */
+          <div>
+            {/* Top Row: Logo and Hamburger */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: isMobileMenuOpen ? '16px' : '0'
+            }}>
+              {/* Logo */}
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '8px',
+                  cursor: 'pointer'
+                }}
+                onClick={() => navigate('/')}
+              >
+                <div style={{ 
+                  fontSize: '24px',
+                  background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  fontWeight: 'bold'
+                }}>
+                  🎙️
+                </div>
+                <div>
+                  <h1 style={{ 
+                    fontSize: '18px', 
+                    fontWeight: 'bold', 
+                    margin: 0,
+                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent'
+                  }}>
+                    dgMeets
+                  </h1>
+                </div>
+              </div>
+
+              {/* Hamburger Menu Button */}
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  fontSize: '24px',
+                  cursor: 'pointer',
+                  padding: '4px'
+                }}
+              >
+                {isMobileMenuOpen ? '✕' : '☰'}
+              </button>
+            </div>
+
+            {/* Mobile Menu */}
+            {isMobileMenuOpen && (
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '12px',
+                paddingTop: '12px',
+                borderTop: '1px solid #e5e7eb'
+              }}>
+                {/* Connection Status */}
+                <div style={{ 
+                  display: 'flex', 
+                  justifyContent: 'center',
+                  alignItems: 'center', 
+                  gap: '8px',
+                  fontSize: '12px',
+                  color: '#6b7280',
+                  padding: '8px'
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    backgroundColor: online ? '#22c55e' : '#ef4444'
+                  }} />
+                  {online ? 'Online' : 'Offline'}
+                  
+                  {vpsUp !== null && (
+                    <>
+                      <span style={{ margin: '0 4px' }}>•</span>
+                      <div style={{
+                        width: '8px',
+                        height: '8px',
+                        borderRadius: '50%',
+                        backgroundColor: vpsUp ? '#22c55e' : '#ef4444'
+                      }} />
+                      AI {vpsUp ? 'Ready' : 'Unavailable'}
+                    </>
+                  )}
+                </div>
+
+                {/* Recording Controls - only show on non-admin pages */}
+                {!isAdminPage && (
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <Recorder
+                      onCreated={handleRecordingCreated}
+                      onStopped={handleRecordingStopped}
+                      text={text}
+                      setText={setText}
+                      tag={tag}
+                      setTag={setTag}
+                      online={online}
+                      vpsUp={vpsUp}
+                      showStopButton={true}
+                    />
+                  </div>
+                )}
+                
+                {/* Navigation Buttons */}
+                <div style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column',
+                  gap: '8px'
+                }}>
+                  <button
+                    onClick={() => {
+                      navigate('/')
+                      setIsMobileMenuOpen(false)
+                    }}
+                    style={{
+                      padding: '12px 16px',
+                      backgroundColor: location.pathname === '/' ? '#3b82f6' : '#f3f4f6',
+                      color: location.pathname === '/' ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      width: '100%'
+                    }}
+                  >
+                    🏠 Home
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      navigate('/admin')
+                      setIsMobileMenuOpen(false)
+                    }}
+                    style={{
+                      padding: '12px 16px',
+                      backgroundColor: location.pathname === '/admin' ? '#3b82f6' : '#f3f4f6',
+                      color: location.pathname === '/admin' ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      width: '100%'
+                    }}
+                  >
+                    ⚙️ Admin
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </header>
 
       {/* Main Content */}

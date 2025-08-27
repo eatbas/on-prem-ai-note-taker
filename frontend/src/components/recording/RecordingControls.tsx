@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
+import { useNotification } from '../../contexts/NotificationContext'
 
 interface RecordingControlsProps {
   isRecording: boolean
@@ -31,6 +32,15 @@ export default function RecordingControls({
   const micAnalyserRef = useRef<AnalyserNode | null>(null)
   const speakerAnalyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  
+  const { showNotification } = useNotification()
+
+  // Show notification when error occurs
+  useEffect(() => {
+    if (error) {
+      showNotification(error, 'error')
+    }
+  }, [error, showNotification])
 
   const formatTime = (seconds: number): string => {
     const mins = Math.floor(seconds / 60)
@@ -338,21 +348,7 @@ export default function RecordingControls({
         </div>
       )}
 
-      {/* Error Display */}
-      {error && (
-        <div style={{
-          padding: '8px 16px',
-          backgroundColor: '#fef2f2',
-          border: '1px solid #fecaca',
-          borderRadius: '6px',
-          color: '#dc2626',
-          fontSize: '14px',
-          textAlign: 'center',
-          marginTop: '8px'
-        }}>
-          ⚠️ {error}
-        </div>
-      )}
+
     </>
   )
 }

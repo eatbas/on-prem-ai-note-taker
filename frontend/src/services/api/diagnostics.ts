@@ -1,4 +1,4 @@
-import { apiRequest, apiBase, getAuthHeader, handleApiResponse } from './core'
+import { apiRequest, apiBase, getAuthHeader, getApiHeaders, getUserId, handleApiResponse } from './core'
 
 export interface VpsDiagnosticResult {
 	check: string
@@ -13,7 +13,7 @@ export async function getVpsHealth() {
 		const response = await fetch(`${apiBase}/health`, {
 			method: 'GET',
 			headers: {
-				...getAuthHeader()
+				...getApiHeaders()
 			},
 			timeout: 5000
 		} as any)
@@ -36,7 +36,7 @@ export async function runVpsDiagnostics(): Promise<VpsDiagnosticResult[]> {
 		const response = await fetch(`${apiBase}/health`, {
 			method: 'GET',
 			headers: {
-				...getAuthHeader()
+				...getApiHeaders()
 			},
 			timeout: 10000
 		} as any)
@@ -72,7 +72,7 @@ export async function runVpsDiagnostics(): Promise<VpsDiagnosticResult[]> {
 		const response = await fetch(`${apiBase}/meetings`, {
 			method: 'GET',
 			headers: {
-				...getAuthHeader()
+				...getApiHeaders()
 			},
 			timeout: 10000
 		} as any)
@@ -118,10 +118,12 @@ export async function runVpsDiagnostics(): Promise<VpsDiagnosticResult[]> {
 		form.append('file', testFile)
 		form.append('language', 'auto')
 
+		const userId = getUserId()
 		const response = await fetch(`${apiBase}/transcribe`, {
 			method: 'POST',
 			headers: {
-				...getAuthHeader()
+				...getAuthHeader(),
+				...(userId && { 'X-User-Id': userId })
 			},
 			body: form,
 			timeout: 30000
@@ -158,8 +160,7 @@ export async function runVpsDiagnostics(): Promise<VpsDiagnosticResult[]> {
 		const response = await fetch(`${apiBase}/chat`, {
 			method: 'POST',
 			headers: {
-				'Content-Type': 'application/json',
-				...getAuthHeader()
+				...getApiHeaders()
 			},
 			body: JSON.stringify({
 				prompt: 'test',
@@ -197,7 +198,7 @@ export async function runVpsDiagnostics(): Promise<VpsDiagnosticResult[]> {
 		const response = await fetch(`${apiBase}/queue/stats`, {
 			method: 'GET',
 			headers: {
-				...getAuthHeader()
+				...getApiHeaders()
 			},
 			timeout: 10000
 		} as any)
@@ -237,7 +238,7 @@ export async function quickVpsTest(): Promise<{ success: boolean; message: strin
 		const response = await fetch(`${apiBase}/health`, {
 			method: 'GET',
 			headers: {
-				...getAuthHeader()
+				...getApiHeaders()
 			},
 			timeout: 5000
 		} as any)

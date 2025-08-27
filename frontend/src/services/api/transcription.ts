@@ -1,4 +1,4 @@
-import { apiBase, getAuthHeader, handleApiResponse } from './core'
+import { apiBase, getAuthHeader, getUserId, handleApiResponse } from './core'
 
 export async function transcribe(file: File, opts?: { language?: string; vadFilter?: boolean }) {
 	const form = new FormData()
@@ -13,16 +13,18 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 	// Import and add to queue (dynamic import to avoid circular dependencies)
 	try {
 		const { jobQueueManager } = await import('../../stores/jobQueueManager')
-		jobQueueManager.addJob(jobId, 'transcription', 'processing', 'Transcribing audio...')
+		jobQueueManager.addJob(jobId, 'processing', 'Transcribing audio...')
 	} catch (error) {
 		console.warn('Failed to add job to queue:', error)
 	}
 
 	try {
+		const userId = getUserId()
 		const response = await fetch(`${apiBase}/transcribe`, {
 			method: 'POST',
 			headers: {
-				...getAuthHeader()
+				...getAuthHeader(),
+				...(userId && { 'X-User-Id': userId })
 			},
 			body: form
 		})
@@ -32,7 +34,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 		// Update job status on success
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'completed', 'Transcription completed')
+			jobQueueManager.updateJob(jobId, { status: 'completed', message: 'Transcription completed' })
 		} catch (error) {
 			console.warn('Failed to update job status:', error)
 		}
@@ -42,7 +44,7 @@ export async function transcribe(file: File, opts?: { language?: string; vadFilt
 		// Update job status on error
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'failed', `Transcription failed: ${error}`)
+			jobQueueManager.updateJob(jobId, { status: 'failed', message: `Transcription failed: ${error}` })
 		} catch (queueError) {
 			console.warn('Failed to update job status:', queueError)
 		}
@@ -55,10 +57,12 @@ export async function submitQueueTranscription(file: File, language: string = 'a
 	form.append('file', file)
 	form.append('language', language)
 
+	const userId = getUserId()
 	const response = await fetch(`${apiBase}/queue/transcribe`, {
 		method: 'POST',
 		headers: {
-			...getAuthHeader()
+			...getAuthHeader(),
+			...(userId && { 'X-User-Id': userId })
 		},
 		body: form
 	})
@@ -72,7 +76,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	
 	try {
 		const { jobQueueManager } = await import('../../stores/jobQueueManager')
-		jobQueueManager.addJob(jobId, 'transcription', 'processing', 'Transcribing and summarizing...')
+		jobQueueManager.addJob(jobId, 'processing', 'Transcribing and summarizing...')
 	} catch (error) {
 		console.warn('Failed to add job to queue:', error)
 	}
@@ -83,10 +87,12 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 	if (opts?.vadFilter !== undefined) form.append('vad_filter', String(opts.vadFilter))
 
 	try {
+		const userId = getUserId()
 		const response = await fetch(`${apiBase}/transcribe-and-summarize`, {
 			method: 'POST',
 			headers: {
-				...getAuthHeader()
+				...getAuthHeader(),
+				...(userId && { 'X-User-Id': userId })
 			},
 			body: form
 		})
@@ -96,7 +102,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 		// Update job status on success
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'completed', 'Transcription and summarization completed')
+			jobQueueManager.updateJob(jobId, { status: 'completed', message: 'Transcription and summarization completed' })
 		} catch (error) {
 			console.warn('Failed to update job status:', error)
 		}
@@ -106,7 +112,7 @@ export async function transcribeAndSummarize(file: File, opts?: { language?: str
 		// Update job status on error
 		try {
 			const { jobQueueManager } = await import('../../stores/jobQueueManager')
-			jobQueueManager.updateJob(jobId, 'failed', `Transcription failed: ${error}`)
+			jobQueueManager.updateJob(jobId, { status: 'failed', message: `Transcription failed: ${error}` })
 		} catch (queueError) {
 			console.warn('Failed to update job status:', queueError)
 		}
@@ -124,10 +130,12 @@ export async function submitTranscribeAndSummarizeJob(
 	form.append('language', language)
 	form.append('vad_filter', String(vadFilter))
 
+	const userId = getUserId()
 	const response = await fetch(`${apiBase}/jobs/transcribe-and-summarize`, {
 		method: 'POST',
 		headers: {
-			...getAuthHeader()
+			...getAuthHeader(),
+			...(userId && { 'X-User-Id': userId })
 		},
 		body: form
 	})

@@ -16,7 +16,33 @@ export function getUserId(): string | undefined {
 		const fromGlobal = (window as any).USER_ID as string | undefined
 		if (fromGlobal) return fromGlobal
 	} catch {}
-	return localStorage.getItem('user_id') || undefined
+	
+	// Check localStorage for existing user ID
+	let userId = localStorage.getItem('user_id')
+	
+	// If no user ID exists, create one
+	if (!userId) {
+		userId = initializeUserId()
+	}
+	
+	return userId || undefined
+}
+
+function initializeUserId(): string {
+	// Generate a user ID similar to backend format: user_{username}
+	// For web version, use a combination of timestamp and random string
+	const timestamp = Date.now()
+	const random = Math.random().toString(36).substr(2, 6)
+	const userId = `user_web_${timestamp}_${random}`
+	
+	try {
+		localStorage.setItem('user_id', userId)
+		console.log('🆔 Generated new user ID:', userId)
+		return userId
+	} catch (error) {
+		console.error('Failed to store user ID:', error)
+		return userId // Return it anyway, even if we can't store it
+	}
 }
 
 export function getAuthHeader(): Record<string, string> {
@@ -39,6 +65,16 @@ export function getAuthHeader(): Record<string, string> {
 	
 	console.warn('⚠️ No authentication credentials found')
 	return {}
+}
+
+// Helper function to get complete API headers (auth + user ID)
+export function getApiHeaders(): Record<string, string> {
+	const userId = getUserId()
+	return {
+		'Content-Type': 'application/json',
+		...getAuthHeader(),
+		...(userId && { 'X-User-Id': userId })
+	}
 }
 
 // Common error handling for API responses
@@ -83,8 +119,7 @@ export async function apiRequest<T>(
 	options: RequestInit = {}
 ): Promise<T> {
 	const headers = {
-		'Content-Type': 'application/json',
-		...getAuthHeader(),
+		...getApiHeaders(),
 		...options.headers
 	}
 

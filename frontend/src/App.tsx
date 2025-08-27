@@ -15,6 +15,8 @@ import { useVpsHealth } from './stores/apiStateManager'
 
 // Import App components
 import { AppShell, RecordingProvider } from './components/app'
+import { NotificationProvider } from './contexts/NotificationContext'
+import { NotificationContainer } from './components/common'
 
 const isElectron = typeof navigator !== 'undefined' && navigator.userAgent.toLowerCase().includes('electron')
 const Router = isElectron ? HashRouter : BrowserRouter
@@ -70,47 +72,52 @@ export default function App() {
   }
 
   return (
-    <RecordingProvider
-      isRecording={isRecording}
-      recordingMeetingId={recordingMeetingId}
-      onRecordingCreated={handleRecordingCreated}
-      onRecordingStopped={handleRecordingStopped}
-    >
-      <Router>
-        <AppShell
-          text={text}
-          setText={setText}
-          tag={tag}
-          setTag={setTag}
-          online={online}
-          availableTags={availableTags}
-          setAvailableTags={setAvailableTags}
-          refreshSignal={refreshSignal}
-          setRefreshSignal={setRefreshSignal}
-          vpsUp={vpsHealth.status === 'ok'}
-        >
-          <Routes>
-            <Route path="/" element={
-              <DashboardRoute 
-                text={text}
-                setText={setText}
-                tag={tag}
-                setTag={setTag}
-                online={online}
-                onTagsChange={setAvailableTags}
-                refreshSignal={refreshSignal}
-                isRecording={isRecording}
-                recordingMeetingId={recordingMeetingId}
-              />
-            } />
-            
-            <Route path="/meeting/:meetingId" element={<MeetingRoute />} />
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/recorder-test" element={<RecorderTestPage />} />
-          </Routes>
-        </AppShell>
-      </Router>
-    </RecordingProvider>
+    <NotificationProvider>
+      <RecordingProvider
+        isRecording={isRecording}
+        recordingMeetingId={recordingMeetingId}
+        onRecordingCreated={handleRecordingCreated}
+        onRecordingStopped={handleRecordingStopped}
+      >
+        <Router>
+          <AppShell
+            text={text}
+            setText={setText}
+            tag={tag}
+            setTag={setTag}
+            online={online}
+            availableTags={availableTags}
+            setAvailableTags={setAvailableTags}
+            refreshSignal={refreshSignal}
+            setRefreshSignal={setRefreshSignal}
+            vpsUp={vpsHealth.status === 'ok'}
+          >
+            <Routes>
+              <Route path="/" element={
+                <DashboardRoute 
+                  text={text}
+                  setText={setText}
+                  tag={tag}
+                  setTag={setTag}
+                  online={online}
+                  onTagsChange={setAvailableTags}
+                  refreshSignal={refreshSignal}
+                  isRecording={isRecording}
+                  recordingMeetingId={recordingMeetingId}
+                />
+              } />
+              
+              <Route path="/meeting/:meetingId" element={<MeetingRoute />} />
+              <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/recorder-test" element={<RecorderTestPage />} />
+            </Routes>
+          </AppShell>
+        </Router>
+        
+        {/* Global notification container */}
+        <NotificationContainer />
+      </RecordingProvider>
+    </NotificationProvider>
   )
 }
 

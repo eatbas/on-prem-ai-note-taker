@@ -7,6 +7,7 @@ import { useAudioRecorder } from '../../hooks/useAudioRecorder'
 import RecordingControls from './RecordingControls'
 import RecordingModal, { RecordingConfig } from './RecordingModal'
 import AudioLevelMonitor from './AudioLevelMonitor'
+import { InputModal } from '../common'
 
 // CSS animations for the component
 const styles = `
@@ -53,6 +54,8 @@ export default function Recorder({
   
   // Local state
   const [showModal, setShowModal] = useState(false)
+  const [showNamingModal, setShowNamingModal] = useState(false)
+  const [pendingMeetingId, setPendingMeetingId] = useState<string | null>(null)
   const [currentMeetingId, setCurrentMeetingId] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<'idle' | 'syncing' | 'success' | 'failed'>('idle')
   const [retryCount, setRetryCount] = useState(0)
@@ -198,22 +201,45 @@ export default function Recorder({
   }
 
   const processMeeting = async (meetingId: string) => {
-    // Ask for meeting name
-    const title = (window.prompt('Name this meeting', 'New meeting') || '').trim()
-    if (title) {
-      await db.meetings.update(meetingId, {
-        title,
+    // Show modal to ask for meeting name
+    setPendingMeetingId(meetingId)
+    setShowNamingModal(true)
+  }
+
+  const handleMeetingNameConfirm = async (title: string) => {
+    if (pendingMeetingId && title.trim()) {
+      await db.meetings.update(pendingMeetingId, {
+        title: title.trim(),
         updatedAt: Date.now(),
         duration: recordingTime
       })
     }
+    setShowNamingModal(false)
+    
+    // Continue with auto-processing if we have a meeting ID
+    if (pendingMeetingId) {
+      continueProcessing(pendingMeetingId)
+    }
+    setPendingMeetingId(null)
+  }
+
+  const handleMeetingNameCancel = () => {
+    setShowNamingModal(false)
+    // Continue with auto-processing with default name if we have a meeting ID
+    if (pendingMeetingId) {
+      continueProcessing(pendingMeetingId)
+    }
+    setPendingMeetingId(null)
+  }
+
+  const continueProcessing = async (meetingId: string) => {
 
     // Auto-process the meeting
     setTimeout(async () => {
       try {
         console.log('Auto-processing meeting...')
         setSyncStatus('syncing')
-        await autoProcessMeetingRecordingWithWhisperOptimization(meetingId, title)
+        await autoProcessMeetingRecordingWithWhisperOptimization(meetingId)
         console.log('Meeting auto-processed successfully!')
         setSyncStatus('success')
         setRetryCount(0)
@@ -311,6 +337,16 @@ export default function Recorder({
         onClose={() => setShowModal(false)}
         onStartRecording={handleModalStartRecording}
         isRecording={isRecording}
+      />
+
+      {/* Meeting Naming Modal */}
+      <InputModal
+        isOpen={showNamingModal}
+        title="Name this meeting"
+        placeholder="Enter meeting name..."
+        defaultValue="New meeting"
+        onConfirm={handleMeetingNameConfirm}
+        onCancel={handleMeetingNameCancel}
       />
     </div>
   )

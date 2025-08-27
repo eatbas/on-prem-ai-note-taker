@@ -55,10 +55,12 @@ export async function uploadMeetingAudio(
 	form.append('audio', audioFile)
 	form.append('audio_type', audioType)
 
+	const userId = getUserId()
 	const response = await fetch(`${apiBase}/meetings/${meetingId}/audio`, {
 		method: 'POST',
 		headers: {
-			...getAuthHeader()
+			...getAuthHeader(),
+			...(userId && { 'X-User-Id': userId })
 		},
 		body: form
 	})
@@ -85,10 +87,12 @@ export async function autoProcessMeeting(
 		form.append('mixed_audio', files.mixed)
 	}
 
+	const userId = getUserId()
 	const response = await fetch(`${apiBase}/meetings/${meetingId}/process`, {
 		method: 'POST',
 		headers: {
-			...getAuthHeader()
+			...getAuthHeader(),
+			...(userId && { 'X-User-Id': userId })
 		},
 		body: form
 	})
@@ -127,10 +131,12 @@ export async function autoProcessDualMeeting(
 
 	console.log('📤 Sending dual processing request...')
 	
+	const userId = getUserId()
 	const response = await fetch(`${apiBase}/meetings/${meetingId}/process-dual`, {
 		method: 'POST',
 		headers: {
-			...getAuthHeader()
+			...getAuthHeader(),
+			...(userId && { 'X-User-Id': userId })
 		},
 		body: form
 	})

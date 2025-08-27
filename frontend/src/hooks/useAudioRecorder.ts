@@ -171,17 +171,33 @@ export function useAudioRecorder() {
     console.log('🛑 Stopping dual recording...')
 
     try {
-      // Request final data from recorders
-      state.micRecorder?.requestData()
-      state.speakerRecorder?.requestData()
+      // Request final data from recorders (only if they're recording)
+      if (state.micRecorder && state.micRecorder.state === 'recording') {
+        state.micRecorder.requestData()
+      }
+      if (state.speakerRecorder && state.speakerRecorder.state === 'recording') {
+        state.speakerRecorder.requestData()
+      }
 
-      // Stop recorders
-      state.micRecorder?.stop()
-      state.speakerRecorder?.stop()
+      // Stop recorders (only if they're not already inactive)
+      if (state.micRecorder && state.micRecorder.state !== 'inactive') {
+        state.micRecorder.stop()
+      }
+      if (state.speakerRecorder && state.speakerRecorder.state !== 'inactive') {
+        state.speakerRecorder.stop()
+      }
 
       // Stop streams
-      state.micStream?.getTracks().forEach(track => track.stop())
-      state.speakerStream?.getTracks().forEach(track => track.stop())
+      state.micStream?.getTracks().forEach(track => {
+        if (track.readyState !== 'ended') {
+          track.stop()
+        }
+      })
+      state.speakerStream?.getTracks().forEach(track => {
+        if (track.readyState !== 'ended') {
+          track.stop()
+        }
+      })
 
       // Reset state
       setState({
