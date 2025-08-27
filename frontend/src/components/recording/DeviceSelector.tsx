@@ -212,6 +212,8 @@ export default function DeviceSelector({
     }
   }
 
+  const selectedSpeaker = outputDevices.find(d => selectedSpeakerId === d.deviceId) || outputDevices[0]
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
       {/* Microphone Selection */}
@@ -242,17 +244,37 @@ export default function DeviceSelector({
           </button>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        <select
+          value={selectedMicId}
+          onChange={(e) => onMicChange(e.target.value)}
+          style={{
+            width: '100%',
+            padding: '12px',
+            border: '1px solid #d1d5db',
+            borderRadius: '8px',
+            fontSize: '14px',
+            backgroundColor: '#ffffff',
+            color: '#374151',
+            cursor: 'pointer',
+            outline: 'none',
+            transition: 'border-color 0.2s ease'
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#3b82f6'
+            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#d1d5db'
+            e.target.style.boxShadow = 'none'
+          }}
+        >
+          <option value="" disabled>Select a microphone...</option>
           {inputDevices.map(device => (
-            <DeviceOption
-              key={device.deviceId}
-              device={device}
-              selected={selectedMicId === device.deviceId}
-              onClick={() => onMicChange(device.deviceId)}
-              usageLevel={showUsageLevels ? micUsageLevels[device.deviceId] : undefined}
-            />
+            <option key={device.deviceId} value={device.deviceId}>
+              {device.label}
+            </option>
           ))}
-        </div>
+        </select>
 
         {showUsageLevels && isMonitoring && (
           <div style={{
@@ -280,7 +302,7 @@ export default function DeviceSelector({
         )}
       </div>
 
-      {/* Speaker/Output Selection */}
+      {/* Speaker Output - Default Only */}
       <div>
         <label style={{ 
           display: 'block',
@@ -291,142 +313,39 @@ export default function DeviceSelector({
           🔊 Speaker Output:
         </label>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-          {outputDevices.map(device => (
-            <DeviceOption
-              key={device.deviceId}
-              device={device}
-              selected={selectedSpeakerId === device.deviceId}
-              onClick={() => onSpeakerChange(device.deviceId)}
-            />
-          ))}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-// Individual device option component
-interface DeviceOptionProps {
-  device: AudioDevice
-  selected: boolean
-  onClick: () => void
-  usageLevel?: number
-}
-
-function DeviceOption({ device, selected, onClick, usageLevel }: DeviceOptionProps) {
-  const isActive = usageLevel !== undefined && usageLevel > 0.02
-
-  return (
-    <div
-      onClick={onClick}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: '12px',
-        border: selected ? '2px solid #3b82f6' : '1px solid #e5e7eb',
-        borderRadius: '8px',
-        cursor: 'pointer',
-        backgroundColor: selected ? '#eff6ff' : '#ffffff',
-        transition: 'all 0.2s ease',
-        gap: '12px'
-      }}
-    >
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '8px',
-        flex: 1
-      }}>
         <div style={{
-          fontSize: '16px',
-          color: selected ? '#3b82f6' : '#6b7280'
+          padding: '12px',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          backgroundColor: '#f9fafb',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px'
         }}>
-          {selected ? '●' : '○'}
-        </div>
-        <div style={{
-          fontSize: '14px',
-          fontWeight: selected ? '600' : '400',
-          color: selected ? '#1e293b' : '#374151',
-          flex: 1
-        }}>
-          {device.label}
+          <div style={{
+            fontSize: '16px',
+            color: '#22c55e'
+          }}>
+            ✓
+          </div>
+          <div style={{
+            fontSize: '14px',
+            color: '#374151',
+            flex: 1
+          }}>
+            {selectedSpeaker ? selectedSpeaker.label : 'Default Speaker'}
+          </div>
+          <div style={{
+            fontSize: '12px',
+            color: '#6b7280',
+            fontStyle: 'italic'
+          }}>
+            Default
+          </div>
         </div>
       </div>
-
-      {usageLevel !== undefined && (
-        <div style={{ minWidth: '80px' }}>
-          <UsageLevelIndicator level={usageLevel} />
-        </div>
-      )}
     </div>
   )
 }
 
-// Usage level indicator component
-interface UsageLevelIndicatorProps {
-  level: number
-}
 
-function UsageLevelIndicator({ level }: UsageLevelIndicatorProps) {
-  const isActive = level > 0.02
-
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: '4px',
-      fontSize: '12px'
-    }}>
-      <div style={{ 
-        fontSize: '12px',
-        color: isActive ? '#22c55e' : '#9ca3af'
-      }}>
-        {isActive ? '🎤' : '🔇'}
-      </div>
-      <div style={{
-        width: '60px',
-        height: '16px',
-        backgroundColor: '#f3f4f6',
-        borderRadius: '4px',
-        border: '1px solid #e5e7eb',
-        position: 'relative',
-        overflow: 'hidden'
-      }}>
-        {/* Background segments */}
-        {[...Array(5)].map((_, i) => (
-          <div
-            key={i}
-            style={{
-              position: 'absolute',
-              left: `${i * 20}%`,
-              top: 0,
-              width: '18%',
-              height: '100%',
-              borderRight: i < 4 ? '1px solid #e5e7eb' : 'none'
-            }}
-          />
-        ))}
-        
-        {/* Active level */}
-        <div
-          style={{
-            position: 'absolute',
-            left: 0,
-            top: 0,
-            height: '100%',
-            width: `${Math.min(level * 100, 100)}%`,
-            background: level > 0.7 ? 
-              'linear-gradient(90deg, #22c55e 0%, #f59e0b 70%, #ef4444 100%)' :
-              level > 0.3 ? 
-              'linear-gradient(90deg, #22c55e 0%, #f59e0b 100%)' :
-              '#22c55e',
-            transition: 'width 0.1s ease-out',
-            borderRadius: '3px'
-          }}
-        />
-      </div>
-    </div>
-  )
-}

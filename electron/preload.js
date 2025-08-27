@@ -1,7 +1,16 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 // Load environment variables from .env file
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') })
+const path = require('path')
+const envPath = path.join(__dirname, '..', '.env')
+console.log('🔧 Preload: Loading .env from:', envPath)
+
+try {
+  require('dotenv').config({ path: envPath })
+  console.log('✅ Preload: Environment variables loaded successfully')
+} catch (error) {
+  console.error('❌ Preload: Failed to load environment variables:', error)
+}
 
 contextBridge.exposeInMainWorld('USER_ID', process.env.USERNAME || process.env.USER || '')
 

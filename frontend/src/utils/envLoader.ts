@@ -6,11 +6,29 @@
 // Load environment variables with centralized naming
 export const config = {
   // API Configuration
-  apiBaseUrl: import.meta.env.VITE_API_BASE_URL || 'http://95.111.244.159:8000/api',
+  apiBaseUrl: (() => {
+    // Check if we're in Electron context first
+    if (typeof window !== 'undefined' && (window as any).API_BASE_URL) {
+      return (window as any).API_BASE_URL
+    }
+    return import.meta.env.VITE_API_BASE_URL || 'http://95.111.244.159:8000/api'
+  })(),
   
   // Authentication (loaded from environment - no hardcoded fallbacks for security)
-  basicAuthUsername: import.meta.env.VITE_BASIC_AUTH_USERNAME,
-  basicAuthPassword: import.meta.env.VITE_BASIC_AUTH_PASSWORD,
+  basicAuthUsername: (() => {
+    // Check if we're in Electron context first
+    if (typeof window !== 'undefined' && (window as any).BASIC_AUTH) {
+      return (window as any).BASIC_AUTH.username
+    }
+    return import.meta.env.BASIC_AUTH_USERNAME
+  })(),
+  basicAuthPassword: (() => {
+    // Check if we're in Electron context first
+    if (typeof window !== 'undefined' && (window as any).BASIC_AUTH) {
+      return (window as any).BASIC_AUTH.password
+    }
+    return import.meta.env.BASIC_AUTH_PASSWORD
+  })(),
   
   // Feature Flags
   enableProgressTracking: import.meta.env.VITE_ENABLE_PROGRESS_TRACKING === 'true',

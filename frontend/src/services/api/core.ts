@@ -25,6 +25,7 @@ export function getAuthHeader(): Record<string, string> {
 		const basic = (window as any).BASIC_AUTH as { username?: string; password?: string } | undefined
 		if (basic?.username && basic?.password) {
 			const token = btoa(`${basic.username}:${basic.password}`)
+			console.log('🔑 Using Electron preload auth credentials')
 			return { Authorization: `Basic ${token}` }
 		}
 	} catch {}
@@ -32,8 +33,11 @@ export function getAuthHeader(): Record<string, string> {
 	// Use centralized config
 	if (config.basicAuthUsername && config.basicAuthPassword) {
 		const token = btoa(`${config.basicAuthUsername}:${config.basicAuthPassword}`)
+		console.log('🔑 Using config auth credentials')
 		return { Authorization: `Basic ${token}` }
 	}
+	
+	console.warn('⚠️ No authentication credentials found')
 	return {}
 }
 

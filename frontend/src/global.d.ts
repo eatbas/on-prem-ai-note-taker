@@ -82,7 +82,10 @@ declare global {
 			getSources: (types: string[]) => Promise<Array<{ id: string; name: string }>>
 		}
 		USER_ID: string
-		BASIC_AUTH: string
+		BASIC_AUTH: {
+			username: string
+			password: string
+		}
 		API_BASE_URL: string
 	}
 }

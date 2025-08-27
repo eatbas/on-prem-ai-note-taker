@@ -2,6 +2,7 @@
  * Admin API Utilities
  * Centralized API functions for admin operations
  */
+import { config } from '../../../utils/envLoader'
 
 const API_BASE = (() => {
     try {
@@ -9,17 +10,29 @@ const API_BASE = (() => {
         const fromPreload = (window as any).API_BASE_URL as string | undefined
         if (fromPreload) return fromPreload
     } catch {}
-    return (import.meta as any).env.VITE_API_BASE_URL || '/api'
+    return config.apiBaseUrl
 })()
 
 const getAuthCredentials = () => {
-    const username = (import.meta as any).env.VITE_BASIC_AUTH_USERNAME
-    const password = (import.meta as any).env.VITE_BASIC_AUTH_PASSWORD
+    // Check if we're in Electron context first
+    if (typeof window !== 'undefined' && (window as any).BASIC_AUTH) {
+        const basicAuth = (window as any).BASIC_AUTH
+        if (basicAuth.username && basicAuth.password) {
+            console.log('✅ Admin API: Using Electron preload credentials')
+            return { username: basicAuth.username, password: basicAuth.password }
+        }
+    }
+    
+    // Fallback to config (for browser context)
+    const username = config.basicAuthUsername
+    const password = config.basicAuthPassword
     
     if (!username || !password) {
+        console.error('❌ Admin API: No credentials found in either context')
         throw new Error('Admin credentials not configured')
     }
     
+    console.log('✅ Admin API: Using config credentials')
     return { username, password }
 }
 

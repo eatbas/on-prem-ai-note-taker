@@ -1,3 +1,4 @@
+import React from 'react'
 import { getMeetings, getVpsHealth, getQueueStats, getProgressStats } from '../services'
 import type { QueueStats, ProgressStats } from '../services'
 import { electronApiOptimizer, isElectronApp, getOptimalPollingIntervals } from './electronApiOptimizer'
@@ -492,5 +493,4 @@ export function useProgressStats() {
   }
 }
 
-// For React import
-import React from 'react'
+

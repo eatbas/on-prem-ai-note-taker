@@ -60,8 +60,9 @@ export default function AudioLevelMonitor({
 
       // Start monitoring loop
       updateAudioLevels()
+      console.log('🎵 Audio monitoring initialized successfully')
     } catch (error) {
-      console.error('Failed to setup audio monitoring:', error)
+      console.warn('Audio monitoring setup failed (this is normal if no audio devices):', error instanceof Error ? error.message : String(error))
     }
   }
 

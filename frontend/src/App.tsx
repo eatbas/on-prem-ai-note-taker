@@ -60,13 +60,13 @@ export default function App() {
   const handleRecordingCreated = (meetingId: string) => {
     console.log('🎙️ Recording created:', meetingId)
     setRefreshSignal(prev => prev + 1)
-    showToast('success', 'Recording started')
+    showToast('Recording started', 'success')
   }
 
   const handleRecordingStopped = (meetingId: string) => {
     console.log('🛑 Recording stopped:', meetingId)
     setRefreshSignal(prev => prev + 1)
-    showToast('success', 'Recording stopped')
+    showToast('Recording stopped', 'success')
   }
 
   return (
@@ -91,16 +91,16 @@ export default function App() {
         >
           <Routes>
             <Route path="/" element={
-              <Dashboard
+              <DashboardRoute 
                 text={text}
                 setText={setText}
                 tag={tag}
                 setTag={setTag}
                 online={online}
-                availableTags={availableTags}
-                setAvailableTags={setAvailableTags}
+                onTagsChange={setAvailableTags}
                 refreshSignal={refreshSignal}
-                setRefreshSignal={setRefreshSignal}
+                isRecording={isRecording}
+                recordingMeetingId={recordingMeetingId}
               />
             } />
             
@@ -115,6 +115,31 @@ export default function App() {
 }
 
 // Route components
+function DashboardRoute(props: {
+  text: string
+  setText: (text: string) => void
+  tag: string
+  setTag: (tag: string) => void
+  online: boolean
+  onTagsChange: (tags: [string, number][]) => void
+  refreshSignal: number
+  isRecording: boolean
+  recordingMeetingId: string | null
+}) {
+  const navigate = useNavigate()
+  
+  const handleOpenMeeting = (meetingId: string) => {
+    navigate(`/meeting/${meetingId}`)
+  }
+  
+  return (
+    <Dashboard
+      onOpen={handleOpenMeeting}
+      {...props}
+    />
+  )
+}
+
 function MeetingRoute() {
   const { meetingId } = useParams<{ meetingId: string }>()
   const navigate = useNavigate()

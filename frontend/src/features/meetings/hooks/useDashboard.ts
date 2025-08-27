@@ -31,7 +31,7 @@ export function useDashboard(refreshSignal?: number) {
     } catch (err) {
       console.error('Failed to load meetings:', err)
       setError('Failed to load meetings')
-      showToast('error', 'Failed to load meetings')
+      showToast('Failed to load meetings', 'error')
     } finally {
       setLoading(false)
     }
@@ -42,11 +42,11 @@ export function useDashboard(refreshSignal?: number) {
     
     try {
       await syncMeeting(meetingId)
-      showToast('success', 'Meeting processed successfully')
+      showToast('Meeting processed successfully', 'success')
       await loadMeetings() // Reload meetings to get updated status
     } catch (err) {
       console.error('Failed to process meeting:', err)
-      showToast('error', 'Failed to process meeting')
+      showToast('Failed to process meeting', 'error')
     } finally {
       setSendingMeetings(prev => {
         const newSet = new Set(prev)
@@ -65,10 +65,10 @@ export function useDashboard(refreshSignal?: number) {
       await deleteMeetingLocally(meetingId)
       await deleteAudioChunksLocally(meetingId)
       await loadMeetings() // Reload to update the list
-      showToast('success', 'Meeting deleted successfully')
+      showToast('Meeting deleted successfully', 'success')
     } catch (err) {
       console.error('Failed to delete meeting:', err)
-      showToast('error', 'Failed to delete meeting')
+      showToast('Failed to delete meeting', 'error')
     }
   }, [loadMeetings, showToast])
 
@@ -84,10 +84,10 @@ export function useDashboard(refreshSignal?: number) {
     error,
     sendingMeetings,
     
-    // VPS meetings data
-    vpsMeetings: vpsMeetingsState.meetings,
-    vpsLoading: vpsMeetingsState.loading,
-    vpsError: vpsMeetingsState.error,
+    // VPS meetings data (with safety checks)
+    vpsMeetings: vpsMeetingsState.data || [],
+    vpsLoading: vpsMeetingsState.loading || false,
+    vpsError: vpsMeetingsState.error || null,
     vpsUp,
     
     // Actions

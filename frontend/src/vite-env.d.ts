@@ -2,8 +2,8 @@
 
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string
-  readonly VITE_BASIC_AUTH_USERNAME: string
-  readonly VITE_BASIC_AUTH_PASSWORD: string
+  readonly BASIC_AUTH_USERNAME: string
+  readonly BASIC_AUTH_PASSWORD: string
   readonly VITE_DEBUG: string
   readonly VITE_ENABLE_PROGRESS_TRACKING: string
   readonly VITE_ENABLE_SSE: string
