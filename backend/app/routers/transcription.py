@@ -83,24 +83,65 @@ async def transcribe(
         duration_out: Optional[float] = None
 
         try:
+            # For very short files (< 10 seconds), disable VAD to prevent over-filtering
+            # Get audio duration using ffprobe (more reliable for webm files)
+            import subprocess
+            try:
+                # Use ffprobe to get duration (works better with webm files)
+                result = subprocess.run([
+                    'ffprobe', '-v', 'quiet', '-show_entries', 
+                    'format=duration', '-of', 'csv=p=0', str(tmp_path)
+                ], capture_output=True, text=True, timeout=10)
+                
+                if result.returncode == 0 and result.stdout.strip():
+                    audio_duration = float(result.stdout.strip())
+                    use_vad = vad_filter and audio_duration >= 10.0  # Only use VAD for 10+ second files
+                    logger.info(f"Audio duration: {audio_duration:.2f}s, VAD enabled: {use_vad}")
+                else:
+                    logger.warning(f"ffprobe failed, disabling VAD for safety")
+                    use_vad = False  # Disable VAD if we can't determine duration
+            except Exception as e:
+                logger.warning(f"Could not determine audio duration: {e}, disabling VAD for safety")
+                use_vad = False  # Disable VAD if we can't determine duration
+            
             # Transcription with configurable quality settings
-            segments, info = model.transcribe(
-                tmp_path,
-                language=validated_language if validated_language != "auto" else None,
-                vad_filter=vad_filter,
-                vad_parameters=dict(
-                    min_silence_duration_ms=settings.whisper_vad_min_silence_ms,
-                    speech_pad_ms=settings.whisper_vad_speech_pad_ms
-                ),
-                beam_size=settings.whisper_beam_size,
-                best_of=settings.whisper_best_of,
-                temperature=settings.whisper_temperature,
-                condition_on_previous_text=settings.whisper_condition_on_previous_text,
-                word_timestamps=settings.whisper_word_timestamps,
-                initial_prompt=settings.whisper_initial_prompt,
-                compression_ratio_threshold=settings.whisper_compression_ratio_threshold,
-                log_prob_threshold=settings.whisper_log_prob_threshold
-            )
+            try:
+                segments, info = model.transcribe(
+                    tmp_path,
+                    language=validated_language if validated_language != "auto" else None,
+                    vad_filter=use_vad,
+                    vad_parameters=dict(
+                        min_silence_duration_ms=settings.whisper_vad_min_silence_ms,
+                        speech_pad_ms=settings.whisper_vad_speech_pad_ms
+                    ) if use_vad else None,
+                    beam_size=settings.whisper_beam_size,
+                    best_of=settings.whisper_best_of,
+                    temperature=settings.whisper_temperature,
+                    condition_on_previous_text=settings.whisper_condition_on_previous_text,
+                    word_timestamps=settings.whisper_word_timestamps,
+                    initial_prompt=settings.whisper_initial_prompt,
+                    compression_ratio_threshold=settings.whisper_compression_ratio_threshold,
+                    log_prob_threshold=settings.whisper_log_prob_threshold
+                )
+            except ValueError as e:
+                if "empty sequence" in str(e):
+                    logger.warning(f"VAD filtered out all audio content, retrying without VAD")
+                    # Retry without VAD filter
+                    segments, info = model.transcribe(
+                        tmp_path,
+                        language=validated_language if validated_language != "auto" else None,
+                        vad_filter=False,  # Disable VAD completely
+                        beam_size=settings.whisper_beam_size,
+                        best_of=settings.whisper_best_of,
+                        temperature=settings.whisper_temperature,
+                        condition_on_previous_text=settings.whisper_condition_on_previous_text,
+                        word_timestamps=settings.whisper_word_timestamps,
+                        initial_prompt=settings.whisper_initial_prompt,
+                        compression_ratio_threshold=settings.whisper_compression_ratio_threshold,
+                        log_prob_threshold=settings.whisper_log_prob_threshold
+                    )
+                else:
+                    raise  # Re-raise if it's a different ValueError
             language_out = info.language if hasattr(info, "language") else None
             duration_out = info.duration if hasattr(info, "duration") else None
             
