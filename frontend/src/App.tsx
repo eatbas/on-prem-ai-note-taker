@@ -103,6 +103,7 @@ export default function App() {
                   tag={tag}
                   setTag={setTag}
                   online={online}
+                  vpsUp={vpsHealth.status === 'ok'}
                   onTagsChange={setAvailableTags}
                   refreshSignal={refreshSignal}
                   isRecording={isRecording}
@@ -131,6 +132,7 @@ function DashboardRoute(props: {
   tag: string
   setTag: (tag: string) => void
   online: boolean
+  vpsUp: boolean | null
   onTagsChange: (tags: [string, number][]) => void
   refreshSignal: number
   isRecording: boolean
