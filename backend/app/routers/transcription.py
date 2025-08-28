@@ -102,6 +102,15 @@ async def transcribe(
         ) as tmp:
             tmp.write(content)
             tmp_path = tmp.name
+        
+        # 🚀 STAGE 1 OPTIMIZATION: Apply audio preprocessing for better accuracy
+        original_tmp_path = tmp_path
+        if settings.enable_audio_normalization:
+            from ..core.audio_utils import preprocess_audio_for_transcription
+            tmp_path = preprocess_audio_for_transcription(tmp_path, True)
+            logger.info(f"Audio preprocessing applied for transcription: {file.filename}")
+        else:
+            logger.debug("Audio normalization disabled for transcription")
 
         segments_out: List[TranscriptionSegment] = []
         text_parts: List[str] = []
@@ -190,8 +199,14 @@ async def transcribe(
             )
             
         finally:
+            # Cleanup preprocessed audio if different from original
+            if tmp_path != original_tmp_path:
+                from ..core.audio_utils import cleanup_preprocessed_audio
+                cleanup_preprocessed_audio(tmp_path, original_tmp_path)
+            
+            # Cleanup original temp file
             try:
-                os.remove(tmp_path)
+                os.remove(original_tmp_path)
             except OSError:
                 pass
 
