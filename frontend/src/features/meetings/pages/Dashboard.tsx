@@ -69,93 +69,8 @@ const Dashboard = memo(function Dashboard({
 		})
 	}
 
-	const closeContextMenu = () => {
-		setContextMenu(null)
-	}
-
-	// Click outside to close context menu
-	useEffect(() => {
-		const handleClickOutside = () => {
-			if (contextMenu?.visible) {
-				closeContextMenu()
-			}
-		}
-		
-		document.addEventListener('click', handleClickOutside)
-		return () => document.removeEventListener('click', handleClickOutside)
-	}, [contextMenu?.visible])
-
-	// 🚀 STAGE 2 OPTIMIZATION: Memoize context menu actions
-	const handleRenameMeeting = useCallback(async (meetingId: string) => {
-		const meeting = meetings.find(m => m.id === meetingId)
-		if (!meeting) return
-		
-		const newTitle = window.prompt('Enter new meeting title:', meeting.title)
-		if (newTitle && newTitle.trim() && newTitle.trim() !== meeting.title) {
-			try {
-				await updateMeeting(meetingId, newTitle.trim())
-				// Update local database as well
-				await db.meetings.update(meetingId, { title: newTitle.trim(), updatedAt: Date.now() })
-				showToast('Meeting renamed successfully! ✏️', 'success')
-				refresh() // Refresh the list
-			} catch (err) {
-				console.error('Failed to rename meeting:', err)
-				showToast('Failed to rename meeting. Please try again.', 'error')
-			}
-		}
-		closeContextMenu()
-	}, [meetings, showToast]) // Note: refresh and closeContextMenu will be added to deps when memoized
-
-	const handleDeleteAudio = async (meetingId: string) => {
-		if (!window.confirm('Are you sure you want to delete the audio for this meeting? The meeting notes, summary, and transcript will be preserved.')) {
-			closeContextMenu()
-			return
-		}
-
-		try {
-			await deleteAudioChunksLocally(meetingId)
-			showToast('Audio deleted successfully! 🗑️', 'success')
-			refresh() // Refresh the list
-		} catch (err) {
-			console.error('Failed to delete audio:', err)
-			showToast('Failed to delete audio. Please try again.', 'error')
-		}
-		closeContextMenu()
-	}
-
-	const handleDeleteMeeting = async (meetingId: string) => {
-		const meeting = meetings.find(m => m.id === meetingId)
-		if (!meeting) return
-
-		if (!window.confirm(`Are you sure you want to permanently delete "${meeting.title}"? This will remove all data including audio, transcript, summary, and notes both locally and from the server.`)) {
-			closeContextMenu()
-			return
-		}
-
-		try {
-			// Delete from VPS if the meeting was sent
-			if (meeting.status === 'sent') {
-				try {
-					await deleteMeeting(meetingId)
-					showToast('Meeting deleted from server ✅', 'info')
-				} catch (vpsError) {
-					console.warn('Failed to delete from VPS, proceeding with local deletion:', vpsError)
-					showToast('⚠️ Could not delete from server, but deleting locally', 'info')
-				}
-			}
-			
-			// Delete locally
-			await deleteMeetingLocally(meetingId)
-			showToast('Meeting deleted completely! 🗑️', 'success')
-			refresh() // Refresh the list
-		} catch (err) {
-			console.error('Failed to delete meeting:', err)
-			showToast('Failed to delete meeting. Please try again.', 'error')
-		}
-		closeContextMenu()
-	}
-
-	async function refresh() {
+	// 🚀 STAGE 2 OPTIMIZATION: Define refresh first so it can be used in other useCallbacks
+	const refresh = useCallback(async () => {
 		console.log('🔄 Dashboard refresh started')
 		setLoading(true)
 		setError(null)
@@ -226,7 +141,93 @@ const Dashboard = memo(function Dashboard({
 			setLoading(false)
 			console.log('✅ Dashboard refresh completed')
 		}
-	}
+	}, [text, tag, online])
+
+	const closeContextMenu = useCallback(() => {
+		setContextMenu(null)
+	}, [])
+
+	// Click outside to close context menu
+	useEffect(() => {
+		const handleClickOutside = () => {
+			if (contextMenu?.visible) {
+				closeContextMenu()
+			}
+		}
+		
+		document.addEventListener('click', handleClickOutside)
+		return () => document.removeEventListener('click', handleClickOutside)
+	}, [contextMenu?.visible])
+
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize context menu actions
+	const handleRenameMeeting = useCallback(async (meetingId: string) => {
+		const meeting = meetings.find(m => m.id === meetingId)
+		if (!meeting) return
+		
+		const newTitle = window.prompt('Enter new meeting title:', meeting.title)
+		if (newTitle && newTitle.trim() && newTitle.trim() !== meeting.title) {
+			try {
+				await updateMeeting(meetingId, newTitle.trim())
+				// Update local database as well
+				await db.meetings.update(meetingId, { title: newTitle.trim(), updatedAt: Date.now() })
+				showToast('Meeting renamed successfully! ✏️', 'success')
+				refresh() // Refresh the list
+			} catch (err) {
+				console.error('Failed to rename meeting:', err)
+				showToast('Failed to rename meeting. Please try again.', 'error')
+			}
+		}
+		closeContextMenu()
+	}, [meetings, showToast, refresh, closeContextMenu])
+
+	const handleDeleteAudio = useCallback(async (meetingId: string) => {
+		if (!window.confirm('Are you sure you want to delete the audio for this meeting? The meeting notes, summary, and transcript will be preserved.')) {
+			closeContextMenu()
+			return
+		}
+
+		try {
+			await deleteAudioChunksLocally(meetingId)
+			showToast('Audio deleted successfully! 🗑️', 'success')
+			refresh() // Refresh the list
+		} catch (err) {
+			console.error('Failed to delete audio:', err)
+			showToast('Failed to delete audio. Please try again.', 'error')
+		}
+		closeContextMenu()
+	}, [showToast, refresh, closeContextMenu])
+
+	const handleDeleteMeeting = useCallback(async (meetingId: string) => {
+		const meeting = meetings.find(m => m.id === meetingId)
+		if (!meeting) return
+
+		if (!window.confirm(`Are you sure you want to permanently delete "${meeting.title}"? This will remove all data including audio, transcript, summary, and notes both locally and from the server.`)) {
+			closeContextMenu()
+			return
+		}
+
+		try {
+			// Delete from VPS if the meeting was sent
+			if (meeting.status === 'sent') {
+				try {
+					await deleteMeeting(meetingId)
+					showToast('Meeting deleted from server ✅', 'info')
+				} catch (vpsError) {
+					console.warn('Failed to delete from VPS, proceeding with local deletion:', vpsError)
+					showToast('⚠️ Could not delete from server, but deleting locally', 'info')
+				}
+			}
+			
+			// Delete locally
+			await deleteMeetingLocally(meetingId)
+			showToast('Meeting deleted completely! 🗑️', 'success')
+			refresh() // Refresh the list
+		} catch (err) {
+			console.error('Failed to delete meeting:', err)
+			showToast('Failed to delete meeting. Please try again.', 'error')
+		}
+		closeContextMenu()
+	}, [meetings, showToast, refresh, closeContextMenu])
 
 	async function clearAllLocalData() {
 		// Ask for confirmation before clearing all data
@@ -503,10 +504,10 @@ const Dashboard = memo(function Dashboard({
 	
 	// 🚀 STAGE 2 OPTIMIZATION: Memoize pagination calculations
 	const paginationData = useMemo(() => {
-		const totalPages = Math.ceil(processedMeetings.length / meetingsPerPage)
-		const startIndex = (currentPage - 1) * meetingsPerPage
-		const endIndex = startIndex + meetingsPerPage
-		const currentMeetings = processedMeetings.slice(startIndex, endIndex)
+	const totalPages = Math.ceil(processedMeetings.length / meetingsPerPage)
+	const startIndex = (currentPage - 1) * meetingsPerPage
+	const endIndex = startIndex + meetingsPerPage
+	const currentMeetings = processedMeetings.slice(startIndex, endIndex)
 		
 		return {
 			totalPages,
@@ -744,7 +745,7 @@ const Dashboard = memo(function Dashboard({
 						</div>
 					</div>
 				}>
-					<AskLlama online={online} vpsUp={vpsUp} />
+				<AskLlama online={online} vpsUp={vpsUp} />
 				</Suspense>
 			)}
 			
@@ -766,220 +767,9 @@ const Dashboard = memo(function Dashboard({
 
 					{/* Recording in progress indicator - Removed as requested */}
 
-									{/* Local meetings list - Always use list view, show pagination only when needed */}
-								{processedMeetings.length > 0 ? (
-					// List view for all meetings
-					<ul style={{ listStyle: 'none', padding: 0 }}>
-							<div style={{
-								backgroundColor: 'white',
-								borderRadius: '12px',
-								border: '1px solid #e2e8f0',
-								overflow: 'hidden',
-								boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-								overflowX: 'auto' // Make table horizontally scrollable on small screens
-							}}>
-							<table style={{
-								width: '100%',
-								borderCollapse: 'collapse',
-								fontSize: '14px',
-								minWidth: '600px' // Ensure table doesn't get too cramped
-							}}>
-								<thead>
-									<tr style={{
-										backgroundColor: '#f8fafc',
-										borderBottom: '2px solid #e2e8f0'
-									}}>
-										<th style={{
-											padding: '16px',
-											textAlign: 'left',
-											fontWeight: '600',
-											color: '#374151',
-											fontSize: '15px',
-											width: '40%'
-										}}>
-											📝 Meeting
-										</th>
-										<th style={{
-											padding: '16px',
-											textAlign: 'left',
-											fontWeight: '600',
-											color: '#374151',
-											fontSize: '15px',
-											width: '25%'
-										}}>
-											📅 Date & Duration
-										</th>
-										<th style={{
-											padding: '16px',
-											textAlign: 'left',
-											fontWeight: '600',
-											color: '#374151',
-											fontSize: '15px',
-											width: '20%'
-										}}>
-											📊 Status
-										</th>
-										<th style={{
-											padding: '16px',
-											textAlign: 'center',
-											fontWeight: '600',
-											color: '#374151',
-											fontSize: '15px',
-											width: '15%'
-										}}>
-											⚡ Actions
-										</th>
-									</tr>
-								</thead>
-								<tbody>
-									{processedMeetings.map(m => (
-										<tr key={m.id}
-											onClick={() => onOpen(m.id)}
-											onContextMenu={(e) => handleContextMenu(e, m.id, m.title)}
-											style={{
-												cursor: 'pointer',
-												transition: 'all 0.2s ease',
-												borderBottom: '1px solid #f1f5f9'
-											}}
-											onMouseEnter={(e) => {
-												e.currentTarget.style.backgroundColor = '#f8fafc'
-											}}
-											onMouseLeave={(e) => {
-												e.currentTarget.style.backgroundColor = 'transparent'
-											}}
-										>
-											<td style={{
-												padding: '16px',
-												verticalAlign: 'top'
-											}}>
-												<div style={{
-													fontWeight: '600',
-													fontSize: '16px',
-													marginBottom: '4px',
-													color: '#1e293b'
-												}}>
-													<InlineEditableTitle id={m.id} title={m.title || 'Untitled Meeting'} onSaved={refresh} />
-												</div>
-												{m.summary && (
-													<div style={{
-														fontSize: '13px',
-														color: '#64748b',
-														marginTop: '8px',
-														lineHeight: '1.4'
-													}}>
-														{m.summary.slice(0, 120)}...
-													</div>
-												)}
-											</td>
-											<td style={{
-												padding: '16px',
-												verticalAlign: 'top'
-											}}>
-												<div style={{
-													fontSize: '14px',
-													color: '#374151',
-													marginBottom: '4px'
-												}}>
-													{new Date(m.created_at || m.createdAt).toLocaleDateString()}
-												</div>
-												<div style={{
-													fontSize: '13px',
-													color: '#6b7280'
-												}}>
-													{new Date(m.created_at || m.createdAt).toLocaleTimeString()}
-												</div>
-												{m.duration && (
-													<div style={{
-														marginTop: '4px'
-													}}>
-														<span style={{
-															backgroundColor: '#f3f4f6',
-															padding: '2px 8px',
-															borderRadius: '12px',
-															fontSize: '12px',
-															fontWeight: '500',
-															color: '#374151'
-														}}>
-															⏱️ {Math.round(m.duration / 60)} min
-														</span>
-													</div>
-												)}
-											</td>
-											<td style={{
-												padding: '16px',
-												verticalAlign: 'top'
-											}}>
-												<EnhancedStatusDisplay 
-													meetingId={m.id}
-													status={m.status}
-													isProcessing={m.status === 'queued'}
-												/>
-											</td>
-											<td style={{
-												padding: '16px',
-												textAlign: 'center',
-												verticalAlign: 'top'
-											}}>
-												{m.status !== 'sent' && (
-													<button 
-														onClick={(e) => {
-															createRippleEffect(e)
-															e.stopPropagation()
-															retry(m.id)
-														}} 
-														disabled={!online || sendingMeetings.has(m.id) || m.status === 'queued'} 
-														style={{ 
-															padding: '6px 12px',
-															backgroundColor: (sendingMeetings.has(m.id) || m.status === 'queued') ? '#9ca3af' : '#10b981',
-															color: 'white',
-															border: 'none',
-															borderRadius: '6px',
-															cursor: (online && !sendingMeetings.has(m.id) && m.status !== 'queued') ? 'pointer' : 'not-allowed',
-															fontWeight: '500',
-															opacity: online ? 1 : 0.6,
-															transition: 'all 0.2s ease',
-															transform: 'scale(1)',
-															fontSize: '12px'
-														}}
-														onMouseDown={(e) => {
-															if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
-																e.currentTarget.style.transform = 'scale(0.95)'
-																e.currentTarget.style.backgroundColor = '#059669'
-															}
-														}}
-														onMouseUp={(e) => {
-															if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
-																e.currentTarget.style.transform = 'scale(1)'
-																e.currentTarget.style.backgroundColor = '#10b981'
-															}
-														}}
-														onMouseLeave={(e) => {
-															if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
-																e.currentTarget.style.transform = 'scale(1)'
-																e.currentTarget.style.backgroundColor = '#10b981'
-															}
-														}}
-													>
-														{(sendingMeetings.has(m.id) || m.status === 'queued') ? '⏳' : '📤'}
-													</button>
-												)}
-												{m.status === 'sent' && (
-													<span style={{
-														fontSize: '12px',
-														color: '#64748b'
-													}}>
-														✅ Synced
-													</span>
-												)}
-											</td>
-										</tr>
-									))}
-								</tbody>
-							</table>
-						</div>
-					</>
-					) : (
-						// List view for larger number of meetings
+									{/* Local meetings list - Clean list view for all meetings */}
+								{processedMeetings.length > 0 && (
+					// Clean list view for all meetings
 						<ul style={{ listStyle: 'none', padding: 0 }}>
 							{currentMeetings.map(m => (
 								<li key={m.id} 
@@ -1126,6 +916,8 @@ const Dashboard = memo(function Dashboard({
 							))}
 						</ul>
 					)}
+
+
 
 					{/* Pagination Controls - Only show for list view (when meetings > meetingsPerPage) */}
 					{!loading && meetings.length > 0 && processedMeetings.length > meetingsPerPage && (
@@ -1678,7 +1470,7 @@ const Dashboard = memo(function Dashboard({
 	)
 })
 
-function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string; onSaved: () => void }) {
+const InlineEditableTitle = memo(function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string; onSaved: () => void }) {
     const [editing, setEditing] = useState(false)
     const [value, setValue] = useState(title)
     const { showToast } = useToast()
@@ -1738,6 +1530,6 @@ function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string
             {title}
         </span>
     )
-}
+})
 
 export default Dashboard
