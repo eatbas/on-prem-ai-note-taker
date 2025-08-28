@@ -11,7 +11,7 @@ const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'
 import { Recorder } from './features/recording'
 
 // Import shared utilities
-import { useToast } from './components/common'
+import { useToast, ErrorBoundary } from './components/common'
 import { watchOnline } from './services'
 import { globalRecordingManager } from './stores/globalRecordingManager'
 import { useVpsHealth } from './stores/apiStateManager'
@@ -30,7 +30,14 @@ const isElectron = typeof navigator !== 'undefined' &&
                   navigator.userAgent.toLowerCase().includes('electron') &&
                   typeof window !== 'undefined' && 
                   !!(window as any).electronAPI
-const Router = isElectron ? HashRouter : BrowserRouter
+
+// Fix: Use a component instead of a variable to ensure proper React Router context
+function RouterWrapper({ children }: { children: React.ReactNode }) {
+  if (isElectron) {
+    return <HashRouter>{children}</HashRouter>
+  }
+  return <BrowserRouter>{children}</BrowserRouter>
+}
 
 export default function App() {
   // Global state
@@ -138,8 +145,9 @@ export default function App() {
         onRecordingCreated={handleRecordingCreated}
         onRecordingStopped={handleRecordingStopped}
       >
-        <Router>
-          <AppShell
+        <RouterWrapper>
+          <ErrorBoundary>
+            <AppShell
             text={text}
             setText={setText}
             tag={tag}
@@ -175,7 +183,8 @@ export default function App() {
               </Routes>
             </Suspense>
           </AppShell>
-        </Router>
+          </ErrorBoundary>
+        </RouterWrapper>
         
         {/* Global notification container */}
         <NotificationContainer />
