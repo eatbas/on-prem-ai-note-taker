@@ -14,6 +14,72 @@
         }
       }
       
+      @keyframes audioPulse {
+        0%, 100% {
+          opacity: 1;
+          transform: scale(1);
+        }
+        50% {
+          opacity: 0.8;
+          transform: scale(1.02);
+        }
+      }
+      
+      /* Recording banner animations */
+      .recording-banner-enter {
+        transform: translateY(-100%);
+        opacity: 0;
+      }
+      
+      .recording-banner-enter-active {
+        transform: translateY(0);
+        opacity: 1;
+        transition: all 0.3s ease;
+      }
+      
+      .recording-banner-exit {
+        transform: translateY(0);
+        opacity: 1;
+      }
+      
+      .recording-banner-exit-active {
+        transform: translateY(-100%);
+        opacity: 0;
+        transition: all 0.3s ease;
+      }
+      
+      /* Recording banner specific styles */
+      .recording-banner {
+        animation: recording-banner-enter 0.3s ease;
+        will-change: transform, opacity;
+        backface-visibility: hidden;
+        transform: translateZ(0);
+      }
+      
+      .recording-banner.recording-banner-exit {
+        animation: recording-banner-exit 0.3s ease;
+      }
+      
+      /* Prevent body scroll when recording banner appears */
+      body.recording-active {
+        padding-top: 80px;
+      }
+      
+      @media (max-width: 768px) {
+        body.recording-active {
+          padding-top: 70px;
+        }
+      }
+      
+      /* Ensure recording banner has proper layering */
+      .recording-banner {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        z-index: 1000 !important;
+      }
+      
       /* Global responsive styles */
       * {
         box-sizing: border-box;
@@ -28,6 +94,8 @@
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         overflow-x: hidden;
+        /* Ensure smooth transitions when recording banner appears */
+        transition: padding-top 0.3s ease;
       }
       
       /* Mobile-specific styles */
@@ -49,6 +117,12 @@
         /* Hide scrollbars on mobile if desired */
         ::-webkit-scrollbar {
           display: none;
+        }
+        
+        /* Adjust recording banner for mobile */
+        .recording-banner {
+          height: 70px !important;
+          padding: 8px 16px !important;
         }
       }
       

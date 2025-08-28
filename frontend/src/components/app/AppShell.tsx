@@ -99,10 +99,14 @@ export default function AppShell({
             {/* Responsive Header */}
       <header style={{
         marginBottom: isMobile ? '16px' : '32px',
+        marginTop: globalRecordingState.isRecording ? (isMobile ? '70px' : '80px') : '0',
         padding: isMobile ? '12px 16px' : '16px 24px',
         backgroundColor: '#ffffff',
         borderRadius: '12px',
-        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)'
+        boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+        transition: 'margin-top 0.3s ease',
+        position: 'relative',
+        zIndex: 999
       }}>
         {/* Desktop Header */}
         {!isMobile ? (
@@ -408,7 +412,7 @@ export default function AppShell({
 
       {/* Main Content */}
       <main style={{
-        paddingTop: globalRecordingState.isRecording ? '80px' : '0',
+        paddingTop: '0',
         transition: 'padding-top 0.3s ease'
       }}>
         {children}
