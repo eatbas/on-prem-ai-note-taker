@@ -15,6 +15,8 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
   const [meeting, setMeeting] = useState<any>(null)
   const [note, setNote] = useState<any>(null)
   const [sending, setSending] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [activeTab, setActiveTab] = useState<'summary' | 'transcript' | 'audio' | 'speakers'>('summary')
   const [isRemote, setIsRemote] = useState(false)
@@ -51,6 +53,9 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
 
   const loadMeeting = async () => {
     try {
+      setLoading(true)
+      setError(null)
+      
       const meetingData = await db.meetings.get(meetingId)
       if (meetingData) {
         setMeeting(meetingData)
@@ -61,10 +66,16 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
         if (noteData) {
           setNote(noteData)
         }
+      } else {
+        setError('Meeting not found')
+        showToast('Meeting not found', 'error')
       }
     } catch (error) {
       console.error('Failed to load meeting:', error)
+      setError(error instanceof Error ? error.message : 'Failed to load meeting')
       showToast('Failed to load meeting', 'error')
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -258,6 +269,65 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
       default:
         return null
     }
+  }
+
+  // 🚀 STAGE 3 OPTIMIZATION: Proper loading and error handling
+  if (loading) {
+    return (
+      <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#6b7280' }}>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid #e2e8f0',
+            borderTop: '3px solid #3b82f6',
+            borderRadius: '50%',
+            animation: 'spin 1s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ fontSize: '16px', fontWeight: '500' }}>Loading meeting...</p>
+        </div>
+        <style>
+          {`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}
+        </style>
+      </div>
+    )
+  }
+
+  if (error || !meeting) {
+    return (
+      <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ textAlign: 'center', color: '#dc2626', maxWidth: '400px', padding: '20px' }}>
+          <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
+          <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: '600' }}>Meeting Not Found</h2>
+          <p style={{ margin: '0 0 20px 0', color: '#6b7280' }}>
+            {error || 'The requested meeting could not be found.'}
+          </p>
+          {onBack && (
+            <button
+              onClick={onBack}
+              style={{
+                padding: '8px 16px',
+                backgroundColor: '#3b82f6',
+                color: 'white',
+                border: 'none',
+                borderRadius: '6px',
+                cursor: 'pointer',
+                fontSize: '14px',
+                fontWeight: '500'
+              }}
+            >
+              ← Back to Dashboard
+            </button>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (

@@ -316,17 +316,54 @@ async def transcribe_and_summarize(
             # Default to Turkish for auto/unknown languages
             lang_code = "tr"
 
-        # Summarize with language-specific prompt
-        prompt = get_single_summary_prompt(lang_code).format(transcript=transcript.text)
-        summary = _ollama_client.generate(
-            prompt,
-            options={
-                "temperature": 0.2,
-                "top_p": 0.8,
-                "top_k": 10,
-                "num_predict": 300,
-            },
-        )
+        # 🚀 STAGE 2-3 OPTIMIZATION: Use hierarchical JSON summarization for direct endpoint
+        from ..services.hierarchical_summary import HierarchicalSummarizationService
+        
+        try:
+            # Use the revolutionary hierarchical summarization
+            hierarchical_service = HierarchicalSummarizationService()
+            
+            # Create chunk from transcript (single chunk for direct processing)
+            chunks = [{
+                'text': transcript.text,
+                'start_time': 0,
+                'end_time': transcript.duration or 0,
+                'chunk_index': 0
+            }]
+            
+            # Generate hierarchical summary with JSON schema
+            summary_result = hierarchical_service.generate_meeting_summary(
+                chunks=chunks,
+                meeting_metadata={
+                    'meeting_id': meeting_id,
+                    'language': lang_code,
+                    'duration': transcript.duration or 0
+                }
+            )
+            
+            # Extract summary text (backward compatibility)
+            if hasattr(summary_result, 'summary') and summary_result.summary:
+                summary = summary_result.summary
+            elif hasattr(summary_result, 'executive_summary'):
+                summary = summary_result.executive_summary
+            else:
+                summary = str(summary_result)
+                
+            logger.info(f"✅ Hierarchical JSON summarization completed for direct endpoint: {meeting_id}")
+            
+        except Exception as e:
+            logger.warning(f"⚠️  Hierarchical summarization failed, falling back to legacy: {e}")
+            # Fallback to old method if new one fails
+            prompt = get_single_summary_prompt(lang_code).format(transcript=transcript.text)
+            summary = _ollama_client.generate(
+                prompt,
+                options={
+                    "temperature": 0.2,
+                    "top_p": 0.8,
+                    "top_k": 10,
+                    "num_predict": 300,
+                },
+            )
         
         # Save summary to database
         summary_obj = Summary(

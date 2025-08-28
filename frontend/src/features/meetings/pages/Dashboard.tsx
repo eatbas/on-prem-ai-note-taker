@@ -766,22 +766,10 @@ const Dashboard = memo(function Dashboard({
 
 					{/* Recording in progress indicator - Removed as requested */}
 
-					{/* Local meetings list - Table view for small counts, List view for larger counts */}
-					{processedMeetings.length <= meetingsPerPage ? (
-						// Table view for small number of meetings
-						<>
-							<div style={{
-								marginBottom: '12px',
-								padding: '8px 16px',
-								backgroundColor: '#f0f9ff',
-								border: '1px solid #0ea5e9',
-								borderRadius: '8px',
-								fontSize: '13px',
-								color: '#0c4a6e',
-								textAlign: 'center'
-							}}>
-								📊 Table View • {processedMeetings.length} meeting{processedMeetings.length !== 1 ? 's' : ''}
-							</div>
+									{/* Local meetings list - Always use list view, show pagination only when needed */}
+								{processedMeetings.length > 0 ? (
+					// List view for all meetings
+					<ul style={{ listStyle: 'none', padding: 0 }}>
 							<div style={{
 								backgroundColor: 'white',
 								borderRadius: '12px',
