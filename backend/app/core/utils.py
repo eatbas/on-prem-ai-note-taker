@@ -34,20 +34,52 @@ def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) ->
 def get_whisper_model() -> WhisperModel:
     """Get or create the Whisper model instance."""
     try:
+        # 🚀 STAGE 1 OPTIMIZATION: Ensure CPU-compatible settings for VPS
+        compute_type = settings.whisper_compute_type
+        device = settings.whisper_device
+        
+        # FAILSAFE: Force CPU-compatible settings if float16 fails
+        if device == "cpu" and compute_type not in ["int8", "float32"]:
+            logger.warning(f"Forcing compute_type from {compute_type} to 'int8' for CPU device")
+            compute_type = "int8"
+        
+        logger.info(f"Loading Whisper model: {settings.whisper_model_name} with device={device}, compute_type={compute_type}")
+        
         # Initialize Whisper model with VPS optimizations
         # Note: beam_size, word_timestamps, vad_filter are transcribe() parameters, not constructor parameters
         model = WhisperModel(
             settings.whisper_model_name,  # First positional argument is the model name
-            compute_type=settings.whisper_compute_type,
-            device=settings.whisper_device,
+            compute_type=compute_type,
+            device=device,
             cpu_threads=settings.whisper_cpu_threads,
             download_root=settings.whisper_download_root,
             local_files_only=False
         )
-        logger.info(f"Whisper model {settings.whisper_model_name} loaded successfully with device={settings.whisper_device}")
+        logger.info(f"✅ Whisper model {settings.whisper_model_name} loaded successfully with device={device}, compute_type={compute_type}")
         return model
     except Exception as e:
-        logger.error(f"Failed to load Whisper model: {e}")
+        # 🚀 FAILSAFE: Try alternative compute types for CPU compatibility
+        if "float16" in str(e) and device == "cpu":
+            logger.warning(f"Float16 failed, trying CPU-compatible alternatives: {e}")
+            
+            for fallback_compute_type in ["int8", "float32"]:
+                try:
+                    logger.info(f"🔄 Attempting fallback with compute_type={fallback_compute_type}")
+                    model = WhisperModel(
+                        settings.whisper_model_name,
+                        compute_type=fallback_compute_type,
+                        device="cpu",
+                        cpu_threads=settings.whisper_cpu_threads,
+                        download_root=settings.whisper_download_root,
+                        local_files_only=False
+                    )
+                    logger.info(f"✅ FALLBACK SUCCESS: Whisper model loaded with compute_type={fallback_compute_type}")
+                    return model
+                except Exception as fallback_error:
+                    logger.warning(f"❌ Fallback {fallback_compute_type} failed: {fallback_error}")
+                    continue
+        
+        logger.error(f"❌ CRITICAL: All Whisper model loading attempts failed: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to load Whisper model: {e}")
 
 
