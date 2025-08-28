@@ -6,8 +6,11 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
+		"build:analyze": "vite build --mode analyze && npm run analyze",
+		"analyze": "npx vite-bundle-analyzer dist",
 		"preview": "vite preview --port 5173",
-		"type-check": "tsc --noEmit"
+		"type-check": "tsc --noEmit",
+		"size-check": "npx bundlesize"
 	},
 	"dependencies": {
 		"clsx": "^2.1.1",
@@ -21,7 +24,26 @@
 		"@types/react": "18.3.3",
 		"@types/react-dom": "18.3.0",
 		"@vitejs/plugin-react": "4.3.1",
+		"bundlesize": "^0.18.1",
 		"typescript": "5.5.4",
-		"vite": "5.4.1"
-	}
+		"vite": "5.4.1",
+		"vite-bundle-analyzer": "^0.7.0"
+	},
+	"bundlesize": [
+		{
+			"path": "dist/assets/*.js",
+			"maxSize": "250kb",
+			"compression": "gzip"
+		},
+		{
+			"path": "dist/assets/vendor-*.js",
+			"maxSize": "200kb",
+			"compression": "gzip"
+		},
+		{
+			"path": "dist/assets/audio-*.js",
+			"maxSize": "150kb",
+			"compression": "gzip"
+		}
+	]
 }

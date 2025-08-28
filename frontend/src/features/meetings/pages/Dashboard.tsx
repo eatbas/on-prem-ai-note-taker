@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState, useCallback, memo } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, memo, Suspense, lazy } from 'react'
 import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../../../services'
-import AskLlama from '../../admin/pages/AskLlama'
 import { getComputerUsername } from '../../../utils/usernameDetector'
+
+// 🚀 STAGE 3 OPTIMIZATION: Lazy load AskLlama component (only loaded when "llama" tab is active)
+const AskLlama = lazy(() => import('../../admin/pages/AskLlama'))
 
 import { useToast } from '../../../components/common'
 import { createRippleEffect } from '../../../utils'
@@ -720,7 +722,30 @@ const Dashboard = memo(function Dashboard({
 
 			{/* Tab Content */}
 			{activeTab === 'llama' && (
-				<AskLlama online={online} vpsUp={vpsUp} />
+				<Suspense fallback={
+					<div style={{
+						display: 'flex',
+						justifyContent: 'center',
+						alignItems: 'center',
+						height: '200px',
+						color: '#64748b'
+					}}>
+						<div style={{ textAlign: 'center' }}>
+							<div style={{
+								width: '32px',
+								height: '32px',
+								border: '3px solid #e2e8f0',
+								borderTop: '3px solid #3b82f6',
+								borderRadius: '50%',
+								animation: 'spin 1s linear infinite',
+								margin: '0 auto 12px'
+							}} />
+							🤖 Loading AI Assistant...
+						</div>
+					</div>
+				}>
+					<AskLlama online={online} vpsUp={vpsUp} />
+				</Suspense>
 			)}
 			
 			{/* Job Queue moved to Admin Dashboard */}

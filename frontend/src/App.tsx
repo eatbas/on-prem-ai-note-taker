@@ -1,11 +1,14 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { BrowserRouter, HashRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 
-// Import from new feature structure
-import { Dashboard, MeetingView } from './features/meetings'
+// 🚀 STAGE 3 OPTIMIZATION: Lazy load major components for code splitting
+const Dashboard = lazy(() => import('./features/meetings/pages/Dashboard'))
+const MeetingView = lazy(() => import('./features/meetings/pages/MeetingView'))
+const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'))
+
+// Import Recorder directly (small component, frequently used)
 import { Recorder } from './features/recording'
-import { AdminDashboard } from './features/admin'
 
 // Import shared utilities
 import { useToast } from './components/common'
@@ -20,7 +23,7 @@ import { apiStateManager } from './stores/api'
 import { AppShell, RecordingProvider } from './components/app'
 import { NotificationProvider } from './contexts/NotificationContext'
 import { NotificationContainer } from './components/common'
-import { initializeBackgroundProcessor } from './services/backgroundProcessor'
+import { loadBackgroundProcessor, preloadCriticalServices } from './lib/serviceLoader'
 import './services/cleanupJobs' // Import cleanup utilities for emergency use
 
 const isElectron = typeof navigator !== 'undefined' && 
@@ -83,9 +86,21 @@ export default function App() {
     setTimeout(checkVpsHealth, 2000)
   }, [])
 
-  // Initialize background processor on app startup
+  // 🚀 STAGE 3 OPTIMIZATION: Initialize background processor with dynamic loading
   useEffect(() => {
-    initializeBackgroundProcessor()
+    const initializeServices = async () => {
+      try {
+        const { initializeBackgroundProcessor } = await loadBackgroundProcessor()
+        initializeBackgroundProcessor()
+        
+        // Preload other critical services during idle time
+        preloadCriticalServices()
+      } catch (error) {
+        console.error('Failed to initialize background processor:', error)
+      }
+    }
+    
+    initializeServices()
   }, [])
 
   // Subscribe to global recording state
@@ -136,26 +151,29 @@ export default function App() {
             setRefreshSignal={setRefreshSignal}
             vpsUp={vpsHealth.status === 'ok'}
           >
-            <Routes>
-              <Route path="/" element={
-                <DashboardRoute 
-                  text={text}
-                  setText={setText}
-                  tag={tag}
-                  setTag={setTag}
-                  online={online}
-                  vpsUp={vpsHealth.status === 'ok'}
-                  onTagsChange={setAvailableTags}
-                  refreshSignal={refreshSignal}
-                  isRecording={isRecording}
-                  recordingMeetingId={recordingMeetingId}
-                />
-              } />
-              
-              <Route path="/meeting/:meetingId" element={<MeetingRoute />} />
-              <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/recorder-test" element={<RecorderTestPage />} />
-            </Routes>
+            {/* 🚀 STAGE 3 OPTIMIZATION: Wrap routes with Suspense for lazy loading */}
+            <Suspense fallback={<LoadingSpinner />}>
+              <Routes>
+                <Route path="/" element={
+                  <DashboardRoute 
+                    text={text}
+                    setText={setText}
+                    tag={tag}
+                    setTag={setTag}
+                    online={online}
+                    vpsUp={vpsHealth.status === 'ok'}
+                    onTagsChange={setAvailableTags}
+                    refreshSignal={refreshSignal}
+                    isRecording={isRecording}
+                    recordingMeetingId={recordingMeetingId}
+                  />
+                } />
+                
+                <Route path="/meeting/:meetingId" element={<MeetingRoute />} />
+                <Route path="/admin" element={<AdminDashboard />} />
+                <Route path="/recorder-test" element={<RecorderTestPage />} />
+              </Routes>
+            </Suspense>
           </AppShell>
         </Router>
         
@@ -163,6 +181,46 @@ export default function App() {
         <NotificationContainer />
       </RecordingProvider>
     </NotificationProvider>
+  )
+}
+
+// 🚀 STAGE 3 OPTIMIZATION: Loading component for lazy loaded routes
+function LoadingSpinner() {
+  return (
+    <div style={{
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: '400px',
+      color: '#64748b',
+      fontSize: '16px',
+      fontWeight: '500'
+    }}>
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '16px'
+      }}>
+        <div style={{
+          width: '40px',
+          height: '40px',
+          border: '3px solid #e2e8f0',
+          borderTop: '3px solid #3b82f6',
+          borderRadius: '50%',
+          animation: 'spin 1s linear infinite'
+        }} />
+        <span>⚡ Loading optimized content...</span>
+      </div>
+      <style>
+        {`
+          @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+          }
+        `}
+      </style>
+    </div>
   )
 }
 

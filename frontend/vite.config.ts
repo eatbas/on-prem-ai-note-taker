@@ -41,13 +41,79 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: 'dist',
       assetsDir: 'assets',
+      // 🚀 STAGE 3 OPTIMIZATION: Enhanced build configuration
+      target: 'esnext',
+      minify: 'terser',
+      sourcemap: mode === 'development',
       rollupOptions: {
         output: {
           assetFileNames: 'assets/[name]-[hash][extname]',
           chunkFileNames: 'assets/[name]-[hash].js',
           entryFileNames: 'assets/[name]-[hash].js',
+          // 🚀 STAGE 3 OPTIMIZATION: Manual chunk splitting for optimal loading
+          manualChunks: {
+            // Vendor libraries - loaded once, cached across routes
+            'vendor-react': ['react', 'react-dom', 'react-router-dom'],
+            'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
+            
+            // Audio processing - separate chunk for audio-heavy features
+            'audio-processing': [
+              './src/lib/audioConfig.ts',
+              './src/lib/audioCompression.ts', 
+              './src/services/streamingUploader.ts',
+              './src/hooks/useAudioRecorder.ts'
+            ],
+            
+            // Admin features - loaded only when needed
+            'admin-features': [
+              './src/features/admin',
+              './src/components/queue'
+            ],
+            
+            // Meeting features - core functionality
+            'meeting-features': [
+              './src/features/meetings/pages/Dashboard.tsx',
+              './src/features/meetings/components',
+              './src/features/meetings/pages/MeetingView.tsx'
+            ],
+            
+            // Services and API - shared across components
+            'services-api': [
+              './src/services/api',
+              './src/services/backgroundProcessor.ts',
+              './src/stores'
+            ],
+            
+            // Utils and shared components
+            'shared-utils': [
+              './src/components/common',
+              './src/utils',
+              './src/lib/constants.ts',
+              './src/lib/types.ts',
+              './src/lib/utils.ts'
+            ]
+          }
+        },
+        // 🚀 STAGE 3 OPTIMIZATION: Tree shaking and external optimization
+        external: (id) => {
+          // Mark large external dependencies for potential CDN loading
+          return false // Keep all bundled for now, but this enables future CDN optimization
         }
-      }
+      },
+      // 🚀 STAGE 3 OPTIMIZATION: Terser options for better compression
+      terserOptions: {
+        compress: {
+          drop_console: mode === 'production', // Remove console.log in production
+          drop_debugger: mode === 'production',
+          pure_funcs: mode === 'production' ? ['console.log', 'console.info'] : []
+        },
+        mangle: {
+          safari10: true // Fix Safari 10+ compatibility
+        }
+      },
+      // 🚀 STAGE 3 OPTIMIZATION: Chunk size optimization
+      chunkSizeWarningLimit: 1000, // Warn for chunks > 1MB
+      assetsInlineLimit: 4096 // Inline assets < 4KB as base64
     }
   }
 })
