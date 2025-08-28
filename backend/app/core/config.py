@@ -102,6 +102,11 @@ class Settings:
 	enable_hierarchical_summarization: bool = os.getenv("ENABLE_HIERARCHICAL_SUMMARIZATION", "true").lower() == "true"
 	hierarchical_chunk_size: int = int(os.getenv("HIERARCHICAL_CHUNK_SIZE", "4000"))  # characters
 	hierarchical_max_chunks: int = int(os.getenv("HIERARCHICAL_MAX_CHUNKS", "20"))  # max chunks to process
+	
+	# Schema-first JSON Output (Stage 3) - 25-40% actionable content improvement
+	enable_schema_first_json: bool = os.getenv("ENABLE_SCHEMA_FIRST_JSON", "true").lower() == "true"
+	json_validation_strict: bool = os.getenv("JSON_VALIDATION_STRICT", "false").lower() == "true"
+	json_retry_attempts: int = int(os.getenv("JSON_RETRY_ATTEMPTS", "2"))  # retries for invalid JSON
 	enable_sse: bool = os.getenv("ENABLE_SSE", "true").lower() == "true"
 
 

@@ -1,6 +1,15 @@
 import { useRef, useState, useCallback } from 'react'
 import { addChunk } from '../services'
 import config from '../utils/envLoader'
+import { 
+  AUDIO_PROCESSING_CONFIG, 
+  getOptimizedRecordingOptions,
+  getOptimizedMicrophoneConstraints,
+  getOptimizedSystemAudioConstraints,
+  logAudioPerformanceMetrics
+} from '../lib/audioConfig'
+import { DualStreamingUploader } from '../services/streamingUploader'
+import { compressAudioChunk } from '../lib/audioCompression'
 
 export interface AudioRecorderState {
   isRecording: boolean
@@ -9,6 +18,8 @@ export interface AudioRecorderState {
   micRecorder: MediaRecorder | null
   speakerRecorder: MediaRecorder | null
   error: string | null
+  streamingUploader: DualStreamingUploader | null
+  uploadProgress: { mic: number, speaker: number, total: number }
 }
 
 export interface RecordingOptions {
@@ -24,7 +35,9 @@ export function useAudioRecorder() {
     speakerStream: null,
     micRecorder: null,
     speakerRecorder: null,
-    error: null
+    error: null,
+    streamingUploader: null,
+    uploadProgress: { mic: 0, speaker: 0, total: 0 }
   })
 
   const micChunkIndexRef = useRef(0)
@@ -47,19 +60,8 @@ export function useAudioRecorder() {
       speakerChunkIndexRef.current = 0
       currentMeetingIdRef.current = meetingId
 
-      // Get microphone stream with proper device constraints
-      const micConstraints: MediaStreamConstraints = {
-        audio: {
-          deviceId: options.micDeviceId 
-            ? { exact: options.micDeviceId } 
-            : undefined,
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-          sampleRate: 44100,
-          channelCount: 2
-        }
-      }
+      // 🚀 STAGE 1 OPTIMIZATION: Use optimized microphone constraints
+      const micConstraints = getOptimizedMicrophoneConstraints(options.micDeviceId)
 
       console.log('🎤 Using microphone constraints:', {
         deviceId: options.micDeviceId,
@@ -131,16 +133,15 @@ export function useAudioRecorder() {
           
           if (loopbackDevice) {
             console.log('🔊 Found loopback device:', loopbackDevice.label)
-            speakerStream = await navigator.mediaDevices.getUserMedia({
+            // 🚀 STAGE 1 OPTIMIZATION: Use optimized system audio constraints
+            const systemConstraints = getOptimizedSystemAudioConstraints()
+            const constraintsWithDevice = {
               audio: {
-                deviceId: { exact: loopbackDevice.deviceId },
-                echoCancellation: false,
-                noiseSuppression: false,
-                autoGainControl: false,
-                sampleRate: 44100,
-                channelCount: 2
+                ...(systemConstraints.audio as MediaTrackConstraints),
+                deviceId: { exact: loopbackDevice.deviceId }
               }
-            })
+            }
+            speakerStream = await navigator.mediaDevices.getUserMedia(constraintsWithDevice)
             console.log('✅ Loopback device system audio successful!')
           } else {
             console.log('📍 No loopback devices found. Available audio input devices:')
@@ -158,15 +159,11 @@ export function useAudioRecorder() {
         try {
           console.log('🔊 Fallback: Requesting system audio via screen capture...')
           
+          // 🚀 STAGE 1 OPTIMIZATION: Use optimized system audio constraints for screen capture
+          const systemConstraints = getOptimizedSystemAudioConstraints()
           const screenStream = await navigator.mediaDevices.getDisplayMedia({
             video: false, // Try audio-only first  
-            audio: {
-              echoCancellation: false,
-              noiseSuppression: false,
-              autoGainControl: false,
-              sampleRate: 44100,
-              channelCount: 2
-            } as any
+            audio: systemConstraints.audio as any
           })
           
           console.log('🖥️ Display media stream obtained, checking for audio tracks...')
@@ -211,34 +208,66 @@ export function useAudioRecorder() {
         console.warn('💡 System audio will not be recorded')
       }
 
-      // Recording options
-      const recordingOptions: MediaRecorderOptions = {
-        mimeType: 'audio/webm;codecs=opus',
-        bitsPerSecond: 128000
-      }
+      // 🚀 STAGE 1 OPTIMIZATION: Use optimized recording options
+      const recordingOptions = getOptimizedRecordingOptions()
+      
+      console.log('🎵 Using optimized recording options:', recordingOptions)
 
       // Create microphone recorder
       const micRecorder = new MediaRecorder(micStream, recordingOptions)
       micRecorder.ondataavailable = async (event) => {
-        console.log(`🎤 Mic data available: ${event.data?.size || 0} bytes`)
+        const chunkSize = event.data?.size || 0
+        console.log(`🎤 Mic data available: ${chunkSize} bytes`)
         
         if (event.data && event.data.size > 0 && currentMeetingIdRef.current) {
           try {
-            console.log(`💾 Saving mic chunk ${micChunkIndexRef.current} with meetingId: ${currentMeetingIdRef.current}`)
+            const chunkStartTime = Date.now()
+            console.log(`💾 Saving OPTIMIZED mic chunk ${micChunkIndexRef.current} with meetingId: ${currentMeetingIdRef.current}`)
+            
+            // 🚀 STAGE 1 OPTIMIZATION: Audio compression for bandwidth optimization
+            let chunkToStore = event.data
+            let chunkToStream = event.data
+            
+            if (AUDIO_PROCESSING_CONFIG.COMPRESSION.enableClientCompression) {
+              console.log(`🗜️ Compressing mic chunk ${micChunkIndexRef.current} for bandwidth optimization...`)
+              const compressionResult = await compressAudioChunk(event.data, 'microphone')
+              
+              if (compressionResult.compressionRatio > 1.1) { // Only use compression if it reduces size by at least 10%
+                chunkToStore = compressionResult.compressedBlob
+                chunkToStream = compressionResult.compressedBlob
+                console.log(`✅ Mic chunk ${micChunkIndexRef.current} compressed: ${compressionResult.originalSize} → ${compressionResult.compressedSize} bytes (${((compressionResult.compressionRatio - 1) * 100).toFixed(1)}% reduction)`)
+              } else {
+                console.log(`📊 Mic chunk ${micChunkIndexRef.current} compression not beneficial, using original`)
+              }
+            }
+            
+            // Local storage for reliability (existing behavior)
             await addChunk(
               currentMeetingIdRef.current, 
-              event.data, 
+              chunkToStore, 
               micChunkIndexRef.current, 
               'microphone'
             )
-            console.log(`✅ Mic chunk ${micChunkIndexRef.current} saved: ${event.data.size} bytes`)
+            
+            // 🚀 STAGE 1 OPTIMIZATION: Streaming upload for real-time processing
+            if (streamingUploader && AUDIO_PROCESSING_CONFIG.UPLOAD.enableStreaming) {
+              console.log(`📤 Streaming upload mic chunk ${micChunkIndexRef.current} for real-time processing...`)
+              await streamingUploader.addMicrophoneChunk(chunkToStream, micChunkIndexRef.current)
+            }
+            
+            const chunkSaveTime = Date.now() - chunkStartTime
+            console.log(`✅ OPTIMIZED mic chunk ${micChunkIndexRef.current} saved + streamed: ${chunkSize} bytes in ${chunkSaveTime}ms`)
+            
+            // 🚀 STAGE 1: Performance monitoring for optimized chunks
+            logAudioPerformanceMetrics('chunk_save_mic', chunkSaveTime, chunkSize)
+            
             micChunkIndexRef.current++
           } catch (error) {
             console.error('❌ Failed to save mic chunk:', error)
             setError(`Failed to save audio: ${error}`)
           }
         } else {
-          console.warn(`⚠️ Empty mic data: ${event.data?.size || 0} bytes, meetingId: ${currentMeetingIdRef.current}`)
+          console.warn(`⚠️ Empty mic data: ${chunkSize} bytes, meetingId: ${currentMeetingIdRef.current}`)
         }
       }
 
@@ -247,53 +276,111 @@ export function useAudioRecorder() {
       if (speakerStream) {
         speakerRecorder = new MediaRecorder(speakerStream, recordingOptions)
         speakerRecorder.ondataavailable = async (event) => {
-          console.log(`🔊 Speaker data available: ${event.data?.size || 0} bytes`)
+          const chunkSize = event.data?.size || 0
+          console.log(`🔊 Speaker data available: ${chunkSize} bytes`)
           
           if (event.data && event.data.size > 0 && currentMeetingIdRef.current) {
             try {
-              console.log(`💾 Saving speaker chunk ${speakerChunkIndexRef.current} with meetingId: ${currentMeetingIdRef.current}`)
+              const chunkStartTime = Date.now()
+              console.log(`💾 Saving OPTIMIZED speaker chunk ${speakerChunkIndexRef.current} with meetingId: ${currentMeetingIdRef.current}`)
+              
+              // 🚀 STAGE 1 OPTIMIZATION: Audio compression for bandwidth optimization
+              let chunkToStore = event.data
+              let chunkToStream = event.data
+              
+              if (AUDIO_PROCESSING_CONFIG.COMPRESSION.enableClientCompression) {
+                console.log(`🗜️ Compressing speaker chunk ${speakerChunkIndexRef.current} for bandwidth optimization...`)
+                const compressionResult = await compressAudioChunk(event.data, 'speaker')
+                
+                if (compressionResult.compressionRatio > 1.1) { // Only use compression if it reduces size by at least 10%
+                  chunkToStore = compressionResult.compressedBlob
+                  chunkToStream = compressionResult.compressedBlob
+                  console.log(`✅ Speaker chunk ${speakerChunkIndexRef.current} compressed: ${compressionResult.originalSize} → ${compressionResult.compressedSize} bytes (${((compressionResult.compressionRatio - 1) * 100).toFixed(1)}% reduction)`)
+                } else {
+                  console.log(`📊 Speaker chunk ${speakerChunkIndexRef.current} compression not beneficial, using original`)
+                }
+              }
+              
+              // Local storage for reliability (existing behavior)
               await addChunk(
                 currentMeetingIdRef.current, 
-                event.data, 
+                chunkToStore, 
                 speakerChunkIndexRef.current, 
                 'speaker'
               )
-              console.log(`✅ Speaker chunk ${speakerChunkIndexRef.current} saved: ${event.data.size} bytes`)
+              
+              // 🚀 STAGE 1 OPTIMIZATION: Streaming upload for real-time processing
+              if (streamingUploader && AUDIO_PROCESSING_CONFIG.UPLOAD.enableStreaming) {
+                console.log(`📤 Streaming upload speaker chunk ${speakerChunkIndexRef.current} for real-time processing...`)
+                await streamingUploader.addSpeakerChunk(chunkToStream, speakerChunkIndexRef.current)
+              }
+              
+              const chunkSaveTime = Date.now() - chunkStartTime
+              console.log(`✅ OPTIMIZED speaker chunk ${speakerChunkIndexRef.current} saved + streamed: ${chunkSize} bytes in ${chunkSaveTime}ms`)
+              
+              // 🚀 STAGE 1: Performance monitoring for optimized chunks
+              logAudioPerformanceMetrics('chunk_save_speaker', chunkSaveTime, chunkSize)
+              
               speakerChunkIndexRef.current++
             } catch (error) {
               console.error('❌ Failed to save speaker chunk:', error)
               // Don't fail recording for speaker issues
             }
           } else {
-            console.warn(`⚠️ Empty speaker data: ${event.data?.size || 0} bytes, meetingId: ${currentMeetingIdRef.current}`)
+            console.warn(`⚠️ Empty speaker data: ${chunkSize} bytes, meetingId: ${currentMeetingIdRef.current}`)
           }
         }
       }
 
-      // Use short chunks like AudioTest for reliability
-      const chunkMs = 1000  // 1 second chunks like AudioTest
+      // 🚀 STAGE 1 OPTIMIZATION: Intelligent chunking strategy (45-second chunks)
+      const chunkMs = AUDIO_PROCESSING_CONFIG.OPTIMAL_CHUNK_DURATION
+      const forceDataMs = AUDIO_PROCESSING_CONFIG.FORCE_DATA_INTERVAL
 
-      // Start recording with short intervals for reliable data capture
-      console.log(`🎙️ Starting recording with ${chunkMs}ms chunks`)
+      // Start recording with backend-aligned chunks for optimal processing
+      console.log(`🚀 Starting OPTIMIZED recording with ${chunkMs}ms chunks (${chunkMs/1000}s per chunk)`)
+      console.log(`🎯 This aligns with backend CHUNK_DURATION_SECONDS for optimal AI processing`)
+      
+      // Start performance monitoring
+      const recordingStartTime = Date.now()
+      logAudioPerformanceMetrics('recording_start', 0)
+
+      // 🚀 STAGE 1 OPTIMIZATION: Initialize streaming uploader for real-time upload
+      let streamingUploader: DualStreamingUploader | null = null
+      if (AUDIO_PROCESSING_CONFIG.UPLOAD.enableStreaming) {
+        console.log('🔄 Initializing streaming uploader for real-time processing...')
+        streamingUploader = new DualStreamingUploader(
+          meetingId,
+          (micProgress, speakerProgress, totalProgress) => {
+            // Update upload progress in real-time
+            setState(prev => ({
+              ...prev,
+              uploadProgress: { mic: micProgress, speaker: speakerProgress, total: totalProgress }
+            }))
+          }
+        )
+        console.log('✅ Streaming uploader initialized')
+      }
+      
       micRecorder.start(chunkMs)
       if (speakerRecorder) {
         speakerRecorder.start(chunkMs)
       }
       
-      // Force data capture every 5 seconds as backup (like AudioTest frequency)
+      // Force data capture as backup (less frequent due to larger chunks)
       const forceDataInterval = setInterval(() => {
         if (micRecorder.state === 'recording') {
-          console.log('🔄 Forcing mic data capture...')
+          console.log(`🔄 Forcing mic data capture (${forceDataMs/1000}s interval)...`)
           micRecorder.requestData()
         }
         if (speakerRecorder && speakerRecorder.state === 'recording') {
-          console.log('🔄 Forcing speaker data capture...')
+          console.log(`🔄 Forcing speaker data capture (${forceDataMs/1000}s interval)...`)
           speakerRecorder.requestData()
         }
-      }, 5000)
+      }, forceDataMs)
       
-      // Store interval for cleanup
+      // Store interval for cleanup and recording start time for performance tracking
       ;(micRecorder as any)._forceDataInterval = forceDataInterval
+      ;(micRecorder as any)._recordingStartTime = recordingStartTime
 
       // Update state
       setState({
@@ -302,7 +389,9 @@ export function useAudioRecorder() {
         speakerStream,
         micRecorder,
         speakerRecorder,
-        error: null
+        error: null,
+        streamingUploader,
+        uploadProgress: { mic: 0, speaker: 0, total: 0 }
       })
 
       console.log('🎙️ Dual recording started successfully')
@@ -408,6 +497,13 @@ export function useAudioRecorder() {
         console.log('✅ All recorders stopped')
       }
 
+      // 🚀 STAGE 1 OPTIMIZATION: Stop streaming uploader
+      if (currentState.streamingUploader) {
+        console.log('🛑 Stopping streaming uploader...')
+        await currentState.streamingUploader.stop()
+        console.log('✅ Streaming uploader stopped')
+      }
+
       // Now safely stop all media streams
       console.log('🔌 Stopping media streams...')
       
@@ -441,7 +537,9 @@ export function useAudioRecorder() {
         speakerStream: null,
         micRecorder: null,
         speakerRecorder: null,
-        error: null
+        error: null,
+        streamingUploader: null,
+        uploadProgress: { mic: 0, speaker: 0, total: 0 }
       })
 
       // Clear meeting reference
@@ -465,7 +563,13 @@ export function useAudioRecorder() {
         console.log('🔍 Final microphone status check completed')
       }, 500)
 
-      console.log('✅ Dual recording stopped successfully - microphone should be released')
+      // 🚀 STAGE 1: Log recording completion performance
+      const totalRecordingTime = Date.now() - (state.micRecorder as any)._recordingStartTime
+      const totalChunks = micChunkIndexRef.current + speakerChunkIndexRef.current
+      logAudioPerformanceMetrics('recording_complete', totalRecordingTime, totalChunks)
+      
+      console.log('✅ OPTIMIZED dual recording stopped successfully - microphone should be released')
+      console.log(`📊 Recording stats: ${totalRecordingTime}ms duration, ${totalChunks} total chunks saved`)
     } catch (error) {
       console.error('❌ Error stopping recording:', error)
       setError('Failed to stop recording properly')
@@ -478,7 +582,9 @@ export function useAudioRecorder() {
           speakerStream: null,
           micRecorder: null,
           speakerRecorder: null,
-          error: null
+          error: null,
+          streamingUploader: null,
+          uploadProgress: { mic: 0, speaker: 0, total: 0 }
         })
         currentMeetingIdRef.current = null
       } catch (e) {
