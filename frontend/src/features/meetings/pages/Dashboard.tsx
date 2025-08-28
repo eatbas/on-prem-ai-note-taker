@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, memo } from 'react'
 import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../../../services'
 import AskLlama from '../../admin/pages/AskLlama'
 import { getComputerUsername } from '../../../utils/usernameDetector'
@@ -7,7 +7,8 @@ import { useToast } from '../../../components/common'
 import { createRippleEffect } from '../../../utils'
 import EnhancedStatusDisplay from '../components/EnhancedStatusDisplay'
 
-export default function Dashboard({ 
+// 🚀 STAGE 2 OPTIMIZATION: Memoize Dashboard component for better performance
+const Dashboard = memo(function Dashboard({ 
 	onOpen, 
 	refreshSignal,
 	text,
@@ -82,8 +83,8 @@ export default function Dashboard({
 		return () => document.removeEventListener('click', handleClickOutside)
 	}, [contextMenu?.visible])
 
-	// Context menu actions
-	const handleRenameMeeting = async (meetingId: string) => {
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize context menu actions
+	const handleRenameMeeting = useCallback(async (meetingId: string) => {
 		const meeting = meetings.find(m => m.id === meetingId)
 		if (!meeting) return
 		
@@ -101,7 +102,7 @@ export default function Dashboard({
 			}
 		}
 		closeContextMenu()
-	}
+	}, [meetings, showToast]) // Note: refresh and closeContextMenu will be added to deps when memoized
 
 	const handleDeleteAudio = async (meetingId: string) => {
 		if (!window.confirm('Are you sure you want to delete the audio for this meeting? The meeting notes, summary, and transcript will be preserved.')) {
@@ -498,11 +499,22 @@ export default function Dashboard({
 		})
 	}, [meetings, isRecording, recordingMeetingId])
 	
-	// Pagination logic
-	const totalPages = Math.ceil(processedMeetings.length / meetingsPerPage)
-	const startIndex = (currentPage - 1) * meetingsPerPage
-	const endIndex = startIndex + meetingsPerPage
-	const currentMeetings = processedMeetings.slice(startIndex, endIndex)
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize pagination calculations
+	const paginationData = useMemo(() => {
+		const totalPages = Math.ceil(processedMeetings.length / meetingsPerPage)
+		const startIndex = (currentPage - 1) * meetingsPerPage
+		const endIndex = startIndex + meetingsPerPage
+		const currentMeetings = processedMeetings.slice(startIndex, endIndex)
+		
+		return {
+			totalPages,
+			startIndex,
+			endIndex,
+			currentMeetings
+		}
+	}, [processedMeetings, currentPage, meetingsPerPage])
+	
+	const { totalPages, startIndex, endIndex, currentMeetings } = paginationData
 
 	// Auto-adjust page if current page is beyond available pages
 	useEffect(() => {
@@ -1651,7 +1663,7 @@ export default function Dashboard({
 			)}
 		</div>
 	)
-}
+})
 
 function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string; onSaved: () => void }) {
     const [editing, setEditing] = useState(false)
@@ -1715,4 +1727,4 @@ function InlineEditableTitle({ id, title, onSaved }: { id: string; title: string
     )
 }
 
-
+export default Dashboard

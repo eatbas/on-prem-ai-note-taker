@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo, memo } from 'react'
 import { getJobStatus, cancelJob } from '../../services'
 import { jobQueueManager, type JobHistoryItem } from '../../stores/jobQueueManager'
 import { isJobActive } from './JobQueueUtils'
@@ -14,7 +14,8 @@ interface JobQueueProps {
 	vpsUp: boolean | null
 }
 
-export default function JobQueue({ online, vpsUp }: JobQueueProps) {
+// 🚀 STAGE 2 OPTIMIZATION: Memoize JobQueue component for performance
+const JobQueue = memo(function JobQueue({ online, vpsUp }: JobQueueProps) {
 	const [jobHistory, setJobHistory] = useState<JobHistoryItem[]>([])
 	const [loading, setLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
@@ -28,25 +29,24 @@ export default function JobQueue({ online, vpsUp }: JobQueueProps) {
 		return unsubscribe
 	}, [])
 
-	// Auto-refresh active jobs every 20 seconds (reduced from 5 seconds)
-	useEffect(() => {
-		if (!online || !vpsUp) return
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize expensive calculations first
+	const hasActiveJobs = useMemo(() => {
+		return jobHistory.some(job => isJobActive(job.status))
+	}, [jobHistory])
 
-		const hasActiveJobs = jobHistory.some(job => isJobActive(job.status))
-		if (!hasActiveJobs) return // Don't poll if no active jobs
+	const connectionStatus = useMemo(() => ({
+		online,
+		vpsUp,
+		connected: online && !!vpsUp
+	}), [online, vpsUp])
 
-		const interval = setInterval(() => {
-			refreshActiveJobs()
-		}, 20000)
-
-		return () => clearInterval(interval)
-	}, [online, vpsUp, jobHistory])
-
-	const updateJobInHistory = (jobId: string, updates: Partial<JobHistoryItem>) => {
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize job update function
+	const updateJobInHistory = useCallback((jobId: string, updates: Partial<JobHistoryItem>) => {
 		jobQueueManager.updateJob(jobId, updates)
-	}
+	}, [])
 
-	const refreshActiveJobs = async () => {
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize job refresh logic
+	const refreshActiveJobs = useCallback(async () => {
 		if (!online || !vpsUp) return
 
 		const activeJobs = jobHistory.filter(job => isJobActive(job.status))
@@ -59,7 +59,7 @@ export default function JobQueue({ online, vpsUp }: JobQueueProps) {
 					progress: status.progress,
 					message: status.message,
 					eta: status.eta_seconds,
-					canGoBack: (status.phase || status.status) === 'done' || (status.phase || status.status) === 'error' || status.status === 'completed' || status.status === 'failed' || status.status === 'canceled'
+					canGoBack: ['done', 'error', 'completed', 'failed', 'canceled'].includes(status.phase || status.status)
 				})
 			} catch (err) {
 				console.error(`Failed to refresh job ${job.id}:`, err)
@@ -70,9 +70,10 @@ export default function JobQueue({ online, vpsUp }: JobQueueProps) {
 				})
 			}
 		}
-	}
+	}, [online, vpsUp, jobHistory, updateJobInHistory])
 
-	const handleCancelJob = async (jobId: string) => {
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize cancel job handler
+	const handleCancelJob = useCallback(async (jobId: string) => {
 		if (!online || !vpsUp) return
 
 		try {
@@ -88,15 +89,29 @@ export default function JobQueue({ online, vpsUp }: JobQueueProps) {
 		} finally {
 			setLoading(false)
 		}
-	}
+	}, [online, vpsUp, updateJobInHistory])
 
-	const handleGoBackToJob = (job: JobHistoryItem) => {
+	// 🚀 STAGE 2 OPTIMIZATION: Memoize additional handlers
+	const handleGoBackToJob = useCallback((job: JobHistoryItem) => {
 		setSelectedJob(job)
-	}
+	}, [])
 
-	const clearHistory = () => {
+	const clearHistory = useCallback(() => {
 		jobQueueManager.clearHistory()
-	}
+	}, [])
+
+	// Auto-refresh active jobs every 20 seconds (reduced from 5 seconds)
+	useEffect(() => {
+		if (!online || !vpsUp) return
+
+		if (!hasActiveJobs) return // Don't poll if no active jobs
+
+		const interval = setInterval(() => {
+			refreshActiveJobs()
+		}, 20000)
+
+		return () => clearInterval(interval)
+	}, [online, vpsUp, hasActiveJobs, refreshActiveJobs])
 
 	return (
 		<div style={{ padding: '24px 0' }}>
@@ -167,4 +182,6 @@ export default function JobQueue({ online, vpsUp }: JobQueueProps) {
 			/>
 		</div>
 	)
-}
+})
+
+export default JobQueue

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback, useMemo, memo } from 'react'
 import { useNotification } from '../../contexts/NotificationContext'
 
 interface RecordingControlsProps {
@@ -13,7 +13,8 @@ interface RecordingControlsProps {
   speakerStream?: MediaStream | null
 }
 
-export default function RecordingControls({
+// 🚀 STAGE 2 OPTIMIZATION: Memoize component to prevent unnecessary re-renders
+const RecordingControls = memo(function RecordingControls({
   isRecording,
   recordingTime,
   onStart,
@@ -55,24 +56,68 @@ export default function RecordingControls({
     }
   }, [isRecording])
 
-  const formatTime = (seconds: number): string => {
+  // 🚀 STAGE 2 OPTIMIZATION: Memoize time formatting to prevent unnecessary recalculations
+  const formatTime = useCallback((seconds: number): string => {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
-  }
+  }, [])
 
-  // Setup audio monitoring when streams change
-  useEffect(() => {
-    if (isRecording && (micStream || speakerStream)) {
-      setupAudioMonitoring()
-    } else {
-      cleanup()
+  // 🚀 STAGE 2 OPTIMIZATION: Memoize cleanup function to prevent unnecessary recreations
+  const cleanup = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current)
+      animationFrameRef.current = null
     }
 
-    return cleanup
-  }, [isRecording, micStream, speakerStream])
+    if (audioContextRef.current) {
+      try {
+        audioContextRef.current.close()
+      } catch (error) {
+        console.warn('Error closing audio context:', error)
+      }
+      audioContextRef.current = null
+    }
 
-  const setupAudioMonitoring = () => {
+    micAnalyserRef.current = null
+    speakerAnalyserRef.current = null
+    setMicLevel(0)
+    setSpeakerLevel(0)
+  }, []) // No dependencies - cleanup logic is stable
+
+  // 🚀 STAGE 2 OPTIMIZATION: Memoize high-frequency audio level updates
+  const updateAudioLevels = useCallback(() => {
+    // Update microphone level
+    if (micAnalyserRef.current) {
+      const micData = new Uint8Array(micAnalyserRef.current.frequencyBinCount)
+      micAnalyserRef.current.getByteFrequencyData(micData)
+      
+      const micSum = micData.reduce((sum, value) => sum + value * value, 0)
+      const micRms = Math.sqrt(micSum / micData.length)
+      // Increase sensitivity and add minimum visible level
+      const normalizedLevel = (micRms / 255) * 3 // Increase sensitivity by 3x
+      setMicLevel(Math.max(normalizedLevel, 0.05)) // Minimum 5% visible level
+    }
+
+    // Update speaker level
+    if (speakerAnalyserRef.current) {
+      const speakerData = new Uint8Array(speakerAnalyserRef.current.frequencyBinCount)
+      speakerAnalyserRef.current.getByteFrequencyData(speakerData)
+      
+      const speakerSum = speakerData.reduce((sum, value) => sum + value * value, 0)
+      const speakerRms = Math.sqrt(speakerSum / speakerData.length)
+      // Increase sensitivity and add minimum visible level
+      const normalizedLevel = (speakerRms / 255) * 3 // Increase sensitivity by 3x
+      setSpeakerLevel(Math.max(normalizedLevel, 0.05)) // Minimum 5% visible level
+    }
+
+    if (isRecording) {
+      animationFrameRef.current = requestAnimationFrame(updateAudioLevels)
+    }
+  }, [isRecording]) // Only recreate if recording state changes
+
+  // 🚀 STAGE 2 OPTIMIZATION: Memoize audio monitoring setup to prevent unnecessary recreations
+  const setupAudioMonitoring = useCallback(() => {
     cleanup() // Clean up any existing monitoring
 
     try {
@@ -105,58 +150,30 @@ export default function RecordingControls({
     } catch (error) {
       console.warn('Audio monitoring setup failed:', error)
     }
-  }
+  }, [micStream, speakerStream, updateAudioLevels, cleanup]) // Dependencies: recreate only when streams or updateAudioLevels change
 
-  const updateAudioLevels = () => {
-    // Update microphone level
-    if (micAnalyserRef.current) {
-      const micData = new Uint8Array(micAnalyserRef.current.frequencyBinCount)
-      micAnalyserRef.current.getByteFrequencyData(micData)
-      
-      const micSum = micData.reduce((sum, value) => sum + value * value, 0)
-      const micRms = Math.sqrt(micSum / micData.length)
-      // Increase sensitivity and add minimum visible level
-      const normalizedLevel = (micRms / 255) * 3 // Increase sensitivity by 3x
-      setMicLevel(Math.max(normalizedLevel, 0.05)) // Minimum 5% visible level
+  // Setup audio monitoring when streams change
+  useEffect(() => {
+    if (isRecording && (micStream || speakerStream)) {
+      setupAudioMonitoring()
+    } else {
+      cleanup()
     }
 
-    // Update speaker level
-    if (speakerAnalyserRef.current) {
-      const speakerData = new Uint8Array(speakerAnalyserRef.current.frequencyBinCount)
-      speakerAnalyserRef.current.getByteFrequencyData(speakerData)
-      
-      const speakerSum = speakerData.reduce((sum, value) => sum + value * value, 0)
-      const speakerRms = Math.sqrt(speakerSum / speakerData.length)
-      // Increase sensitivity and add minimum visible level
-      const normalizedLevel = (speakerRms / 255) * 3 // Increase sensitivity by 3x
-      setSpeakerLevel(Math.max(normalizedLevel, 0.05)) // Minimum 5% visible level
-    }
+    return cleanup
+  }, [isRecording, micStream, speakerStream, setupAudioMonitoring, cleanup])
 
-    if (isRecording) {
-      animationFrameRef.current = requestAnimationFrame(updateAudioLevels)
-    }
-  }
-
-  const cleanup = () => {
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current)
-      animationFrameRef.current = null
-    }
-
-    if (audioContextRef.current) {
-      try {
-        audioContextRef.current.close()
-      } catch (error) {
-        console.warn('Error closing audio context:', error)
-      }
-      audioContextRef.current = null
-    }
-
-    micAnalyserRef.current = null
-    speakerAnalyserRef.current = null
-    setMicLevel(0)
-    setSpeakerLevel(0)
-  }
+  // 🚀 STAGE 2 OPTIMIZATION: Memoize expensive display calculations
+  const formattedTime = useMemo(() => formatTime(recordingTime), [formatTime, recordingTime])
+  
+  const micLevelPercentage = useMemo(() => Math.round(micLevel * 100), [micLevel])
+  const speakerLevelPercentage = useMemo(() => Math.round(speakerLevel * 100), [speakerLevel])
+  
+  const streamStatusInfo = useMemo(() => ({
+    micConnected: !!micStream,
+    speakerConnected: !!speakerStream,
+    bothConnected: !!micStream && !!speakerStream
+  }), [micStream, speakerStream])
 
   return (
     <>
@@ -220,7 +237,7 @@ export default function RecordingControls({
             border: '1px solid rgba(0, 0, 0, 0.1)',
             boxShadow: '0 2px 4px rgba(0, 0, 0, 0.1)'
           }}>
-            {formatTime(recordingTime)}
+            {formattedTime}
           </div>
 
                       {/* Audio Levels */}
@@ -263,7 +280,7 @@ export default function RecordingControls({
                     <div
                       style={{
                         height: '100%',
-                        width: `${Math.max(micLevel * 100, 8)}%`,
+                        width: `${Math.max(micLevelPercentage, 8)}%`,
                         background: micLevel > 0.7 ? 
                           'linear-gradient(90deg, #22c55e 0%, #f59e0b 70%, #ef4444 100%)' :
                           micLevel > 0.3 ? 
@@ -309,7 +326,7 @@ export default function RecordingControls({
                     <div
                       style={{
                         height: '100%',
-                        width: `${Math.max(speakerLevel * 100, 8)}%`,
+                        width: `${Math.max(speakerLevelPercentage, 8)}%`,
                         background: speakerLevel > 0.7 ? 
                           'linear-gradient(90deg, #22c55e 0%, #f59e0b 70%, #ef4444 100%)' :
                           speakerLevel > 0.3 ? 
@@ -405,7 +422,9 @@ export default function RecordingControls({
 
     </>
   )
-}
+})
+
+export default RecordingControls
 
 // CSS for pulse animation (should be added to global styles)
 export const recordingControlsStyles = `
