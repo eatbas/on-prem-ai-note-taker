@@ -1,4 +1,4 @@
-# 🎤 dgMeets
+# 🎤 On-Prem AI Note Taker
 
 > **Professional AI-powered meeting transcription and summarization platform**
 > 
@@ -8,102 +8,97 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
 [![Status](https://img.shields.io/badge/Status-Production%20Ready-brightgreen?style=for-the-badge)](#)
 
-[![Electron](https://img.shields.io/badge/Electron-Desktop%20App-47848F?logo=electron)](https://www.electronjs.org/)
-[![React](https://img.shields.io/badge/React-Frontend-61DAFB?logo=react)](https://reactjs.org/)
-[![FastAPI](https://img.shields.io/badge/FastAPI-Backend-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
-[![Whisper](https://img.shields.io/badge/Whisper-AI%20Transcription-FF6B6B)](https://github.com/openai/whisper)
+[![Electron](https://img.shields.io/badge/Electron%2030.0.9-Desktop%20App-47848F?logo=electron)](https://www.electronjs.org/)
+[![React](https://img.shields.io/badge/React%2018.3.1-Frontend-61DAFB?logo=react)](https://reactjs.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript%205.5.4-Language-3178C6?logo=typescript)](https://www.typescriptlang.org/)
+[![Vite](https://img.shields.io/badge/Vite%205.4.1-Build%20Tool-646CFF?logo=vite)](https://vitejs.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI%200.112.2-Backend-009688?logo=fastapi)](https://fastapi.tiangolo.com/)
+[![Faster Whisper](https://img.shields.io/badge/Faster%20Whisper%201.0.3-AI%20Transcription-FF6B6B)](https://github.com/guillaumekln/faster-whisper)
+[![PyAnnote](https://img.shields.io/badge/PyAnnote%20Audio%203.1.1-Speaker%20Diarization-orange)](https://github.com/pyannote/pyannote-audio)
 [![Ollama](https://img.shields.io/badge/Ollama-AI%20Summarization-764ba2)](https://ollama.com/)
+[![Redis](https://img.shields.io/badge/Redis%204.6.0-Queue%20System-DC382D?logo=redis)](https://redis.io/)
+[![Dexie](https://img.shields.io/badge/Dexie%204.0.8-Local%20Database-blue)](https://dexie.org/)
 
 ---
 
-## 🎯 What Makes dgMeets Special
+## 🎯 What Makes On-Prem AI Note Taker Special
 
-dgMeets is a production-ready, enterprise-grade meeting transcription platform that combines cutting-edge AI with professional usability:
+On-Prem AI Note Taker is a production-ready, enterprise-grade meeting transcription platform that combines cutting-edge AI with professional usability:
 
 ### ✨ **Advanced AI Features**
 - 🎯 **Dual Recording System** - Separate microphone and system audio for 95% speaker accuracy
-- 🤖 **Maximum Quality Whisper** - Large-v3 model with 16kHz optimization for ~92% word accuracy
-- 👥 **Enhanced Speaker Identification** - Up to 6 speakers with intelligent diarization
-- 📝 **AI-Powered Summaries** - Instant key points with Qwen2.5 3B model
-- ⚡ **Real-time Processing** - Live transcription with progress tracking
+- 🤖 **Faster-Whisper Integration** - Large-v3 model with CPU optimization for ~92% word accuracy
+- 👥 **PyAnnote Speaker Diarization** - Professional-grade speaker identification with up to 6 speakers
+- 📝 **AI-Powered Summaries** - Instant key points with Qwen2.5 3B model via Ollama
+- ⚡ **Real-time Processing** - Live transcription with WebSocket progress tracking
+- 🎤 **Advanced Audio Processing** - Smart username detection and floating recorder interface
 
 ### 🖥️ **Professional Desktop Experience**
-- 🎙️ **Floating Recorder** - Always-on-top mini recorder for seamless workflow
-- 📊 **Comprehensive Dashboard** - Advanced search, filtering, and meeting management
-- 🔍 **Powerful Search** - Full-text search across transcripts, summaries, and metadata
-- 🏷️ **Smart Tagging** - Organize meetings with intelligent tag suggestions
-- 🌐 **Offline Capable** - Local SQLite database with VPS sync
+- 🎙️ **Floating Recorder** - Always-on-top mini recorder with system tray integration
+- 📊 **Modern React Dashboard** - Advanced search, filtering, and meeting management with TypeScript
+- 🔍 **Powerful Local Search** - Dexie-powered IndexedDB for instant full-text search
+- 🏷️ **Smart Tagging** - Organize meetings with intelligent tag suggestions and analytics
+- 🌐 **Offline-First Architecture** - Local-first with background VPS synchronization
+- 👤 **Smart User Detection** - Automatic computer username detection for seamless experience
 
 ### 🚀 **Enterprise Architecture**
-- ⚡ **Queue-based Processing** - Redis-powered job management for scalability
-- 📈 **Health Monitoring** - Real-time VPS connectivity and service status
-- 🔐 **Secure Authentication** - Built-in user management and API protection
-- 🎛️ **Admin Dashboard** - Complete system monitoring and management
-- 📱 **Cross-platform** - Native Windows, macOS, and Linux applications
-
----
-
-## 📦 Download & Install (End Users)
-
-Get the latest release for your platform:
-
-### Windows
-```
-dgMeets-Setup-1.0.0.exe
-```
-Double-click to install → Launch from Start Menu → Start recording!
-
-### macOS  
-```
-dgMeets-1.0.0.dmg
-```
-Drag to Applications → Launch → Grant microphone permissions → Record!
-
-### Linux
-```
-dgMeets-1.0.0.AppImage
-```
-Make executable (`chmod +x dgMeets-1.0.0.AppImage`) → Run directly!
+- ⚡ **Redis Queue System** - Redis 4.6.0 with hiredis for high-performance job processing
+- 📈 **Health Monitoring** - Real-time VPS diagnostics and service health checks
+- 🔐 **Centralized Authentication** - Single .env configuration with basic auth protection
+- 🎛️ **Admin Dashboard** - Complete system monitoring, queue management, and diagnostics
+- 📱 **Native Desktop Apps** - Electron 30.0.9 with proper Windows, macOS, and Linux builds
+- 🔄 **Background Processing** - Intelligent background sync and job management
 
 ---
 
 ## 🏗️ Architecture Overview
 
 ```
-┌─────────────────┐    HTTPS/WebSocket    ┌─────────────────┐
-│   Desktop App   │ ────────────────────→ │   VPS Backend   │
-│                 │                       │                 │
-│ ┌─────────────┐ │                       │ ┌─────────────┐ │
-│ │  React UI   │ │                       │ │  FastAPI    │ │
-│ │  + Electron │ │                       │ │  + Redis    │ │
-│ └─────────────┘ │                       │ └─────────────┘ │
-│                 │                       │        │        │
-│ ┌─────────────┐ │                       │        ▼        │
-│ │  SQLite DB  │ │                       │ ┌─────────────┐ │
-│ │  + Audio    │ │                       │ │  Whisper    │ │
-│ │  Files      │ │                       │ │  Large-v3   │ │
-│ └─────────────┘ │                       │ └─────────────┘ │
-│                 │                       │        │        │
-│ 🎤 Dual Audio   │                       │        ▼        │
-│    Recording    │                       │ ┌─────────────┐ │
-└─────────────────┘                       │ │   Ollama    │ │
-                                          │ │ Qwen2.5 3B  │ │
-                                          │ └─────────────┘ │
-                                          └─────────────────┘
+┌─────────────────────┐   HTTPS/WebSocket    ┌───────────────────────┐
+│    Desktop App      │ ──────────────────→  │     VPS Backend       │
+│   (Electron 30.0.9) │                      │    (FastAPI 0.112.2)  │
+│                     │                      │                       │
+│ ┌─────────────────┐ │                      │ ┌───────────────────┐ │
+│ │ React 18.3.1 +  │ │                      │ │ FastAPI + Redis   │ │
+│ │ TypeScript 5.5.4│ │                      │ │ Queue System      │ │
+│ │ + Vite 5.4.1    │ │                      │ └───────────────────┘ │
+│ └─────────────────┘ │                      │          │            │
+│                     │                      │          ▼            │
+│ ┌─────────────────┐ │                      │ ┌───────────────────┐ │
+│ │ Dexie 4.0.8     │ │                      │ │ Faster-Whisper    │ │
+│ │ IndexedDB +     │ │                      │ │ Large-v3 + CPU    │ │
+│ │ Audio Files     │ │                      │ │ Optimization      │ │
+│ └─────────────────┘ │                      │ └───────────────────┘ │
+│                     │                      │          │            │
+│ ┌─────────────────┐ │                      │          ▼            │
+│ │  Dual Audio     │ │                      │ ┌───────────────────┐ │
+│ │ + Username      │ │                      │ │ PyAnnote Audio    │ │
+│ │ Detection       │ │                      │ │ Speaker Diarizati.│ │
+│ │ + Floating UI   │ │                      │ └───────────────────┘ │
+│ └─────────────────┘ │                      │          │            │
+└─────────────────────┘                      │          ▼            │
+                                             │ ┌───────────────────┐ │
+                                             │ │   Ollama Service  │ │
+                                             │ │ Qwen2.5 3B Inst.  │ │
+                                             │ └───────────────────┘ │
+                                             └───────────────────────┘
 ```
 
 ### Component Details
-- **Desktop App**: Electron-wrapped React app with local data storage
-- **VPS Backend**: FastAPI server with Redis queue management  
-- **AI Services**: Whisper Large-v3 (transcription) + Qwen2.5 3B (summarization)
-- **Data Flow**: Audio recorded locally → Processed on VPS → Results cached locally
+- **Desktop App**: Electron 30.0.9 with React 18.3.1 + TypeScript 5.5.4, built with Vite 5.4.1
+- **Local Storage**: Dexie 4.0.8 for IndexedDB management with offline-first architecture
+- **VPS Backend**: FastAPI 0.112.2 with Redis 4.6.0 queue system and SQLAlchemy 2.0.23
+- **AI Transcription**: Faster-Whisper 1.0.3 with Large-v3 model and CPU optimization
+- **Speaker Analysis**: PyAnnote Audio 3.1.1 for professional speaker diarization
+- **AI Summarization**: Ollama with Qwen2.5 3B Instruct model
+- **Data Flow**: Dual audio recording → Background processing → VPS AI services → Local caching
 
 ---
 
 ## 🔬 Advanced Features Deep Dive
 
 ### 🎯 **Dual Recording System**
-Traditional meeting tools mix all audio into one stream, limiting AI accuracy. dgMeets records separately:
+Traditional meeting tools mix all audio into one stream, limiting AI accuracy. On-Prem AI Note Taker records separately:
 
 ```
 🎤 Microphone Audio    → Perfect user voice capture
@@ -118,17 +113,20 @@ Traditional meeting tools mix all audio into one stream, limiting AI accuracy. d
 - Perfect diarization without AI guessing
 
 ### 🤖 **Maximum Quality AI Configuration**
-- **Whisper Large-v3**: Most accurate model (~3GB, 70-80% better than base)
-- **16kHz Optimization**: Native Whisper sample rate for best results
-- **45-second Chunks**: Optimal for speaker persistence across long meetings
-- **Enhanced Context**: Professional meeting prompts for technical terminology
-- **Multi-language**: Optimized Turkish + English support
+- **Faster-Whisper 1.0.3**: Optimized implementation with Large-v3 model (70-80% better than base)
+- **PyAnnote Audio 3.1.1**: Professional-grade speaker diarization with advanced neural networks
+- **CPU Optimization**: Tuned for 6 vCPU / 16GB RAM with PyTorch optimizations
+- **45-second Chunks**: Optimal chunking with 8-second overlap for speaker persistence
+- **Enhanced Context**: Professional meeting prompts with speaker-aware processing
+- **Multi-language**: Optimized Turkish + English support with smart detection
 
 ### ⚡ **Enterprise-Grade Processing**
-- **Redis Queue System**: Scalable job processing with concurrent workers
-- **Real-time Progress**: WebSocket updates during transcription
-- **Health Monitoring**: Automatic VPS connectivity and service health checks
-- **Failover Support**: Graceful handling of network issues and service outages
+- **Redis 4.6.0 Queue System**: High-performance job processing with hiredis optimization
+- **Background Processing**: Intelligent background sync with job queue management
+- **Real-time Progress**: WebSocket-based progress tracking with detailed phase information
+- **Health Monitoring**: Comprehensive VPS diagnostics and service health monitoring
+- **Offline-First Architecture**: Local-first storage with seamless VPS synchronization
+- **Smart User Detection**: Automatic computer username detection for personalized experience
 
 ---
 
@@ -182,17 +180,23 @@ docker compose logs -f backend
 
 **Local development setup:**
 ```bash
-# Frontend development
+# Frontend development (React 18.3.1 + TypeScript 5.5.4 + Vite 5.4.1)
 cd frontend
 npm install
 npm run dev         # http://localhost:5173
+npm run type-check  # TypeScript validation
 
-# Backend development  
+# Backend development (FastAPI 0.112.2 + Python)
 cd backend
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
 pip install -r requirements.txt
 python -m uvicorn app.main:app --reload --port 8000
+
+# Electron development (Electron 30.0.9)
+cd electron
+npm install
+npm run dev         # Launch desktop app in dev mode
 ```
 
 ---
@@ -200,69 +204,95 @@ python -m uvicorn app.main:app --reload --port 8000
 ## 📁 Project Structure
 
 ```
-dgmeets/
-├── 📱 frontend/                 # React + TypeScript UI
-│   ├── src/components/         # UI components
-│   ├── src/pages/             # Main application pages
-│   ├── src/services/          # API and database services
-│   ├── src/stores/            # State management
-│   └── src/utils/             # Utilities and helpers
-├── 🐍 backend/                 # FastAPI Python backend
-│   ├── app/api.py             # Legacy API endpoints
-│   ├── app/routers/           # Modern API routes
-│   ├── app/services/          # Business logic
-│   ├── app/workers/           # Background job processing
-│   └── app/core/              # Configuration and utilities
-├── 🖥️ electron/               # Desktop app wrapper
-│   ├── main.js                # Electron main process
-│   ├── preload.js             # Secure API bridge
-│   └── package.json           # Build configuration
-├── 🛠️ scripts/                # Automation scripts
-├── 📚 documents/              # Technical documentation
-├── 🐳 docker-compose.yml      # VPS deployment
-└── ⚙️ env.example             # Configuration template
+on-prem-ai-note-taker/
+├── 📱 frontend/                 # React 18.3.1 + TypeScript 5.5.4 + Vite 5.4.1
+│   ├── src/components/         # Reusable UI components (app, common, queue, recording)
+│   ├── src/features/           # Feature-based organization
+│   │   ├── admin/              # Admin dashboard and diagnostics
+│   │   ├── meetings/           # Meeting management and views
+│   │   ├── recording/          # Audio recording features
+│   │   └── ui/                 # UI utilities
+│   ├── src/services/           # API clients and background processing
+│   ├── src/stores/             # State management (Zustand-style)
+│   ├── src/utils/              # Username detection, env loading, utilities
+│   └── src/hooks/              # Custom React hooks
+├── 🐍 backend/                 # FastAPI 0.112.2 + Python backend
+│   ├── app/routers/            # Modern API routes (transcription, meetings, admin)
+│   ├── app/services/           # Business logic (meeting, tag services)
+│   ├── app/workers/            # Job processing (queue, progress, chunked service)
+│   ├── app/models/             # SQLAlchemy 2.0.23 database models
+│   ├── app/schemas/            # Pydantic request/response schemas
+│   ├── app/clients/            # External service clients (Ollama)
+│   └── app/core/               # Configuration, utilities, prompts
+├── 🖥️ electron/               # Electron 30.0.9 desktop wrapper
+│   ├── main.js                 # Main process with floating recorder
+│   ├── preload.js              # Secure API bridge
+│   ├── floating-recorder.html  # Floating recorder interface
+│   └── build-app.js            # Build automation
+├── 🛠️ scripts/                # Build and development scripts
+│   ├── build-desktop-app.sh    # Cross-platform desktop builds
+│   └── start-electron-dev.sh   # Development workflow
+├── 📚 documents/              # Comprehensive technical documentation
+├── 🐳 docker-compose.yml      # VPS deployment with Redis + Ollama
+└── ⚙️ env.example             # Centralized configuration template
 ```
 
 ---
 
 ## 🔧 Configuration
 
-dgMeets uses a centralized configuration system. Copy `env.example` to `.env` and customize:
+On-Prem AI Note Taker uses a **centralized configuration system** with a single `.env` file that powers all components (frontend, backend, and Electron). Copy `env.example` to `.env` and customize:
 
 ### Key Configuration Options
 
 ```bash
-# AI Models
-WHISPER_MODEL=large-v3              # Maximum accuracy model
-OLLAMA_MODEL=qwen2.5:3b-instruct   # Fast summarization
+# AI Models & Processing
+WHISPER_MODEL=large-v3                    # Faster-Whisper with Large-v3
+WHISPER_COMPUTE_TYPE=int8                 # CPU optimization
+WHISPER_CPU_THREADS=6                     # VPS CPU optimization
+OLLAMA_MODEL=qwen2.5:3b-instruct         # Fast summarization model
 
-# Performance  
-MAX_CONCURRENCY=3                   # Concurrent transcriptions
-CHUNK_DURATION_SECONDS=45          # Optimal chunk size
-MAX_UPLOAD_MB=200                  # Support 2+ hour meetings
+# Performance Optimization
+MAX_CONCURRENCY=3                         # Concurrent transcriptions
+CHUNK_DURATION_SECONDS=45                # Optimal chunk size
+CHUNK_OVERLAP_SECONDS=8                  # Speaker continuity
+MAX_UPLOAD_MB=200                        # Support 2+ hour meetings
 
-# Speaker Features
-ENABLE_SPEAKER_IDENTIFICATION=true # Enhanced speaker detection
-MAX_SPEAKERS=6                     # Maximum speakers to track
+# Advanced Speaker Features
+ENABLE_SPEAKER_IDENTIFICATION=true       # PyAnnote speaker diarization
+MAX_SPEAKERS=6                           # Maximum speakers to track
+SPEAKER_SIMILARITY_THRESHOLD=0.7         # Speaker matching accuracy
 
-# Security
-BASIC_AUTH_USERNAME=your_username  # Change these!
-BASIC_AUTH_PASSWORD=your_password
+# Queue System
+USE_QUEUE_SYSTEM=true                    # Enable Redis queuing
+REDIS_URL=redis://redis:6379             # Redis connection
+QUEUE_MAX_WORKERS=3                      # Background workers
+
+# Frontend Configuration (Vite)
+VITE_API_BASE_URL=http://95.111.244.159:8000/api
+VITE_AUDIO_CHUNK_MS=45000               # Frontend chunking
+VITE_ENABLE_SPEAKER_TRACKING=true       # UI speaker features
+
+# Security (Centralized)
+BASIC_AUTH_USERNAME=your_username        # Change these!
+BASIC_AUTH_PASSWORD=your_password        # Secure credentials
 ```
 
 ### Hardware Requirements
 
-**VPS Minimum:**
-- 6 vCPU cores
-- 16GB RAM  
-- 50GB storage
-- Ubuntu 22.04+
+**VPS Minimum (for AI processing):**
+- 6 vCPU cores (optimized for Faster-Whisper + PyAnnote)
+- 16GB RAM (required for Large-v3 model + speaker diarization)
+- 50GB storage (models + recordings)
+- Ubuntu 22.04+ (Docker support)
+- Redis 4.6.0+ and Ollama support
 
-**Desktop Minimum:**
-- 4GB RAM
-- 2GB free storage
-- Microphone access
-- Internet connection (for AI processing)
+**Desktop Minimum (Electron app):**
+- 4GB RAM (local Dexie database + React app)
+- 2GB free storage (local recordings cache)
+- Microphone + system audio access
+- Internet connection (for VPS AI processing)
+- Modern browser engine (Chromium-based via Electron)
 
 ---
 
@@ -270,7 +300,7 @@ BASIC_AUTH_PASSWORD=your_password
 
 | Feature | Basic Tools | dgMeets |
 |---------|-------------|---------|
-| **Audio Quality** | Mixed streams | Dual recording (🎤+🔊) |
+| **Audio Quality** | Mixed streams | Dual recording (🎤+🔊) + username detection |
 | **Speaker ID** | 60-70% accuracy | 95% accuracy |
 | **Word Accuracy** | 75-85% | 92% with Whisper Large-v3 |
 | **Real-time** | Basic status | Live progress + WebSocket |
@@ -328,7 +358,7 @@ WHISPER_BEST_OF=5                 # Multiple attempts
 
 ## 🔐 Security & Privacy
 
-dgMeets prioritizes data security and user privacy:
+On-Prem AI Note Taker prioritizes data security and user privacy:
 
 ### Data Protection
 - ✅ **Local-first**: All recordings and transcripts stored locally
@@ -353,13 +383,22 @@ dgMeets prioritizes data security and user privacy:
 
 Built with cutting-edge open-source technologies:
 
-- **[OpenAI Whisper](https://github.com/openai/whisper)** - Speech recognition AI
-- **[Ollama](https://ollama.com)** - Local LLM inference platform  
-- **[FastAPI](https://fastapi.tiangolo.com)** - Modern Python web framework
-- **[React](https://reactjs.org)** - User interface library
-- **[Electron](https://www.electronjs.org/)** - Cross-platform desktop apps
-- **[Redis](https://redis.io)** - High-performance job queue
-- **[SQLite](https://www.sqlite.org)** - Reliable local database
+**AI & Processing:**
+- **[Faster-Whisper 1.0.3](https://github.com/guillaumekln/faster-whisper)** - Optimized speech recognition
+- **[PyAnnote Audio 3.1.1](https://github.com/pyannote/pyannote-audio)** - Professional speaker diarization
+- **[Ollama](https://ollama.com)** - Local LLM inference platform (Qwen2.5 3B)
+
+**Backend Infrastructure:**
+- **[FastAPI 0.112.2](https://fastapi.tiangolo.com)** - Modern async Python web framework
+- **[Redis 4.6.0](https://redis.io)** - High-performance job queue with hiredis
+- **[SQLAlchemy 2.0.23](https://www.sqlalchemy.org)** - Modern Python ORM
+
+**Frontend & Desktop:**
+- **[React 18.3.1](https://reactjs.org)** - Modern user interface library
+- **[TypeScript 5.5.4](https://www.typescriptlang.org)** - Type-safe JavaScript
+- **[Vite 5.4.1](https://vitejs.dev)** - Lightning-fast build tool
+- **[Electron 30.0.9](https://www.electronjs.org/)** - Cross-platform desktop apps
+- **[Dexie 4.0.8](https://dexie.org)** - Powerful IndexedDB wrapper for offline storage
 
 ---
 
