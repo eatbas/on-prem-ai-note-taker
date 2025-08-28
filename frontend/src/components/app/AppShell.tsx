@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { Recorder, FloatingRecorder } from '../../features/recording'
 import { useToast } from '../common'
 import { globalRecordingManager } from '../../stores/globalRecordingManager'
+import { getComputerUsername } from '../../utils/usernameDetector'
 import dgMeetsLogo from '../../../../logo/dgMeets-512.png'
 
 interface AppShellProps {
@@ -150,6 +151,14 @@ export default function AppShell({
                   fontWeight: '500'
                 }}>
                   On-Prem AI-Powered Meeting Notes
+                </p>
+                <p style={{ 
+                  fontSize: '11px', 
+                  color: '#3b82f6', 
+                  margin: '4px 0 0 0',
+                  fontWeight: '500'
+                }}>
+                  👋 Hello {getComputerUsername()}, ready to prepare your meeting notes securely
                 </p>
               </div>
             </div>

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../../../services'
 import AskLlama from '../../admin/pages/AskLlama'
+import { getComputerUsername } from '../../../utils/usernameDetector'
 
 import { useToast } from '../../../components/common'
 import { createRippleEffect } from '../../../utils'
+import EnhancedStatusDisplay from '../components/EnhancedStatusDisplay'
 
 export default function Dashboard({ 
 	onOpen, 
@@ -689,6 +691,21 @@ export default function Dashboard({
 
 			{/* Diagnostic Results moved to Admin Dashboard */}
 
+			{/* Personalized Greeting */}
+			<div style={{
+				padding: '16px 24px',
+				backgroundColor: '#f8fafc',
+				border: '1px solid #e2e8f0',
+				borderRadius: '8px',
+				marginBottom: '24px',
+				textAlign: 'center',
+				fontSize: '14px',
+				color: '#475569',
+				fontWeight: '500'
+			}}>
+				👋 Hello <strong style={{ color: '#3b82f6' }}>{getComputerUsername()}</strong>, we are ready to prepare the meeting notes for you in a secure and private way
+			</div>
+
 			{/* Tab Content */}
 			{activeTab === 'llama' && (
 				<AskLlama online={online} vpsUp={vpsUp} />
@@ -867,23 +884,11 @@ export default function Dashboard({
 												padding: '16px',
 												verticalAlign: 'top'
 											}}>
-												<span style={{
-													display: 'inline-block',
-													padding: '4px 12px',
-													borderRadius: '12px',
-													fontSize: '12px',
-													fontWeight: '500',
-													backgroundColor: m.status === 'recording' ? '#fef3c7' : 
-																	m.status === 'sent' ? '#dcfce7' : 
-																	m.status === 'queued' ? '#fef3c7' : '#fee2e2',
-													color: m.status === 'recording' ? '#92400e' : 
-														   m.status === 'sent' ? '#166534' : 
-														   m.status === 'queued' ? '#92400e' : '#dc2626'
-												}}>
-													{m.status === 'recording' ? '🔴 Recording' : 
-													 m.status === 'sent' ? '✅ Sent' : 
-													 m.status === 'queued' ? '⏳ Processing' : '📝 Local'}
-												</span>
+												<EnhancedStatusDisplay 
+													meetingId={m.id}
+													status={m.status}
+													isProcessing={m.status === 'queued'}
+												/>
 											</td>
 											<td style={{
 												padding: '16px',
@@ -1026,17 +1031,12 @@ export default function Dashboard({
 													⏱️ Duration not recorded
 												</span>
 											)}
-											{/* Debug: Show actual status value */}
-											<span style={{ 
-												backgroundColor: '#fee', 
-												padding: '2px 6px', 
-												borderRadius: '10px',
-												marginLeft: '8px',
-												fontSize: '12px',
-												color: '#dc2626'
-											}}>
-												🔍 Status: {m.status === 'recording' ? 'Recording in Progress' : (m.status || 'undefined')}
-											</span>
+											{/* Enhanced Status Display */}
+											<EnhancedStatusDisplay 
+												meetingId={m.id}
+												status={m.status}
+												isProcessing={m.status === 'queued'}
+											/>
 										</div>
 										{m.summary && (
 											<div style={{ 

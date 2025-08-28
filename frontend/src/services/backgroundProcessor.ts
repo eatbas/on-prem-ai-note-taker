@@ -2,11 +2,14 @@
 import { autoProcessMeetingRecordingWithWhisperOptimization } from './offline/processingOperations'
 import { db } from './db'
 import { jobQueueManager } from '../stores/jobQueueManager'
+import { getComputerUsername } from '../utils/usernameDetector'
 
 export interface ProcessingJobData {
 	meetingId: string
+	meetingTitle: string  // Add meeting title for better identification
 	recordingDuration: number
 	timestamp: number
+	username: string  // Add username for user identification
 }
 
 // Queue a meeting for background processing 
@@ -40,14 +43,17 @@ export async function queueMeetingProcessing(meetingId: string, recordingDuratio
 	// Create unique job ID
 	const jobId = `process_meeting_${meetingId}_${Date.now()}`
 	
-	// Add to job queue for tracking
-	jobQueueManager.addJob(jobId, 'pending', 'Queued for processing...')
+	// Add to job queue for tracking with meeting title
+	const meetingTitle = meeting.title || 'Untitled Meeting'
+	jobQueueManager.addJob(jobId, 'pending', `[${getComputerUsername()}] Queued: ${meetingTitle}`, meetingTitle)
 	
 	// Store job data for processing
 	const jobData: ProcessingJobData = {
 		meetingId,
+		meetingTitle,
 		recordingDuration,
-		timestamp: Date.now()
+		timestamp: Date.now(),
+		username: getComputerUsername()
 	}
 	
 	// Store job data in localStorage for persistence across navigation
@@ -76,7 +82,7 @@ async function processQueuedMeeting(jobId: string, jobData: ProcessingJobData): 
 			console.log(`✅ Meeting ${jobData.meetingId} already processed. Stopping job to prevent duplicate.`)
 			jobQueueManager.updateJob(jobId, { 
 				status: 'completed', 
-				message: 'Already processed - skipped duplicate',
+				message: `Already processed: ${jobData.meetingTitle}`,
 				progress: 100
 			})
 			// Clean up job data
@@ -85,11 +91,11 @@ async function processQueuedMeeting(jobId: string, jobData: ProcessingJobData): 
 			return
 		}
 		
-		// Update job status
+		// Update job status - Starting upload
 		jobQueueManager.updateJob(jobId, { 
-			status: 'processing', 
-			message: 'Processing meeting with AI...',
-			progress: 10
+			status: 'uploading', 
+			message: `[${jobData.username}] Uploading ${jobData.meetingTitle} to VPS...`,
+			progress: 5
 		})
 		
 		// Update meeting duration if provided
@@ -100,25 +106,48 @@ async function processQueuedMeeting(jobId: string, jobData: ProcessingJobData): 
 			})
 		}
 		
-		// Update progress
+		// Update progress - Upload complete, waiting for processing
 		jobQueueManager.updateJob(jobId, { 
-			progress: 30,
-			message: 'Assembling audio files...'
+			progress: 25,
+			status: 'waiting',
+			message: `[${jobData.username}] Upload complete. ${jobData.meetingTitle} queued for AI processing...`
+		})
+		
+		// Update progress - AI analysis started
+		jobQueueManager.updateJob(jobId, { 
+			progress: 40,
+			status: 'transcribing',
+			message: `[${jobData.username}] Transcribing ${jobData.meetingTitle} with AI...`
+		})
+		
+		// Update progress - Transcription complete, starting summarization
+		jobQueueManager.updateJob(jobId, { 
+			progress: 60,
+			status: 'summarizing',
+			message: `[${jobData.username}] Transcription complete. Generating summary for ${jobData.meetingTitle}...`
 		})
 		
 		// Process the meeting (this can take a while but persists across navigation)
 		await autoProcessMeetingRecordingWithWhisperOptimization(jobData.meetingId)
 		
-		// Update progress
+		// Update progress - Analysis complete
+		jobQueueManager.updateJob(jobId, { 
+			progress: 80,
+			status: 'finalizing',
+			message: `[${jobData.username}] AI analysis complete. Finalizing ${jobData.meetingTitle}...`
+		})
+		
+		// Update progress - Finalizing
 		jobQueueManager.updateJob(jobId, { 
 			progress: 90,
-			message: 'Finalizing...'
+			status: 'finalizing',
+			message: `[${jobData.username}] Syncing ${jobData.meetingTitle} to database...`
 		})
 		
 		// Mark as completed
 		jobQueueManager.updateJob(jobId, { 
 			status: 'completed', 
-			message: 'Meeting processed successfully!',
+			message: `✅ [${jobData.username}] ${jobData.meetingTitle} processed successfully!`,
 			progress: 100
 		})
 		
@@ -134,7 +163,7 @@ async function processQueuedMeeting(jobId: string, jobData: ProcessingJobData): 
 		// Update job status to failed
 		jobQueueManager.updateJob(jobId, { 
 			status: 'failed', 
-			message: `Processing failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+			message: `[${jobData.username}] ${jobData.meetingTitle} failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
 			progress: 0
 		})
 		
@@ -157,7 +186,7 @@ export async function retryProcessingJob(jobId: string): Promise<void> {
 	// Reset job status
 	jobQueueManager.updateJob(jobId, { 
 		status: 'pending', 
-		message: 'Retrying processing...',
+		message: `[${getComputerUsername()}] Retrying processing...`,
 		progress: 0
 	})
 	
@@ -231,8 +260,9 @@ export function resumeInterruptedJobs(): void {
 					console.log(`🔄 Resuming processing for meeting ${jobData.meetingId}...`)
 					const jobId = `resume_process_meeting_${jobData.meetingId}_${Date.now()}`
 					
-					// Add back to job queue
-					jobQueueManager.addJob(jobId, 'pending', 'Resuming interrupted processing...')
+					// Add back to job queue with meeting title
+					const meetingTitle = meeting.title || 'Untitled Meeting'
+					jobQueueManager.addJob(jobId, 'pending', `[${getComputerUsername()}] Resuming interrupted processing...`, meetingTitle)
 					
 					// Start processing
 					setTimeout(() => processQueuedMeeting(jobId, jobData), 2000)

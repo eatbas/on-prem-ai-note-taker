@@ -44,7 +44,7 @@ export default function JobQueueItem({ job, loading, onCancelJob, onGoBackToJob 
 							fontWeight: '600',
 							color: '#1e293b'
 						}}>
-							Job {job.id.slice(0, 8)}...
+							{job.meetingTitle ? job.meetingTitle : `Job ${job.id.slice(0, 8)}...`}
 						</span>
 						<span style={{
 							padding: '4px 12px',
@@ -138,7 +138,7 @@ export default function JobQueueItem({ job, loading, onCancelJob, onGoBackToJob 
 				gap: '12px',
 				justifyContent: 'flex-end'
 			}}>
-				{['pending', 'transcribing', 'summarizing', 'finalizing'].includes(job.status) && (
+				{['pending', 'uploading', 'waiting', 'transcribing', 'summarizing', 'finalizing'].includes(job.status) && (
 					<button
 						onClick={() => onCancelJob(job.id)}
 						disabled={loading}

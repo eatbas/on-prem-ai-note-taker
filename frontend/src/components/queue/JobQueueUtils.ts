@@ -2,26 +2,34 @@
 
 export const getStatusColor = (status: string): string => {
 	switch (status) {
-		case 'done': return '#10b981'
-		case 'error': return '#ef4444'
+		case 'done': 
+		case 'completed': return '#10b981'
+		case 'error': 
+		case 'failed': return '#ef4444'
 		case 'canceled': return '#6b7280'
 		case 'pending': return '#f59e0b'
-		case 'transcribing':
-		case 'summarizing':
-		case 'finalizing': return '#3b82f6'
+		case 'uploading': return '#8b5cf6'  // Purple for upload
+		case 'waiting': return '#f59e0b'    // Orange for waiting
+		case 'transcribing': return '#3b82f6'  // Blue for transcription
+		case 'summarizing': return '#06b6d4'   // Cyan for summarization
+		case 'finalizing': return '#059669'    // Green for finalization
 		default: return '#6b7280'
 	}
 }
 
 export const getStatusIcon = (status: string): string => {
 	switch (status) {
-		case 'done': return '✅'
-		case 'error': return '❌'
+		case 'done': 
+		case 'completed': return '✅'
+		case 'error': 
+		case 'failed': return '❌'
 		case 'canceled': return '⏹️'
 		case 'pending': return '⏳'
-		case 'transcribing': return '🎙️'
-		case 'summarizing': return '📝'
-		case 'finalizing': return '🔧'
+		case 'uploading': return '📤'  // Upload icon
+		case 'waiting': return '⏳'    // Waiting icon
+		case 'transcribing': return '🎙️'  // Microphone for transcription
+		case 'summarizing': return '📝'   // Document for summarization
+		case 'finalizing': return '🔧'    // Wrench for finalization
 		default: return '❓'
 	}
 }
@@ -48,7 +56,7 @@ export const formatDate = (date: Date): string => {
 }
 
 export const getActiveStatuses = (): string[] => {
-	return ['pending', 'transcribing', 'summarizing', 'finalizing']
+	return ['pending', 'uploading', 'waiting', 'transcribing', 'summarizing', 'finalizing']
 }
 
 export const isJobActive = (status: string): boolean => {

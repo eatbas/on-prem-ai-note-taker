@@ -59,7 +59,7 @@ export default function JobQueue({ online, vpsUp }: JobQueueProps) {
 					progress: status.progress,
 					message: status.message,
 					eta: status.eta_seconds,
-					canGoBack: (status.phase || status.status) === 'done' || (status.phase || status.status) === 'error' || status.status === 'completed' || status.status === 'failed'
+					canGoBack: (status.phase || status.status) === 'done' || (status.phase || status.status) === 'error' || status.status === 'completed' || status.status === 'failed' || status.status === 'canceled'
 				})
 			} catch (err) {
 				console.error(`Failed to refresh job ${job.id}:`, err)

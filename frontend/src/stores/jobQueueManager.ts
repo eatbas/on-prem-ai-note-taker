@@ -9,6 +9,7 @@ interface JobHistoryItem {
 	updatedAt: Date
 	eta?: number
 	canGoBack: boolean
+	meetingTitle?: string  // Add meeting title for better identification
 }
 
 class JobQueueManager {
@@ -55,7 +56,7 @@ class JobQueueManager {
 		this.listeners.forEach(listener => listener([...this.jobHistory]))
 	}
 
-	addJob(jobId: string, status: string = 'pending', message: string = 'Job submitted') {
+	addJob(jobId: string, status: string = 'pending', message: string = 'Job submitted', meetingTitle?: string) {
 		const newJob: JobHistoryItem = {
 			id: jobId,
 			status,
@@ -63,7 +64,8 @@ class JobQueueManager {
 			message,
 			createdAt: new Date(),
 			updatedAt: new Date(),
-			canGoBack: false
+			canGoBack: false,
+			meetingTitle
 		}
 
 		this.jobHistory = [newJob, ...this.jobHistory].slice(0, 50) // Keep last 50 jobs

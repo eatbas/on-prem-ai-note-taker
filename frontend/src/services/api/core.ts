@@ -1,4 +1,5 @@
 import config from '../../utils/envLoader'
+import { detectComputerUsername } from '../../utils/usernameDetector'
 
 export const apiBase = (() => {
 	try {
@@ -29,15 +30,14 @@ export function getUserId(): string | undefined {
 }
 
 function initializeUserId(): string {
-	// Generate a user ID similar to backend format: user_{username}
-	// For web version, use a combination of timestamp and random string
-	const timestamp = Date.now()
-	const random = Math.random().toString(36).substr(2, 6)
-	const userId = `user_web_${timestamp}_${random}`
+	// Use the detected computer username for consistent user identification
+	// This ensures meetings are properly associated with the user's computer
+	const computerUsername = detectComputerUsername()
+	const userId = `user_${computerUsername}`
 	
 	try {
 		localStorage.setItem('user_id', userId)
-		console.log('🆔 Generated new user ID:', userId)
+		console.log('🆔 Generated user ID from detected username:', userId)
 		return userId
 	} catch (error) {
 		console.error('Failed to store user ID:', error)

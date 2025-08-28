@@ -16,8 +16,16 @@ export default function JobQueueStats({ jobHistory }: JobQueueStatsProps) {
 			count: jobHistory.filter(j => isJobActive(j.status)).length, 
 			color: '#f59e0b' 
 		},
-		{ label: 'Completed', count: jobHistory.filter(j => j.status === 'done').length, color: '#10b981' },
-		{ label: 'Failed', count: jobHistory.filter(j => j.status === 'error').length, color: '#ef4444' }
+		{ 
+			label: 'Completed', 
+			count: jobHistory.filter(j => j.status === 'done' || j.status === 'completed').length, 
+			color: '#10b981' 
+		},
+		{ 
+			label: 'Failed', 
+			count: jobHistory.filter(j => j.status === 'error' || j.status === 'failed').length, 
+			color: '#ef4444' 
+		}
 	]
 
 	return (

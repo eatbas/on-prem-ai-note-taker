@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from ..schemas.transcription import TranscriptionResponse, TranscriptionSegment, TranscribeAndSummarizeResponse
 from ..schemas.summarization import SummarizeRequest, SummarizeResponse
 from ..core.config import settings
-from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary
+from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary, User
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language
 from ..core.prompts import get_single_summary_prompt
 from ..clients.ollama_client import OllamaClient
@@ -38,6 +38,32 @@ def get_transcribe_semaphore() -> asyncio.Semaphore:
         _concurrency = max(1, settings.max_concurrency)
         _transcribe_semaphore = asyncio.Semaphore(_concurrency)
     return _transcribe_semaphore
+
+
+def get_user_from_header(x_user_id: Optional[str], db: Session) -> str:
+    """Get or create user based on X-User-Id header"""
+    if x_user_id:
+        # Extract username from user ID format: user_{username}
+        if x_user_id.startswith('user_'):
+            username = x_user_id[5:]  # Remove 'user_' prefix
+        else:
+            username = x_user_id
+        
+        # Get or create user with this username
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            user = User(
+                id=x_user_id,
+                username=username
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user.id
+    
+    # Fallback to system username if no header provided
+    user = get_or_create_user(db)
+    return user.id
 
 
 @router.post("/transcribe", response_model=TranscriptionResponse)
@@ -228,13 +254,13 @@ async def transcribe_and_summarize(
             validated_language = "auto"
         
         # Get or create user
-        user = get_or_create_user(db)
+        user_id = get_user_from_header(x_user_id, db)
         
         # Create meeting record
         meeting_id = str(uuid.uuid4())
         meeting = Meeting(
             id=meeting_id,
-            user_id=user.id,
+            user_id=user_id,
             title=f"Meeting {meeting_id[:8]}",  # Default title
             language=validated_language,
         )

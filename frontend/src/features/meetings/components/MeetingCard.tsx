@@ -1,4 +1,5 @@
 import React from 'react'
+import EnhancedStatusDisplay from './EnhancedStatusDisplay'
 
 interface MeetingCardProps {
   meeting: any
@@ -110,14 +111,11 @@ export default function MeetingCard({
             fontSize: '12px',
             color: '#6b7280'
           }}>
-            <span style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '4px',
-              color: getStatusColor(meeting.status)
-            }}>
-              {getStatusIcon(meeting.status)} {meeting.status === 'recording' ? 'Recording...' : meeting.status === 'queued' ? 'Processing...' : (meeting.status || 'local')}
-            </span>
+            <EnhancedStatusDisplay 
+              meetingId={meeting.id}
+              status={meeting.status}
+              isProcessing={meeting.status === 'queued'}
+            />
             <span>•</span>
             <span>📅 {formatDate(meeting.createdAt)}</span>
             {meeting.duration && (

@@ -35,6 +35,7 @@ from ..core.utils import require_basic_auth, get_whisper_model, validate_languag
 from ..clients.ollama_client import OllamaClient
 from ..workers.chunked_service import chunked_service
 from ..workers.progress import job_store, Phase
+from ..database import User
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 logger = logging.getLogger(__name__)
@@ -47,17 +48,44 @@ _ollama_client = OllamaClient(
 )
 
 
+def get_user_from_header(x_user_id: Optional[str], db: Session) -> str:
+    """Get or create user based on X-User-Id header"""
+    if x_user_id:
+        # Extract username from user ID format: user_{username}
+        if x_user_id.startswith('user_'):
+            username = x_user_id[5:]  # Remove 'user_' prefix
+        else:
+            username = x_user_id
+        
+        # Get or create user with this username
+        user = db.query(User).filter(User.username == username).first()
+        if not user:
+            user = User(
+                id=x_user_id,
+                username=username
+            )
+            db.add(user)
+            db.commit()
+            db.refresh(user)
+        return user.id
+    
+    # Fallback to system username if no header provided
+    user = get_or_create_user(db)
+    return user.id
+
+
 @router.get("", response_model=List[MeetingResponse])
 async def list_meetings(
     search: Optional[str] = Query(None, description="Search in title, summary, and transcript"),
     tag: Optional[str] = Query(None, description="Filter by tag"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> List[MeetingResponse]:
     """List all meetings for the current user with optional search and tag filtering"""
-    user = get_or_create_user(db)
+    user_id = get_user_from_header(x_user_id, db)
     
-    query = db.query(Meeting).filter(Meeting.user_id == user.id)
+    query = db.query(Meeting).filter(Meeting.user_id == user_id)
     
     # Apply tag filter
     if tag:
@@ -123,15 +151,16 @@ async def list_meetings(
 @router.get("/{meeting_id}", response_model=MeetingResponse)
 async def get_meeting(
     meeting_id: str,
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> MeetingResponse:
     """Get a specific meeting by ID"""
-    user = get_or_create_user(db)
+    user_id = get_user_from_header(x_user_id, db)
     
     meeting = db.query(Meeting).filter(
         Meeting.id == meeting_id,
-        Meeting.user_id == user.id
+        Meeting.user_id == user_id
     ).first()
     
     if not meeting:
@@ -171,15 +200,16 @@ async def update_meeting(
     meeting_id: str,
     title: Optional[str] = Form(None),
     tags: Optional[str] = Form(None, description="JSON array of tags"),
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> MeetingResponse:
     """Update meeting title and/or tags"""
-    user = get_or_create_user(db)
+    user_id = get_user_from_header(x_user_id, db)
     
     meeting = db.query(Meeting).filter(
         Meeting.id == meeting_id,
-        Meeting.user_id == user.id
+        Meeting.user_id == user_id
     ).first()
     
     if not meeting:
@@ -203,22 +233,23 @@ async def update_meeting(
     
     db.commit()
     
-    return await get_meeting(meeting_id, _auth, db)
+    return await get_meeting(meeting_id, x_user_id, _auth, db)
 
 
 @router.put("/{meeting_id}/tags", response_model=MeetingResponse)
 async def update_meeting_tags(
     meeting_id: str,
     request: UpdateMeetingRequest,
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> MeetingResponse:
     """Update meeting tags only"""
-    user = get_or_create_user(db)
+    user_id = get_user_from_header(x_user_id, db)
     
     meeting = db.query(Meeting).filter(
         Meeting.id == meeting_id,
-        Meeting.user_id == user.id
+        Meeting.user_id == user_id
     ).first()
     
     if not meeting:
@@ -228,21 +259,22 @@ async def update_meeting_tags(
         meeting.tags = json.dumps(request.tags)
         db.commit()
     
-    return await get_meeting(meeting_id, _auth, db)
+    return await get_meeting(meeting_id, x_user_id, _auth, db)
 
 
 @router.delete("/{meeting_id}")
 async def delete_meeting(
     meeting_id: str,
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> Dict[str, str]:
     """Delete a meeting and all associated data including audio files"""
-    user = get_or_create_user(db)
+    user_id = get_user_from_header(x_user_id, db)
     
     meeting = db.query(Meeting).filter(
         Meeting.id == meeting_id,
-        Meeting.user_id == user.id
+        Meeting.user_id == user_id
     ).first()
     
     if not meeting:
@@ -283,14 +315,14 @@ async def start_meeting(
     except HTTPException as e:
         raise HTTPException(status_code=400, detail=str(e.detail))
     
-    # Get or create user
-    user = get_or_create_user(db)
+    # Get or create user from header
+    user_id = get_user_from_header(x_user_id, db)
     
     # Create meeting record
     meeting_id = str(uuid.uuid4())
     meeting = Meeting(
         id=meeting_id,
-        user_id=user.id,
+        user_id=user_id,
         title=request.title,
         language=validated_language,
         tags=json.dumps(request.tags) if request.tags else None
@@ -346,10 +378,10 @@ async def upload_meeting_audio(
         raise HTTPException(status_code=400, detail=str(e.detail))
     
     # Verify meeting exists and belongs to user
-    user = get_or_create_user(db)
+    user_id = get_user_from_header(x_user_id, db)
     meeting = db.query(Meeting).filter(
         Meeting.id == meeting_id,
-        Meeting.user_id == user.id
+        Meeting.user_id == user_id
     ).first()
     
     if not meeting:
