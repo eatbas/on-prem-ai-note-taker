@@ -78,11 +78,7 @@ export function getOptimizedMicrophoneConstraints(deviceId?: string): MediaStrea
       noiseSuppression: false,         // Backend has better noise suppression
       autoGainControl: false,          // Backend handles gain optimization
       sampleRate: AUDIO_PROCESSING_CONFIG.RECORDING_CONFIG.sampleRate,
-      channelCount: AUDIO_PROCESSING_CONFIG.RECORDING_CONFIG.channelCount,
-      
-      // Additional optimization for consistent quality
-      latency: 0.01,                   // Low latency for real-time processing
-      volume: 1.0                      // Maximum volume for better signal
+      channelCount: AUDIO_PROCESSING_CONFIG.RECORDING_CONFIG.channelCount
     }
   }
 }
@@ -95,9 +91,7 @@ export function getOptimizedSystemAudioConstraints(): MediaStreamConstraints {
       noiseSuppression: false,
       autoGainControl: false,
       sampleRate: AUDIO_PROCESSING_CONFIG.RECORDING_CONFIG.sampleRate,
-      channelCount: AUDIO_PROCESSING_CONFIG.RECORDING_CONFIG.channelCount,
-      latency: 0.01,
-      volume: 1.0
+      channelCount: AUDIO_PROCESSING_CONFIG.RECORDING_CONFIG.channelCount
     }
   }
 }

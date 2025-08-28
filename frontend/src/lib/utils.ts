@@ -3,12 +3,11 @@
  * Reusable utility functions used across the application
  */
 
-import { type ClassValue, clsx } from 'clsx'
 import { STORAGE_KEYS } from './constants'
 
-// CSS Class Utilities
-export function cn(...inputs: ClassValue[]) {
-  return clsx(inputs)
+// CSS Class Utilities (simple className concatenation)
+export function cn(...inputs: (string | undefined | null | false)[]): string {
+  return inputs.filter(Boolean).join(' ')
 }
 
 // ID Generation

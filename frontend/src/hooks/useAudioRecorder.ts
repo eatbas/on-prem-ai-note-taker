@@ -312,7 +312,7 @@ export function useAudioRecorder() {
               // 🚀 STAGE 1 OPTIMIZATION: Streaming upload for real-time processing
               if (streamingUploader && AUDIO_PROCESSING_CONFIG.UPLOAD.enableStreaming) {
                 console.log(`📤 Streaming upload speaker chunk ${speakerChunkIndexRef.current} for real-time processing...`)
-                await streamingUploader.addSpeakerChunk(chunkToStream, speakerChunkIndexRef.current)
+                await streamingUploader.addSystemChunk(chunkToStream, speakerChunkIndexRef.current)
               }
               
               const chunkSaveTime = Date.now() - chunkStartTime

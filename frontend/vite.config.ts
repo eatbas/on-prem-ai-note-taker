@@ -43,7 +43,7 @@ export default defineConfig(({ mode }) => {
       assetsDir: 'assets',
       // 🚀 STAGE 3 OPTIMIZATION: Enhanced build configuration
       target: 'esnext',
-      minify: 'terser',
+      minify: true,
       sourcemap: mode === 'development',
       rollupOptions: {
         output: {
@@ -54,7 +54,6 @@ export default defineConfig(({ mode }) => {
           manualChunks: {
             // Vendor libraries - loaded once, cached across routes
             'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-            'vendor-ui': ['@radix-ui/react-dialog', '@radix-ui/react-dropdown-menu'],
             
             // Audio processing - separate chunk for audio-heavy features
             'audio-processing': [
@@ -98,17 +97,6 @@ export default defineConfig(({ mode }) => {
         external: (id) => {
           // Mark large external dependencies for potential CDN loading
           return false // Keep all bundled for now, but this enables future CDN optimization
-        }
-      },
-      // 🚀 STAGE 3 OPTIMIZATION: Terser options for better compression
-      terserOptions: {
-        compress: {
-          drop_console: mode === 'production', // Remove console.log in production
-          drop_debugger: mode === 'production',
-          pure_funcs: mode === 'production' ? ['console.log', 'console.info'] : []
-        },
-        mangle: {
-          safari10: true // Fix Safari 10+ compatibility
         }
       },
       // 🚀 STAGE 3 OPTIMIZATION: Chunk size optimization

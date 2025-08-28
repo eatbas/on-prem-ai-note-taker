@@ -35,7 +35,7 @@ export class CombinedApiStateManager extends ApiStateManager {
    */
   initialize(): void {
     console.log('🚀 Initializing Combined API State Manager...')
-    console.log('🌐 Current state:', { online: this.getState().online, isPollingEnabled: this.isPollingEnabled })
+    console.log('🌐 Current state:', { online: this.getState().online })
     
     // Initialize event listeners
     this.eventManager.initialize()

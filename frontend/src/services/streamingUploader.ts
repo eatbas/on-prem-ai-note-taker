@@ -14,7 +14,7 @@ import { AUDIO_PROCESSING_CONFIG, logAudioPerformanceMetrics } from '../lib/audi
 
 export interface StreamingUploadConfig {
   meetingId: string
-  audioType: 'microphone' | 'speaker'
+  audioType: 'microphone' | 'system'
   enableRetry: boolean
   maxRetryAttempts: number
   retryDelay: number
@@ -50,7 +50,7 @@ export interface ChunkUploadData {
   blob: Blob
   index: number
   meetingId: string
-  audioType: 'microphone' | 'speaker'
+  audioType: 'microphone' | 'system'
   timestamp: number
 }
 
@@ -338,17 +338,17 @@ export function createStreamingUploader(config: StreamingUploadConfig): Streamin
 }
 
 /**
- * Dual streaming uploader for microphone and speaker audio
+ * Dual streaming uploader for microphone and system audio
  */
 export class DualStreamingUploader {
   private micUploader: StreamingUploader | null = null
-  private speakerUploader: StreamingUploader | null = null
+  private systemUploader: StreamingUploader | null = null
   private meetingId: string
-  private totalProgress: { mic: number, speaker: number } = { mic: 0, speaker: 0 }
+  private totalProgress: { mic: number, system: number } = { mic: 0, system: 0 }
 
   constructor(
     meetingId: string,
-    onProgress?: (micProgress: number, speakerProgress: number, totalProgress: number) => void
+    onProgress?: (micProgress: number, systemProgress: number, totalProgress: number) => void
   ) {
     this.meetingId = meetingId
 
@@ -365,27 +365,27 @@ export class DualStreamingUploader {
       }
     })
 
-    // Create speaker uploader
-    this.speakerUploader = createStreamingUploader({
+    // Create system uploader
+    this.systemUploader = createStreamingUploader({
       meetingId,
-      audioType: 'speaker',
+      audioType: 'system',
       enableRetry: true,
       maxRetryAttempts: AUDIO_PROCESSING_CONFIG.UPLOAD.retryAttempts,
       retryDelay: 1000,
       onProgress: (progress) => {
-        this.totalProgress.speaker = (progress.uploadedSize / progress.totalSize) * 100 || 0
+        this.totalProgress.system = (progress.uploadedSize / progress.totalSize) * 100 || 0
         this.updateTotalProgress(onProgress)
       }
     })
   }
 
   private updateTotalProgress(
-    onProgress?: (micProgress: number, speakerProgress: number, totalProgress: number) => void
+    onProgress?: (micProgress: number, systemProgress: number, totalProgress: number) => void
   ): void {
-    const totalProgress = (this.totalProgress.mic + this.totalProgress.speaker) / 2
+    const totalProgress = (this.totalProgress.mic + this.totalProgress.system) / 2
     
     if (onProgress) {
-      onProgress(this.totalProgress.mic, this.totalProgress.speaker, totalProgress)
+      onProgress(this.totalProgress.mic, this.totalProgress.system, totalProgress)
     }
   }
 
@@ -401,14 +401,14 @@ export class DualStreamingUploader {
     })
   }
 
-  async addSpeakerChunk(blob: Blob, index: number): Promise<void> {
-    if (!this.speakerUploader) return
+  async addSystemChunk(blob: Blob, index: number): Promise<void> {
+    if (!this.systemUploader) return
     
-    await this.speakerUploader.addChunk({
+    await this.systemUploader.addChunk({
       blob,
       index,
       meetingId: this.meetingId,
-      audioType: 'speaker',
+      audioType: 'system',
       timestamp: Date.now()
     })
   }
@@ -422,8 +422,8 @@ export class DualStreamingUploader {
       stopPromises.push(this.micUploader.stop())
     }
     
-    if (this.speakerUploader) {
-      stopPromises.push(this.speakerUploader.stop())
+    if (this.systemUploader) {
+      stopPromises.push(this.systemUploader.stop())
     }
 
     await Promise.all(stopPromises)
@@ -433,14 +433,14 @@ export class DualStreamingUploader {
 
   getStatistics() {
     const micStats = this.micUploader?.getStatistics() || { totalChunksUploaded: 0, totalSizeUploaded: 0 }
-    const speakerStats = this.speakerUploader?.getStatistics() || { totalChunksUploaded: 0, totalSizeUploaded: 0 }
+    const systemStats = this.systemUploader?.getStatistics() || { totalChunksUploaded: 0, totalSizeUploaded: 0 }
 
     return {
       microphone: micStats,
-      speaker: speakerStats,
+      system: systemStats,
       total: {
-        chunks: micStats.totalChunksUploaded + speakerStats.totalChunksUploaded,
-        size: micStats.totalSizeUploaded + speakerStats.totalSizeUploaded
+        chunks: micStats.totalChunksUploaded + systemStats.totalChunksUploaded,
+        size: micStats.totalSizeUploaded + systemStats.totalSizeUploaded
       }
     }
   }
