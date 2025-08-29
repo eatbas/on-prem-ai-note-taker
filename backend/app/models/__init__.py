@@ -6,6 +6,7 @@ from .meeting import Meeting
 from .transcription import Transcription
 from .summary import Summary
 from .job import Job, JobStatus, JobType
+from .workspace import Workspace
 
 __all__ = [
     "Base",
@@ -16,4 +17,5 @@ __all__ = [
     "Job",
     "JobStatus",
     "JobType",
+    "Workspace",
 ]

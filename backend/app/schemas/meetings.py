@@ -14,6 +14,8 @@ class MeetingResponse(BaseModel):
     duration: Optional[float]
     language: Optional[str] = "auto"
     tags: Optional[List[str]] = []
+    workspace_id: Optional[int] = None
+    is_personal: bool = True
 
 
 class UpdateMeetingRequest(BaseModel):
@@ -25,6 +27,7 @@ class StartMeetingRequest(BaseModel):
     title: str
     language: str = "auto"  # "tr", "en", or "auto"
     tags: Optional[List[str]] = []
+    scope: str = "personal"  # "personal" or "workspace"
 
 
 class StartMeetingResponse(BaseModel):
@@ -39,6 +42,8 @@ class AdminUserResponse(BaseModel):
     username: str
     created_at: str
     meeting_count: int
+    workspace_id: Optional[int] = None
+    workspace_name: Optional[str] = None
 
 
 class AdminMeetingResponse(BaseModel):
@@ -53,3 +58,11 @@ class AdminMeetingResponse(BaseModel):
     has_transcription: bool
     has_summary: bool
     tags: Optional[List[str]] = []
+    workspace_id: Optional[int] = None
+    workspace_name: Optional[str] = None
+    is_personal: bool = True
+
+
+class UserWorkspaceAssignmentRequest(BaseModel):
+    """Schema for assigning a user to a workspace"""
+    workspace_id: Optional[int] = None  # None to remove workspace assignment

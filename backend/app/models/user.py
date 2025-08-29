@@ -3,7 +3,7 @@
 import os
 import platform
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime
+from sqlalchemy import Column, String, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import relationship, Session
 
 from .base import Base
@@ -17,7 +17,11 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
+    # Workspace relationship
+    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
+    
     # Relationships
+    workspace = relationship("Workspace", back_populates="users")
     meetings = relationship("Meeting", back_populates="user")
     jobs = relationship("Job", back_populates="user")
 
