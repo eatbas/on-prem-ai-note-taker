@@ -30,8 +30,9 @@ from ..schemas.meetings import (
     StartMeetingResponse,
 )
 from ..core.config import settings
-from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary, Speaker, SpeakerSegment
+from ..database import get_db, Meeting, Transcription, Summary, Speaker, SpeakerSegment
 from ..models import User, Workspace
+from ..models.user import get_or_create_user, get_or_create_user_from_header
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language
 from ..clients.ollama_client import OllamaClient
 from ..workers.chunked_service import chunked_service
@@ -49,28 +50,8 @@ _ollama_client = OllamaClient(
 
 
 def get_user_from_header(x_user_id: Optional[str], db: Session) -> str:
-    """Get or create user based on X-User-Id header"""
-    if x_user_id:
-        # Extract username from user ID format: user_{username}
-        if x_user_id.startswith('user_'):
-            username = x_user_id[5:]  # Remove 'user_' prefix
-        else:
-            username = x_user_id
-        
-        # Get or create user with this username
-        user = db.query(User).filter(User.username == username).first()
-        if not user:
-            user = User(
-                id=x_user_id,
-                username=username
-            )
-            db.add(user)
-            db.commit()
-            db.refresh(user)
-        return user.id
-    
-    # Fallback to system username if no header provided
-    user = get_or_create_user(db)
+    """Get or create user based on X-User-Id header using centralized user creation"""
+    user = get_or_create_user_from_header(db, x_user_id)
     return user.id
 
 

@@ -58,11 +58,15 @@ export function detectComputerUsername(): string {
 			}
 		}
 		
-		// Final fallback: generate a unique identifier
+		// Final fallback: generate a consistent identifier based on browser fingerprint
 		if (computerUsername === 'unknown') {
-			const timestamp = Date.now()
-			const random = Math.random().toString(36).substr(2, 6)
-			computerUsername = `user_${timestamp}_${random}`
+			// Try to create a more consistent identifier for the same machine/browser
+			const browserInfo = navigator.userAgent + navigator.language + screen.width + screen.height
+			const hash = browserInfo.split('').reduce((acc, char) => {
+				return ((acc << 5) - acc) + char.charCodeAt(0)
+			}, 0)
+			computerUsername = `browser_${Math.abs(hash).toString(36)}`
+			console.log('🔍 Generated consistent browser-based username:', computerUsername)
 		}
 		
 		// Store the detected username for future use

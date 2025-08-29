@@ -15,7 +15,14 @@ export function getUserId(): string | undefined {
 		// Electron-preload may set window.USER_ID
 		// @ts-ignore
 		const fromGlobal = (window as any).USER_ID as string | undefined
-		if (fromGlobal) return fromGlobal
+		if (fromGlobal) {
+			// Store it to ensure consistency for future calls
+			try {
+				localStorage.setItem('user_id', fromGlobal)
+				console.log('🆔 Using Electron preload user ID:', fromGlobal)
+			} catch {}
+			return fromGlobal
+		}
 	} catch {}
 	
 	// Check localStorage for existing user ID
