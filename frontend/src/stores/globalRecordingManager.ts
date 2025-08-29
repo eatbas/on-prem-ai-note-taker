@@ -1,5 +1,6 @@
 // Global recording manager to persist recording state across navigation
-import { addChunk, createMeeting } from '../services'
+import { addChunk } from '../services'
+import { startMeeting } from '../services/api/meetings'
 
 export interface GlobalRecordingState {
 	isRecording: boolean
@@ -25,6 +26,7 @@ export interface RecordingOptions {
 	speakerDeviceId?: string
 	language: 'tr' | 'en' | 'auto'
 	showFloatingWidget?: boolean
+	scope?: 'personal' | 'workspace'
 }
 
 class GlobalRecordingManager {
@@ -155,16 +157,22 @@ class GlobalRecordingManager {
 			// Clear error state
 			this.state.error = null
 			
-			// Create meeting immediately with timestamp name
+			// Create meeting immediately with timestamp name using startMeeting API
 			const now = new Date()
 			const timestamp = now.toLocaleString()
-			const meeting = await createMeeting(`Meeting ${timestamp}`, [], options.language)
-			const meetingId = meeting.id
+			const meetingResult = await startMeeting(
+				`Meeting ${timestamp}`, 
+				options.language, 
+				[], 
+				options.scope || 'personal'
+			)
+			const meetingId = meetingResult.meetingId
 			
-			console.log('📝 Created placeholder meeting:', {
+			console.log('📝 Created meeting with scope:', {
 				id: meetingId.slice(0, 8) + '...',
-				title: meeting.title,
-				language: options.language
+				title: `Meeting ${timestamp}`,
+				language: options.language,
+				scope: options.scope || 'personal'
 			})
 			
 			// Reset chunk indices

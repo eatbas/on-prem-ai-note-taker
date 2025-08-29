@@ -140,7 +140,8 @@ export default function Recorder({
       const result = await globalRecordingManager.startRecording({
         micDeviceId: config.micDeviceId,
         speakerDeviceId: config.speakerDeviceId,
-        language: config.language
+        language: config.language,
+        scope: config.scope
       })
 
       if (result.success && result.meetingId) {

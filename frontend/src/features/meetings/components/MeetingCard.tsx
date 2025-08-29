@@ -103,6 +103,41 @@ export default function MeetingCard({
           }}>
             {meeting.title || 'Untitled Meeting'}
           </h3>
+
+          {/* Workspace Badge */}
+          <div style={{ marginBottom: '8px' }}>
+            {meeting.is_personal === false && meeting.workspace_id ? (
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                backgroundColor: '#f0f9ff',
+                color: '#0369a1',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: '500',
+                border: '1px solid #0ea5e9'
+              }}>
+                🏢 Workspace Meeting
+              </span>
+            ) : (
+              <span style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '2px 8px',
+                backgroundColor: '#f8fafc',
+                color: '#64748b',
+                borderRadius: '12px',
+                fontSize: '11px',
+                fontWeight: '500',
+                border: '1px solid #e2e8f0'
+              }}>
+                👤 Personal Meeting
+              </span>
+            )}
+          </div>
           
           <div style={{ 
             display: 'flex', 

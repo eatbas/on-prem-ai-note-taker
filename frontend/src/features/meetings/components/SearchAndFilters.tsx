@@ -6,6 +6,9 @@ interface SearchAndFiltersProps {
   tag: string
   setTag: (tag: string) => void
   availableTags: [string, number][]
+  workspaceFilter: 'all' | 'personal' | 'workspace'
+  setWorkspaceFilter: (filter: 'all' | 'personal' | 'workspace') => void
+  userHasWorkspace: boolean
   onClearFilters: () => void
 }
 
@@ -15,9 +18,12 @@ export default function SearchAndFilters({
   tag,
   setTag,
   availableTags,
+  workspaceFilter,
+  setWorkspaceFilter,
+  userHasWorkspace,
   onClearFilters
 }: SearchAndFiltersProps) {
-  const hasFilters = text || tag
+  const hasFilters = text || tag || workspaceFilter !== 'all'
 
   return (
     <div style={{ 
@@ -64,7 +70,7 @@ export default function SearchAndFilters({
 
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
         gap: '16px'
       }}>
         {/* Text Search */}
@@ -206,6 +212,146 @@ export default function SearchAndFilters({
             </div>
           )}
         </div>
+
+        {/* Workspace Filter */}
+        <div>
+          <label style={{ 
+            display: 'block', 
+            fontSize: '12px', 
+            fontWeight: '600', 
+            color: '#374151',
+            marginBottom: '6px'
+          }}>
+            Meeting scope
+          </label>
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(3, 1fr)', 
+            gap: '6px'
+          }}>
+            <button
+              onClick={() => setWorkspaceFilter('all')}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: workspaceFilter === 'all' ? '#3b82f6' : '#f8fafc',
+                color: workspaceFilter === 'all' ? 'white' : '#374151',
+                border: workspaceFilter === 'all' ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px'
+              }}
+              onMouseEnter={(e) => {
+                if (workspaceFilter !== 'all') {
+                  e.currentTarget.style.backgroundColor = '#e5e7eb'
+                  e.currentTarget.style.borderColor = '#9ca3af'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (workspaceFilter !== 'all') {
+                  e.currentTarget.style.backgroundColor = '#f8fafc'
+                  e.currentTarget.style.borderColor = '#d1d5db'
+                }
+              }}
+            >
+              🌐 All
+            </button>
+            <button
+              onClick={() => setWorkspaceFilter('personal')}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: workspaceFilter === 'personal' ? '#3b82f6' : '#f8fafc',
+                color: workspaceFilter === 'personal' ? 'white' : '#374151',
+                border: workspaceFilter === 'personal' ? '2px solid #3b82f6' : '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '500',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px'
+              }}
+              onMouseEnter={(e) => {
+                if (workspaceFilter !== 'personal') {
+                  e.currentTarget.style.backgroundColor = '#e5e7eb'
+                  e.currentTarget.style.borderColor = '#9ca3af'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (workspaceFilter !== 'personal') {
+                  e.currentTarget.style.backgroundColor = '#f8fafc'
+                  e.currentTarget.style.borderColor = '#d1d5db'
+                }
+              }}
+            >
+              👤 Personal
+            </button>
+            <button
+              onClick={() => setWorkspaceFilter('workspace')}
+              disabled={!userHasWorkspace}
+              style={{
+                padding: '8px 12px',
+                backgroundColor: workspaceFilter === 'workspace' ? '#3b82f6' : !userHasWorkspace ? '#f3f4f6' : '#f8fafc',
+                color: workspaceFilter === 'workspace' ? 'white' : !userHasWorkspace ? '#9ca3af' : '#374151',
+                border: workspaceFilter === 'workspace' ? '2px solid #3b82f6' : !userHasWorkspace ? '1px solid #e5e7eb' : '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '12px',
+                fontWeight: '500',
+                cursor: !userHasWorkspace ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                textAlign: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '4px',
+                opacity: !userHasWorkspace ? 0.5 : 1
+              }}
+              onMouseEnter={(e) => {
+                if (workspaceFilter !== 'workspace' && userHasWorkspace) {
+                  e.currentTarget.style.backgroundColor = '#e5e7eb'
+                  e.currentTarget.style.borderColor = '#9ca3af'
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (workspaceFilter !== 'workspace' && userHasWorkspace) {
+                  e.currentTarget.style.backgroundColor = '#f8fafc'
+                  e.currentTarget.style.borderColor = '#d1d5db'
+                }
+              }}
+            >
+              🏢 Workspace
+            </button>
+          </div>
+          
+          {!userHasWorkspace && (
+            <div style={{ 
+              fontSize: '11px', 
+              color: '#6b7280', 
+              marginTop: '4px' 
+            }}>
+              You need to be assigned to a workspace to filter workspace meetings
+            </div>
+          )}
+          
+          {workspaceFilter !== 'all' && (
+            <div style={{ 
+              fontSize: '11px', 
+              color: '#6b7280', 
+              marginTop: '4px' 
+            }}>
+              Showing: {workspaceFilter === 'personal' ? 'Personal meetings only' : 'Workspace meetings only'}
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Active filters summary */}
@@ -251,6 +397,17 @@ export default function SearchAndFilters({
                 borderRadius: '4px'
               }}>
                 Tag: "{tag}"
+              </span>
+            )}
+            {workspaceFilter !== 'all' && (
+              <span style={{ 
+                fontSize: '11px',
+                color: '#1e40af',
+                backgroundColor: '#dbeafe',
+                padding: '2px 6px',
+                borderRadius: '4px'
+              }}>
+                Scope: {workspaceFilter === 'personal' ? 'Personal' : 'Workspace'} meetings
               </span>
             )}
           </div>

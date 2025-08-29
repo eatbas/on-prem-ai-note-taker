@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
 import DeviceSelector from './DeviceSelector'
+import WorkspaceScopeSelector from './WorkspaceScopeSelector'
 
 interface RecordingModalProps {
   isOpen: boolean
@@ -13,6 +14,7 @@ export interface RecordingConfig {
   speakerDeviceId?: string // Optional - system audio is captured automatically
   language: 'tr' | 'en' | 'auto'
   showFloatingWidget: boolean
+  scope: 'personal' | 'workspace'
 }
 
 export default function RecordingModal({
@@ -24,6 +26,7 @@ export default function RecordingModal({
   const [selectedMicId, setSelectedMicId] = useState('')
   const [language, setLanguage] = useState<'tr' | 'en' | 'auto'>('tr')
   const [showFloatingWidget, setShowFloatingWidget] = useState(true)
+  const [scope, setScope] = useState<'personal' | 'workspace'>('personal')
 
   const handleStartRecording = () => {
     if (!selectedMicId) return
@@ -31,7 +34,8 @@ export default function RecordingModal({
     onStartRecording({
       micDeviceId: selectedMicId,
       language,
-      showFloatingWidget
+      showFloatingWidget,
+      scope
     })
   }
 
@@ -170,6 +174,14 @@ export default function RecordingModal({
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Workspace Scope Selection */}
+        <div style={{ marginBottom: '24px' }}>
+          <WorkspaceScopeSelector
+            selectedScope={scope}
+            onScopeChange={setScope}
+          />
         </div>
 
         {/* Action Buttons */}
