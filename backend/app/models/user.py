@@ -61,6 +61,8 @@ def get_or_create_user_by_username(db: Session, username: str) -> User:
     db.commit()
     db.refresh(user)
     
+    print(f"✅ Created new user '{username}'")
+    
     return user
 
 

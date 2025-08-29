@@ -14,7 +14,9 @@ from pydantic import BaseModel
 from .workers.progress import job_store, Phase
 from .core.config import settings
 from .clients.ollama_client import OllamaClient
-from .database import get_db, get_or_create_user, Meeting, Transcription, Summary
+from .database import get_db
+from .models import Meeting, Transcription, Summary
+from .models.user import get_or_create_user
 from .core.utils import get_whisper_model, validate_language, require_basic_auth
 from .core.prompts import get_single_summary_prompt
 

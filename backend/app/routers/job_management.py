@@ -10,7 +10,8 @@ from fastapi.responses import StreamingResponse
 
 from ..schemas.jobs import JobSubmitRequest, JobSubmitResponse, JobStatusResponse, JobCancelResponse
 from ..core.config import settings
-from ..database import JobType, JobStatus
+from ..database import get_db
+from ..models import JobType, JobStatus
 from ..workers.job_manager import job_manager
 from ..core.utils import require_basic_auth
 

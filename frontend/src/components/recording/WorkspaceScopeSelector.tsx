@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react'
-import { getUserId } from '../../services/api/core'
+import React, { type FC } from 'react'
+import { useUserWorkspace } from '../../hooks/useUserWorkspace'
 
 interface WorkspaceScopeOption {
   value: 'personal' | 'workspace'
@@ -15,41 +15,12 @@ interface WorkspaceScopeSelectorProps {
   className?: string
 }
 
-export default function WorkspaceScopeSelector({
+const WorkspaceScopeSelector: FC<WorkspaceScopeSelectorProps> = ({
   selectedScope,
   onScopeChange,
   className = ''
-}: WorkspaceScopeSelectorProps) {
-  const [userWorkspace, setUserWorkspace] = useState<{ id: number; name: string } | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  // Get current user's workspace info
-  useEffect(() => {
-    const fetchUserWorkspace = async () => {
-      try {
-        setLoading(true)
-        const userId = getUserId()
-        if (!userId) {
-          setLoading(false)
-          return
-        }
-
-        // For now, we'll assume no workspace until the admin API provides user info
-        // In a full implementation, you'd call an API to get current user's workspace
-        // For this implementation, we'll check localStorage or use a simple approach
-        const mockWorkspace = localStorage.getItem('user_workspace')
-        if (mockWorkspace) {
-          setUserWorkspace(JSON.parse(mockWorkspace))
-        }
-      } catch (error) {
-        console.error('Failed to fetch user workspace:', error)
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchUserWorkspace()
-  }, [])
+}) => {
+  const { workspace: userWorkspace, loading } = useUserWorkspace()
 
   if (loading) {
     return (
@@ -153,13 +124,13 @@ export default function WorkspaceScopeSelector({
               textAlign: 'left',
               opacity: option.disabled ? 0.5 : 1
             }}
-            onMouseEnter={(e) => {
+            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
               if (!option.disabled && selectedScope !== option.value) {
                 e.currentTarget.style.backgroundColor = '#e5e7eb'
                 e.currentTarget.style.borderColor = '#9ca3af'
               }
             }}
-            onMouseLeave={(e) => {
+            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
               if (!option.disabled && selectedScope !== option.value) {
                 e.currentTarget.style.backgroundColor = '#f8fafc'
                 e.currentTarget.style.borderColor = '#d1d5db'
@@ -212,3 +183,5 @@ export default function WorkspaceScopeSelector({
     </div>
   )
 }
+
+export default WorkspaceScopeSelector

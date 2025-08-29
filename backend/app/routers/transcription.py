@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session
 from ..schemas.transcription import TranscriptionResponse, TranscriptionSegment, TranscribeAndSummarizeResponse
 from ..schemas.summarization import SummarizeRequest, SummarizeResponse
 from ..core.config import settings
-from ..database import get_db, Meeting, Transcription, Summary
+from ..database import get_db
+from ..models import Meeting, Transcription, Summary
 from ..models import User
 from ..models.user import get_or_create_user, get_or_create_user_from_header
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language

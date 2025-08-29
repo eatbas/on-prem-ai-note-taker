@@ -1,12 +1,14 @@
-"""Tag management service"""
+"""Tag management service for meetings"""
 
 import json
 import logging
-from typing import Dict
+from typing import Dict, List, Optional
 
 from sqlalchemy.orm import Session
 
-from ..database import get_or_create_user, Meeting
+from ..database import get_db
+from ..models import Meeting
+from ..models.user import get_or_create_user
 
 logger = logging.getLogger(__name__)
 

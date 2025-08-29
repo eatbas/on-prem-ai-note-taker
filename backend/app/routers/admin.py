@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 
 from ..schemas.meetings import AdminUserResponse, AdminMeetingResponse, UserWorkspaceAssignmentRequest
-from ..database import get_db, User, Meeting, Transcription, Summary
+from ..database import get_db
+from ..models import User, Meeting, Transcription, Summary
 from ..models import Workspace
 from ..core.utils import require_basic_auth
 

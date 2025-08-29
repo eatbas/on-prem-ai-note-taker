@@ -6,7 +6,7 @@ import os
 import logging
 from typing import Any, Dict
 
-from ..database import Job
+from ..models import Job
 from .job_manager import JobProgressTracker, JobPhase
 from ..core.config import settings
 from ..clients.ollama_client import OllamaClient

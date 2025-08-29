@@ -14,6 +14,9 @@ from ..core.audio_utils import get_audio_duration, split_audio_into_chunks, clea
 from ..core.config import settings
 from ..clients.ollama_client import OllamaClient
 from ..core.config import settings
+from ..database import get_db
+from ..models import Meeting, Transcription, Summary
+from ..models.user import get_or_create_user
 
 logger = logging.getLogger(__name__)
 
@@ -171,7 +174,6 @@ class ChunkedTranscriptionService:
             
             # Save to database if needed
             try:
-                from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary
                 db = next(get_db())
                 user = get_or_create_user(db)
                 

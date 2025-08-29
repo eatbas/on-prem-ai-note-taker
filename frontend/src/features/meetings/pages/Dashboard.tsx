@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState, useCallback, memo, Suspense, lazy } from 'react'
 import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../../../services'
 import { getComputerUsername } from '../../../utils/usernameDetector'
+import { useUserWorkspace } from '../../../hooks/useUserWorkspace'
 
 // 🚀 STAGE 3 OPTIMIZATION: Lazy load AskLlama component (only loaded when "llama" tab is active)
 const AskLlama = lazy(() => import('../../admin/pages/AskLlama'))
@@ -40,12 +41,13 @@ const Dashboard = memo(function Dashboard({
 	const [error, setError] = useState<string | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
-	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama'>('local')
+	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'workspace'>('local')
 	const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
 	const [vpsLoading, setVpsLoading] = useState(false)
 	const [vpsError, setVpsError] = useState<string | null>(null)
 	const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
 	const { showToast, ToastContainer } = useToast()
+	const { workspace: userWorkspace, hasWorkspace } = useUserWorkspace()
 	
 	// Context menu state
 	const [contextMenu, setContextMenu] = useState<{
@@ -654,12 +656,13 @@ const Dashboard = memo(function Dashboard({
 			}}>
 				{[
 					{ id: 'local', label: '📁 Local Meetings', icon: '🏠' },
+					...(hasWorkspace ? [{ id: 'workspace', label: `🏢 ${userWorkspace?.name || 'Workspace'} Meetings`, icon: '🏢' }] : []),
 					{ id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
 					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
 				].map((tab) => (
 					<button
 						key={tab.id}
-						onClick={() => setActiveTab(tab.id as 'local' | 'vps' | 'llama')}
+						onClick={() => setActiveTab(tab.id as 'local' | 'vps' | 'llama' | 'workspace')}
 						style={{
 							flex: 1,
 							padding: '16px 24px',
@@ -1374,6 +1377,171 @@ const Dashboard = memo(function Dashboard({
 							>
 								{vpsLoading ? '🔄 Refreshing...' : '🔄 Refresh VPS Meetings'}
 							</button>
+						</div>
+					)}
+				</div>
+			)}
+
+			{/* Workspace Meetings Tab */}
+			{activeTab === 'workspace' && (
+				<div style={{ padding: '24px 0' }}>
+					<div style={{ 
+						textAlign: 'center', 
+						marginBottom: '32px',
+						padding: '24px',
+						backgroundColor: '#f8fafc',
+						borderRadius: '12px',
+						border: '2px solid #e2e8f0'
+					}}>
+						<h2 style={{
+							margin: '0 0 16px 0',
+							fontSize: '1.8rem',
+							fontWeight: '600',
+							color: '#1e293b'
+						}}>
+							🏢 {userWorkspace?.name || 'Workspace'} Meetings
+						</h2>
+						<p style={{
+							margin: '0',
+							fontSize: '1.1rem',
+							color: '#64748b',
+							lineHeight: '1.6'
+						}}>
+							Meetings shared with your workspace team. All workspace members can view these recordings.
+						</p>
+						
+						{/* Workspace Info */}
+						{userWorkspace && (
+							<div style={{
+								display: 'flex',
+								justifyContent: 'center',
+								gap: '16px',
+								marginTop: '16px'
+							}}>
+								<span style={{ 
+									fontSize: '14px', 
+									fontWeight: '500',
+									display: 'flex',
+									alignItems: 'center',
+									gap: '8px',
+									padding: '8px 16px',
+									backgroundColor: '#dcfce7',
+									color: '#166534',
+									borderRadius: '8px',
+									border: '1px solid #bbf7d0'
+								}}>
+									🏢 {userWorkspace.name}
+								</span>
+							</div>
+						)}
+					</div>
+
+					{/* Workspace Meetings List */}
+					{hasWorkspace ? (
+						<div>
+							{/* Filter workspace meetings from the main meetings list */}
+							{(() => {
+								const workspaceMeetings = meetings.filter(meeting => 
+									meeting.workspace_id === userWorkspace?.id && !meeting.is_personal
+								)
+								
+								if (workspaceMeetings.length === 0) {
+									return (
+										<div style={{ textAlign: 'center', padding: 40, opacity: 0.6 }}>
+											No workspace meetings found. Create a workspace meeting to get started!
+										</div>
+									)
+								}
+								
+								return workspaceMeetings.map((meeting) => (
+									<div
+										key={meeting.id}
+										onClick={() => onOpen(meeting.id)}
+										onContextMenu={(e) => handleContextMenu(e, meeting.id, meeting.title)}
+										style={{
+											display: 'flex',
+											alignItems: 'center',
+											gap: 12,
+											padding: 16,
+											borderBottom: '1px solid #eee',
+											backgroundColor: '#fafafa',
+											marginBottom: 8,
+											borderRadius: 4,
+											cursor: 'pointer',
+											transition: 'all 0.2s ease',
+											border: '1px solid transparent',
+											position: 'relative'
+										}}
+										onMouseEnter={(e) => {
+											e.currentTarget.style.backgroundColor = '#f0f0f0'
+											e.currentTarget.style.transform = 'translateY(-1px)'
+											e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)'
+											e.currentTarget.style.borderColor = '#d1d5db'
+										}}
+										onMouseLeave={(e) => {
+											e.currentTarget.style.backgroundColor = '#fafafa'
+											e.currentTarget.style.transform = 'translateY(0)'
+											e.currentTarget.style.boxShadow = 'none'
+											e.currentTarget.style.borderColor = 'transparent'
+										}}
+									>
+										{/* Workspace Badge */}
+										<div style={{
+											padding: '4px 8px',
+											backgroundColor: '#0ea5e9',
+											color: 'white',
+											borderRadius: '6px',
+											fontSize: '12px',
+											fontWeight: '600'
+										}}>
+											🏢 {userWorkspace?.name}
+										</div>
+										
+										{/* Meeting Info */}
+										<div style={{ flex: 1 }}>
+											<div style={{ fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>
+												{meeting.title}
+											</div>
+											<div style={{ fontSize: '14px', color: '#666' }}>
+												{new Date(meeting.createdAt || meeting.created_at).toLocaleDateString()} 
+												{meeting.duration && ` • ${Math.round(meeting.duration / 60)}min`}
+											</div>
+										</div>
+										
+										{/* Status Badge */}
+										<div style={{
+											padding: '4px 8px',
+											backgroundColor: meeting.status === 'sent' ? '#10b981' : 
+															meeting.status === 'queued' ? '#f59e0b' : 
+															meeting.status === 'recording' ? '#ef4444' : '#6b7280',
+											color: 'white',
+											borderRadius: '6px',
+											fontSize: '12px',
+											fontWeight: '600'
+										}}>
+											{meeting.status === 'recording' ? '🔴 Recording' :
+											 meeting.status === 'sent' ? '✅ Synced' :
+											 meeting.status === 'queued' ? '⏳ Queued' : '📱 Local'}
+										</div>
+									</div>
+								))
+							})()}
+						</div>
+					) : (
+						<div style={{
+							padding: '20px',
+							backgroundColor: '#fef3c7',
+							border: '1px solid #fde68a',
+							borderRadius: '8px',
+							textAlign: 'center',
+							color: '#92400e'
+						}}>
+							<p style={{ margin: '0 0 12px 0', fontWeight: '500' }}>
+								🏢 No workspace assigned
+							</p>
+							<p style={{ margin: '0', fontSize: '14px' }}>
+								Contact an admin to be assigned to a workspace to view workspace meetings.
+							</p>
 						</div>
 					)}
 				</div>

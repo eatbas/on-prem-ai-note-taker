@@ -29,7 +29,7 @@ class Meeting(Base):
     workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
     is_personal = Column(Boolean, nullable=False, default=True)
     
-    # Relationships
+    # Relationships - using string references to avoid circular imports
     user = relationship("User", back_populates="meetings")
     workspace = relationship("Workspace", back_populates="meetings")
     transcriptions = relationship("Transcription", back_populates="meeting", cascade="all, delete-orphan")

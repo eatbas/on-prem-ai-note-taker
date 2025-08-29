@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
-from .database import JobType
+from .models import JobType
 from .workers.job_manager import job_manager
 from .workers.queue_manager import queue_manager
 from .routers import (
@@ -86,6 +86,10 @@ app.include_router(jobs_router)  # Keep existing jobs router for compatibility
 @app.on_event("startup")
 async def startup_event():
     """Initialize queue manager and register handlers with resource optimization"""
+    
+    # Initialize database tables
+    from .database import init_db
+    init_db()
     
     # Optimize for 6 CPU / 16GB RAM constraints
     import os

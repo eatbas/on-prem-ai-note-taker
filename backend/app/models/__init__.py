@@ -5,6 +5,7 @@ from .user import User
 from .meeting import Meeting
 from .transcription import Transcription
 from .summary import Summary
+from .speaker import Speaker, SpeakerSegment
 from .job import Job, JobStatus, JobType
 from .workspace import Workspace
 
@@ -14,6 +15,8 @@ __all__ = [
     "Meeting", 
     "Transcription",
     "Summary",
+    "Speaker",
+    "SpeakerSegment",
     "Job",
     "JobStatus",
     "JobType",

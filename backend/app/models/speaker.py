@@ -1,7 +1,7 @@
 """Speaker database model for speaker diarization and custom naming"""
 
 from datetime import datetime
-from sqlalchemy import Column, String, Text, DateTime, Integer, ForeignKey
+from sqlalchemy import Column, String, Text, DateTime, Integer, Float, ForeignKey
 from sqlalchemy.orm import relationship
 
 from .base import Base

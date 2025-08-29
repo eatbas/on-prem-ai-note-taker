@@ -30,7 +30,8 @@ from ..schemas.meetings import (
     StartMeetingResponse,
 )
 from ..core.config import settings
-from ..database import get_db, Meeting, Transcription, Summary, Speaker, SpeakerSegment
+from ..database import get_db
+from ..models import Meeting, Transcription, Summary, Speaker, SpeakerSegment
 from ..models import User, Workspace
 from ..models.user import get_or_create_user, get_or_create_user_from_header
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language
@@ -40,6 +41,45 @@ from ..workers.progress import job_store, Phase
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 logger = logging.getLogger(__name__)
+
+
+@router.get("/user/profile")
+async def get_user_profile(
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    _auth: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Get current user profile including workspace information"""
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    
+    # Get or create user
+    user_id = get_user_from_header(x_user_id, db)
+    user = db.query(User).filter(User.id == user_id).first()
+    
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Get workspace information if user has one
+    workspace_info = None
+    if user.workspace_id:
+        workspace = db.query(Workspace).filter(Workspace.id == user.workspace_id).first()
+        if workspace:
+            workspace_info = {
+                "id": workspace.id,
+                "name": workspace.name,
+                "description": workspace.description
+            }
+    
+    return {
+        "id": user.id,
+        "username": user.username,
+        "workspace": workspace_info,
+        "has_workspace": workspace_info is not None
+    }
+
+
+
 
 # Initialize Ollama client
 _ollama_client = OllamaClient(

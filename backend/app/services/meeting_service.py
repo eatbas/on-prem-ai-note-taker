@@ -12,7 +12,8 @@ from fastapi import HTTPException, UploadFile, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from ..core.config import settings
-from ..database import get_or_create_user, Meeting, Transcription, Summary, Speaker, SpeakerSegment
+from ..models.user import get_or_create_user
+from ..models import Meeting, Transcription, Summary, Speaker, SpeakerSegment
 from ..core.utils import get_whisper_model, validate_language
 from ..clients.ollama_client import OllamaClient
 from ..core.prompts import get_single_summary_prompt

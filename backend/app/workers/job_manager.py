@@ -1,4 +1,4 @@
-"""Job management system for handling async AI processing with progress tracking"""
+"""Job management and queue processing for async operations"""
 
 import asyncio
 import json
@@ -10,7 +10,8 @@ from typing import Any, Dict, Optional, Callable, List
 from dataclasses import dataclass
 from enum import Enum
 
-from ..database import Job, JobStatus, JobType, get_db
+from ..database import get_db
+from ..models import Job, JobStatus, JobType
 from ..core.config import settings
 
 logger = logging.getLogger(__name__)
