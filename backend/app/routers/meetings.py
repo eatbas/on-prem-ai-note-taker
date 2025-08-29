@@ -31,11 +31,11 @@ from ..schemas.meetings import (
 )
 from ..core.config import settings
 from ..database import get_db, get_or_create_user, Meeting, Transcription, Summary, Speaker, SpeakerSegment
+from ..models import User, Workspace
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language
 from ..clients.ollama_client import OllamaClient
 from ..workers.chunked_service import chunked_service
 from ..workers.progress import job_store, Phase
-from ..database import User
 
 router = APIRouter(prefix="/api/meetings", tags=["meetings"])
 logger = logging.getLogger(__name__)
@@ -78,14 +78,46 @@ def get_user_from_header(x_user_id: Optional[str], db: Session) -> str:
 async def list_meetings(
     search: Optional[str] = Query(None, description="Search in title, summary, and transcript"),
     tag: Optional[str] = Query(None, description="Filter by tag"),
+    scope: Optional[str] = Query(None, description="Filter by scope: 'personal', 'workspace', or 'all'"),
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> List[MeetingResponse]:
-    """List all meetings for the current user with optional search and tag filtering"""
+    """List meetings accessible to the current user with workspace support"""
     user_id = get_user_from_header(x_user_id, db)
     
-    query = db.query(Meeting).filter(Meeting.user_id == user_id)
+    # Get current user and their workspace
+    current_user = db.query(User).filter(User.id == user_id).first()
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Build access control filter
+    # Users can see: 1) Their own meetings, 2) Meetings from their workspace
+    access_filters = [Meeting.user_id == user_id]
+    
+    if current_user.workspace_id:
+        # Add workspace meetings filter
+        access_filters.append(
+            (Meeting.workspace_id == current_user.workspace_id) & 
+            (Meeting.is_personal == False)
+        )
+    
+    # Apply access control
+    query = db.query(Meeting).filter(or_(*access_filters))
+    
+    # Apply scope filter if specified
+    if scope == "personal":
+        query = query.filter(Meeting.is_personal == True)
+    elif scope == "workspace":
+        if current_user.workspace_id:
+            query = query.filter(
+                (Meeting.workspace_id == current_user.workspace_id) & 
+                (Meeting.is_personal == False)
+            )
+        else:
+            # User has no workspace, return empty for workspace scope
+            query = query.filter(False)
+    # scope == "all" or None: no additional filtering
     
     # Apply tag filter
     if tag:
@@ -143,6 +175,8 @@ async def list_meetings(
             duration=meeting.duration,
             language=meeting.language or "auto",
             tags=tags,
+            workspace_id=meeting.workspace_id,
+            is_personal=meeting.is_personal,
         ))
     
     return response
@@ -155,12 +189,27 @@ async def get_meeting(
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> MeetingResponse:
-    """Get a specific meeting by ID"""
+    """Get a specific meeting by ID with workspace access control"""
     user_id = get_user_from_header(x_user_id, db)
+    
+    # Get current user and their workspace
+    current_user = db.query(User).filter(User.id == user_id).first()
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Build access control filter for single meeting
+    access_filters = [Meeting.user_id == user_id]
+    
+    if current_user.workspace_id:
+        # Add workspace meetings filter
+        access_filters.append(
+            (Meeting.workspace_id == current_user.workspace_id) & 
+            (Meeting.is_personal == False)
+        )
     
     meeting = db.query(Meeting).filter(
         Meeting.id == meeting_id,
-        Meeting.user_id == user_id
+        or_(*access_filters)
     ).first()
     
     if not meeting:
@@ -192,6 +241,8 @@ async def get_meeting(
         duration=meeting.duration,
         language=meeting.language or "auto",
         tags=tags,
+        workspace_id=meeting.workspace_id,
+        is_personal=meeting.is_personal,
     )
 
 
@@ -305,7 +356,7 @@ async def start_meeting(
     _: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> StartMeetingResponse:
-    """Start a new meeting with language selection"""
+    """Start a new meeting with language and workspace scope selection"""
     if not x_user_id:
         raise HTTPException(status_code=400, detail="X-User-Id header required")
     
@@ -318,6 +369,32 @@ async def start_meeting(
     # Get or create user from header
     user_id = get_user_from_header(x_user_id, db)
     
+    # Get current user and validate workspace scope
+    current_user = db.query(User).filter(User.id == user_id).first()
+    if not current_user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Determine meeting scope and workspace assignment
+    workspace_id = None
+    is_personal = True
+    
+    if request.scope == "workspace":
+        if not current_user.workspace_id:
+            raise HTTPException(
+                status_code=400, 
+                detail="Cannot create workspace meeting: user is not assigned to any workspace"
+            )
+        workspace_id = current_user.workspace_id
+        is_personal = False
+    elif request.scope == "personal":
+        # Personal meeting - workspace_id stays None, is_personal stays True
+        pass
+    else:
+        raise HTTPException(
+            status_code=400, 
+            detail="Invalid scope. Must be 'personal' or 'workspace'"
+        )
+    
     # Create meeting record
     meeting_id = str(uuid.uuid4())
     meeting = Meeting(
@@ -325,7 +402,9 @@ async def start_meeting(
         user_id=user_id,
         title=request.title,
         language=validated_language,
-        tags=json.dumps(request.tags) if request.tags else None
+        tags=json.dumps(request.tags) if request.tags else None,
+        workspace_id=workspace_id,
+        is_personal=is_personal,
     )
     db.add(meeting)
     db.commit()

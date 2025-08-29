@@ -22,6 +22,7 @@ from .routers import (
     chat_router,
     meetings_router,
     admin_router,
+    workspaces_router,
     queue_router,
     job_router,
     progress_router,
@@ -74,6 +75,7 @@ app.include_router(transcription_router)
 app.include_router(chat_router)
 app.include_router(meetings_router)
 app.include_router(admin_router)
+app.include_router(workspaces_router)
 app.include_router(tags_router)
 app.include_router(queue_router)
 app.include_router(job_router)

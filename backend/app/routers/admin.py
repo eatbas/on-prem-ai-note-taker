@@ -9,8 +9,9 @@ from fastapi import APIRouter, Query, HTTPException, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import or_, func
 
-from ..schemas.meetings import AdminUserResponse, AdminMeetingResponse
+from ..schemas.meetings import AdminUserResponse, AdminMeetingResponse, UserWorkspaceAssignmentRequest
 from ..database import get_db, User, Meeting, Transcription, Summary
+from ..models import Workspace
 from ..core.utils import require_basic_auth
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
@@ -29,20 +30,92 @@ async def admin_list_users(
     _auth: None = Depends(require_admin_auth),
     db: Session = Depends(get_db),
 ) -> List[AdminUserResponse]:
-    """Admin: List all users with meeting counts"""
+    """Admin: List all users with meeting counts and workspace info"""
     users = db.query(User).all()
     
     response = []
     for user in users:
         meeting_count = db.query(Meeting).filter(Meeting.user_id == user.id).count()
+        
+        # Get workspace info if user has one
+        workspace_name = None
+        if user.workspace_id:
+            workspace = db.query(Workspace).filter(Workspace.id == user.workspace_id).first()
+            workspace_name = workspace.name if workspace else None
+        
         response.append(AdminUserResponse(
             id=user.id,
             username=user.username,
             created_at=user.created_at.isoformat(),
             meeting_count=meeting_count,
+            workspace_id=user.workspace_id,
+            workspace_name=workspace_name,
         ))
     
     return response
+
+
+@router.patch("/users/{user_id}/workspace")
+async def assign_user_workspace(
+    user_id: str,
+    request: UserWorkspaceAssignmentRequest,
+    _auth: None = Depends(require_admin_auth),
+    db: Session = Depends(get_db),
+) -> Dict[str, Any]:
+    """Admin: Assign or remove user from workspace"""
+    # Check if user exists
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # If workspace_id is provided, validate it exists and is active
+    if request.workspace_id is not None:
+        workspace = db.query(Workspace).filter(
+            Workspace.id == request.workspace_id,
+            Workspace.is_active == True
+        ).first()
+        if not workspace:
+            raise HTTPException(
+                status_code=404, 
+                detail="Workspace not found or inactive"
+            )
+        
+        # Assign user to workspace
+        old_workspace_id = user.workspace_id
+        user.workspace_id = request.workspace_id
+        db.commit()
+        
+        logger.info(
+            f"Assigned user {user.username} to workspace {workspace.name} "
+            f"(was: {old_workspace_id}, now: {request.workspace_id})"
+        )
+        
+        return {
+            "message": f"User '{user.username}' assigned to workspace '{workspace.name}'",
+            "user_id": user.id,
+            "workspace_id": request.workspace_id,
+            "workspace_name": workspace.name
+        }
+    else:
+        # Remove user from workspace
+        old_workspace_id = user.workspace_id
+        old_workspace = None
+        if old_workspace_id:
+            old_workspace = db.query(Workspace).filter(Workspace.id == old_workspace_id).first()
+        
+        user.workspace_id = None
+        db.commit()
+        
+        logger.info(
+            f"Removed user {user.username} from workspace "
+            f"(was: {old_workspace.name if old_workspace else old_workspace_id})"
+        )
+        
+        return {
+            "message": f"User '{user.username}' removed from workspace",
+            "user_id": user.id,
+            "previous_workspace": old_workspace.name if old_workspace else "Unknown"
+        }
 
 
 @router.get("/meetings")
@@ -107,6 +180,12 @@ async def admin_list_meetings(
             except (json.JSONDecodeError, TypeError):
                 tags = []
         
+        # Get workspace info if meeting has one
+        workspace_name = None
+        if meeting.workspace_id:
+            workspace = db.query(Workspace).filter(Workspace.id == meeting.workspace_id).first()
+            workspace_name = workspace.name if workspace else None
+        
         response_meetings.append(AdminMeetingResponse(
             id=meeting.id,
             user_id=meeting.user_id,
@@ -118,6 +197,9 @@ async def admin_list_meetings(
             has_transcription=has_transcription,
             has_summary=has_summary,
             tags=tags,
+            workspace_id=meeting.workspace_id,
+            workspace_name=workspace_name,
+            is_personal=meeting.is_personal,
         ))
     
     return {
