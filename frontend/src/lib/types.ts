@@ -66,6 +66,8 @@ export interface Meeting {
   tags: string[]
   summary?: string
   transcript?: string
+  workspace_id?: number
+  is_personal: boolean
 }
 
 export interface MeetingMetadata {

@@ -15,6 +15,7 @@ export * from './jobs'
 export * from './queue'
 export * from './tags'
 export * from './diagnostics'
+export * from './workspaces'
 
 // Legacy compatibility - maintain existing import paths
 export { transcribe, transcribeAndSummarize, submitTranscribeAndSummarizeJob, submitQueueTranscription } from './transcription'
@@ -37,6 +38,17 @@ export { getJobStatus, cancelJob, createJobProgressStream } from './jobs'
 export { getQueueStats, getQueueTaskStatus, getQueueTaskResult, getProgressStats } from './queue'
 export { getTags, updateMeetingTags } from './tags'
 export { getVpsHealth, runVpsDiagnostics, quickVpsTest } from './diagnostics'
+export { 
+  createWorkspace,
+  getWorkspaces,
+  getWorkspacesDropdown,
+  getWorkspace,
+  updateWorkspace,
+  deactivateWorkspace,
+  getWorkspaceStats,
+  assignUserToWorkspace,
+  removeUserFromWorkspace
+} from './workspaces'
 
 // Re-export types
 export type { JobStatus } from './jobs'

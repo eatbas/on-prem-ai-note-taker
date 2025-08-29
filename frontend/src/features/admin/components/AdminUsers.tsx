@@ -1,30 +1,38 @@
 import React, { useState } from 'react'
+import type { WorkspaceListItem } from '../../../types/workspace'
 
 interface User {
     id: string
     username: string
     created_at: string
     meeting_count: number
+    workspace_id?: number
+    workspace_name?: string
 }
 
 interface AdminUsersProps {
     users: User[]
+    workspaces: WorkspaceListItem[]
     loading: boolean
     error: string | null
     searchTerm: string
     onSearchChange: (term: string) => void
     onDeleteUser: (userId: string) => Promise<void>
+    onAssignWorkspace: (userId: string, workspaceId: number | null) => Promise<void>
 }
 
 export default function AdminUsers({
     users,
+    workspaces,
     loading,
     error,
     searchTerm,
     onSearchChange,
-    onDeleteUser
+    onDeleteUser,
+    onAssignWorkspace
 }: AdminUsersProps) {
     const [deletingUsers, setDeletingUsers] = useState<Set<string>>(new Set())
+    const [assigningWorkspace, setAssigningWorkspace] = useState<Set<string>>(new Set())
 
     const handleDeleteUser = async (userId: string) => {
         setDeletingUsers(prev => new Set(prev).add(userId))
@@ -32,6 +40,20 @@ export default function AdminUsers({
             await onDeleteUser(userId)
         } finally {
             setDeletingUsers(prev => {
+                const newSet = new Set(prev)
+                newSet.delete(userId)
+                return newSet
+            })
+        }
+    }
+
+    const handleWorkspaceChange = async (userId: string, workspaceId: string) => {
+        const workspaceIdNum = workspaceId === '' ? null : parseInt(workspaceId)
+        setAssigningWorkspace(prev => new Set(prev).add(userId))
+        try {
+            await onAssignWorkspace(userId, workspaceIdNum)
+        } finally {
+            setAssigningWorkspace(prev => {
                 const newSet = new Set(prev)
                 newSet.delete(userId)
                 return newSet
@@ -140,7 +162,7 @@ export default function AdminUsers({
                             {/* Table Header */}
                             <div style={{
                                 display: 'grid',
-                                gridTemplateColumns: '1fr 1fr 120px 100px 120px',
+                                gridTemplateColumns: '1fr 1fr 150px 120px 100px 120px',
                                 gap: '12px',
                                 padding: '16px',
                                 backgroundColor: '#f9fafb',
@@ -151,6 +173,7 @@ export default function AdminUsers({
                             }}>
                                 <div>Username</div>
                                 <div>User ID</div>
+                                <div>Workspace</div>
                                 <div>Meetings</div>
                                 <div>Created</div>
                                 <div>Actions</div>
@@ -162,7 +185,7 @@ export default function AdminUsers({
                                     key={user.id}
                                     style={{
                                         display: 'grid',
-                                        gridTemplateColumns: '1fr 1fr 120px 100px 120px',
+                                        gridTemplateColumns: '1fr 1fr 150px 120px 100px 120px',
                                         gap: '12px',
                                         padding: '16px',
                                         borderBottom: index < filteredUsers.length - 1 ? '1px solid #f3f4f6' : 'none',
@@ -182,6 +205,34 @@ export default function AdminUsers({
                                         textOverflow: 'ellipsis'
                                     }}>
                                         {user.id}
+                                    </div>
+                                    <div>
+                                        <select
+                                            value={user.workspace_id || ''}
+                                            onChange={(e) => handleWorkspaceChange(user.id, e.target.value)}
+                                            disabled={assigningWorkspace.has(user.id)}
+                                            style={{
+                                                width: '100%',
+                                                padding: '4px 6px',
+                                                border: '1px solid #d1d5db',
+                                                borderRadius: '4px',
+                                                fontSize: '12px',
+                                                backgroundColor: assigningWorkspace.has(user.id) ? '#f3f4f6' : 'white',
+                                                cursor: assigningWorkspace.has(user.id) ? 'not-allowed' : 'pointer'
+                                            }}
+                                        >
+                                            <option value="">No Workspace</option>
+                                            {workspaces.filter(w => w.is_active).map(workspace => (
+                                                <option key={workspace.id} value={workspace.id}>
+                                                    {workspace.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {assigningWorkspace.has(user.id) && (
+                                            <div style={{ fontSize: '10px', color: '#6b7280', marginTop: '2px' }}>
+                                                Updating...
+                                            </div>
+                                        )}
                                     </div>
                                     <div style={{
                                         display: 'flex',

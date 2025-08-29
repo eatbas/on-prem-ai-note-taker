@@ -7,6 +7,7 @@ import { ProgressDashboard, JobQueue } from '../../../components/queue'
 import AdminStats from '../components/AdminStats'
 import AdminUsers from '../components/AdminUsers'
 import AdminMeetings from '../components/AdminMeetings'
+import AdminWorkspaces from '../components/AdminWorkspaces'
 import AdminTools from '../components/AdminTools'
 
 // Import admin API utilities
@@ -17,6 +18,14 @@ import {
     deleteUser,
     deleteMeeting
 } from '../utils/adminApi'
+import {
+    getWorkspaces,
+    getWorkspacesDropdown,
+    createWorkspace,
+    updateWorkspace,
+    deactivateWorkspace,
+    assignUserToWorkspace
+} from '../../../services/api/workspaces'
 import { config } from '../../../utils/envLoader'
 
 // Types
@@ -25,6 +34,8 @@ interface User {
     username: string
     created_at: string
     meeting_count: number
+    workspace_id?: number
+    workspace_name?: string
 }
 
 interface AdminMeeting {
@@ -57,12 +68,14 @@ interface Stats {
 
 export default function AdminDashboard() {
     const navigate = useNavigate()
-    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'tools' | 'jobs' | 'progress'>('stats')
+    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'workspaces' | 'tools' | 'jobs' | 'progress'>('stats')
     
     // Data state
     const [stats, setStats] = useState<Stats | null>(null)
     const [users, setUsers] = useState<User[]>([])
     const [meetings, setMeetings] = useState<AdminMeeting[]>([])
+    const [workspaces, setWorkspaces] = useState<any[]>([])
+    const [workspaceDropdown, setWorkspaceDropdown] = useState<any[]>([])
     const [meetingsPagination, setMeetingsPagination] = useState({
         total_count: 0,
         offset: 0,
@@ -89,6 +102,16 @@ export default function AdminDashboard() {
             case 'meetings':
                 loadMeetingsData()
                 break
+            case 'workspaces':
+                loadWorkspacesData()
+                break
+        }
+    }, [activeTab])
+
+    // Load workspace dropdown data when users tab is active
+    useEffect(() => {
+        if (activeTab === 'users') {
+            loadWorkspaceDropdownData()
         }
     }, [activeTab])
 
@@ -160,6 +183,29 @@ export default function AdminDashboard() {
         }
     }
 
+    const loadWorkspacesData = async () => {
+        setLoading(true)
+        setError(null)
+        try {
+            const data = await getWorkspaces(true) // Include inactive
+            setWorkspaces(data)
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Failed to load workspaces')
+            showToast('Failed to load workspaces', 'error')
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const loadWorkspaceDropdownData = async () => {
+        try {
+            const data = await getWorkspacesDropdown()
+            setWorkspaceDropdown(data)
+        } catch (err) {
+            console.error('Failed to load workspace dropdown:', err)
+        }
+    }
+
     const handleDeleteUser = async (userId: string) => {
         if (!confirm('Are you sure? This will delete the user and ALL their meetings permanently.')) {
             return
@@ -195,10 +241,37 @@ export default function AdminDashboard() {
         loadMeetingsData(offset)
     }
 
+    // Workspace handlers
+    const handleCreateWorkspace = async (workspace: any) => {
+        await createWorkspace(workspace)
+        await loadWorkspacesData()
+        showToast('Workspace created successfully', 'success')
+    }
+
+    const handleUpdateWorkspace = async (id: number, update: any) => {
+        await updateWorkspace(id, update)
+        await loadWorkspacesData()
+        showToast('Workspace updated successfully', 'success')
+    }
+
+    const handleDeactivateWorkspace = async (id: number) => {
+        if (!confirm('Deactivate this workspace? Users will be unassigned.')) return
+        await deactivateWorkspace(id)
+        await loadWorkspacesData()
+        showToast('Workspace deactivated successfully', 'success')
+    }
+
+    const handleAssignWorkspace = async (userId: string, workspaceId: number | null) => {
+        await assignUserToWorkspace(userId, { workspace_id: workspaceId })
+        await loadUsersData()
+        showToast('User workspace assignment updated', 'success')
+    }
+
     const tabs = [
         { key: 'stats', label: '📊 Statistics', description: 'System overview' },
         { key: 'users', label: '👥 Users', description: 'User management' },
         { key: 'meetings', label: '📋 Meetings', description: 'Meeting management' },
+        { key: 'workspaces', label: '🏢 Workspaces', description: 'Workspace management' },
         { key: 'tools', label: '🔧 Tools', description: 'Administrative tools' },
         { key: 'jobs', label: '⚙️ Jobs', description: 'Background jobs' },
         { key: 'progress', label: '📈 Progress', description: 'System progress' }
@@ -218,11 +291,13 @@ export default function AdminDashboard() {
                 return (
                     <AdminUsers
                         users={users}
+                        workspaces={workspaceDropdown}
                         loading={loading}
                         error={error}
                         searchTerm={searchTerm}
                         onSearchChange={setSearchTerm}
                         onDeleteUser={handleDeleteUser}
+                        onAssignWorkspace={handleAssignWorkspace}
                     />
                 )
             case 'meetings':
@@ -239,6 +314,17 @@ export default function AdminDashboard() {
                         onDeleteMeeting={handleDeleteMeeting}
                         onPageChange={handleMeetingPageChange}
                         users={users}
+                    />
+                )
+            case 'workspaces':
+                return (
+                    <AdminWorkspaces
+                        workspaces={workspaces}
+                        loading={loading}
+                        error={error}
+                        onCreateWorkspace={handleCreateWorkspace}
+                        onUpdateWorkspace={handleUpdateWorkspace}
+                        onDeactivateWorkspace={handleDeactivateWorkspace}
                     />
                 )
             case 'tools':

@@ -10,6 +10,9 @@ export type Meeting = {
 	language?: 'tr' | 'en' | 'auto'  // Meeting language for transcription
 	// Optional metadata for display
 	duration?: number
+	// Workspace support
+	workspace_id?: number
+	is_personal: boolean
 }
 
 export type AudioType = 'microphone' | 'system' | 'speaker' | 'mixed'
@@ -30,10 +33,20 @@ export type Note = {
 	createdAt: number
 }
 
+export type Workspace = {
+	id: number
+	name: string
+	description?: string
+	is_active: boolean
+	createdAt: number
+	updatedAt?: number
+}
+
 export class AppDB extends Dexie {
 	meetings!: Table<Meeting, string>
 	chunks!: Table<Chunk, string>
 	notes!: Table<Note, string>
+	workspaces!: Table<Workspace, number>
 
 	constructor() {
 		super('onprem_notes_db')
@@ -54,6 +67,24 @@ export class AppDB extends Dexie {
 			// Migrate existing chunks to have 'mixed' audioType (backward compatibility)
 			return trans.table('chunks').toCollection().modify((chunk: any) => {
 				chunk.audioType = 'mixed'
+			})
+		})
+		
+		// Version 3: Add workspace support
+		this.version(3).stores({
+			meetings: 'id, createdAt, updatedAt, status, *tags, title, workspace_id, is_personal',
+			chunks: 'id, meetingId, index, createdAt, audioType',
+			notes: 'meetingId, createdAt',
+			workspaces: 'id, name, is_active, createdAt',
+		}).upgrade(trans => {
+			// Migrate existing meetings to be personal by default
+			return trans.table('meetings').toCollection().modify((meeting: any) => {
+				if (meeting.is_personal === undefined) {
+					meeting.is_personal = true
+				}
+				if (meeting.workspace_id === undefined) {
+					meeting.workspace_id = null
+				}
 			})
 		})
 	}

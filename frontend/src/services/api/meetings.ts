@@ -1,11 +1,13 @@
 import { apiRequest, apiBase, getAuthHeader, handleApiResponse, getUserId } from './core'
 
-export async function getMeetings() {
-	return apiRequest<any>('/meetings')
+export async function getMeetings(scope?: 'personal' | 'workspace' | 'all') {
+	const params = scope ? `?scope=${scope}` : ''
+	return apiRequest<any>(`/meetings${params}`)
 }
 
-export async function getVpsMeetings() {
-	return apiRequest<any>('/meetings')
+export async function getVpsMeetings(scope?: 'personal' | 'workspace' | 'all') {
+	const params = scope ? `?scope=${scope}` : ''
+	return apiRequest<any>(`/meetings${params}`)
 }
 
 export async function getMeeting(meetingId: string) {
@@ -28,20 +30,21 @@ export async function deleteMeeting(meetingId: string): Promise<{ message: strin
 export async function startMeeting(
 	title: string,
 	language: string = 'auto',
-	tags: string[] = []
+	tags: string[] = [],
+	scope: 'personal' | 'workspace' = 'personal'
 ): Promise<{ meetingId: string; message: string }> {
 	const userId = getUserId()
 	if (!userId) {
 		throw new Error('User ID not found. Please check your setup.')
 	}
 
-	return apiRequest<{ meetingId: string; message: string }>('/meetings', {
+	return apiRequest<{ meetingId: string; message: string }>('/meetings/start', {
 		method: 'POST',
 		body: JSON.stringify({
 			title,
 			language,
 			tags,
-			user_id: userId
+			scope
 		})
 	})
 }

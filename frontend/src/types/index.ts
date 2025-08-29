@@ -17,3 +17,6 @@ export type TimerIdNode = ReturnType<typeof setTimeout>
 
 // Union type for cross-platform compatibility
 export type CrossPlatformTimerId = number | TimerId
+
+// Workspace types - re-export from workspace.ts
+export * from './workspace'
