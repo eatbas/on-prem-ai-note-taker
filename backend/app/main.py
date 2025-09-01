@@ -13,6 +13,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .core.config import settings
+from .core.rate_limiter import rate_limiter, custom_rate_limit_handler
+from slowapi.errors import RateLimitExceeded
 from .models import JobType
 from .workers.job_manager import job_manager
 from .workers.queue_manager import queue_manager
@@ -44,6 +46,10 @@ app = FastAPI(
     version="1.0.0",
     description="AI-powered meeting transcription and summarization service 🎙️✨"
 )
+
+# 🚨 PHASE 3.3: Add rate limiting middleware
+app.state.limiter = rate_limiter.limiter
+app.add_exception_handler(RateLimitExceeded, custom_rate_limit_handler)
 
 # Configure logging
 _level = getattr(logging, settings.log_level.upper(), logging.INFO)

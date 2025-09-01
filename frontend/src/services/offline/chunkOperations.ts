@@ -6,7 +6,7 @@ import { generateId } from './offlineUtils'
 export async function addChunk(meetingId: string, blob: Blob, index: number, audioType: AudioType = 'mixed'): Promise<void> {
 	console.log(`💾 addChunk called:`, {
 		meetingId: meetingId, // Log full meeting ID to debug
-		meetingIdShort: meetingId.slice(0, 8) + '...',
+		meetingIdShort: meetingId ? meetingId.slice(0, 8) + '...' : 'unknown',
 		blobSize: blob.size,
 		blobType: blob.type,
 		index,

@@ -62,12 +62,14 @@ export interface Meeting {
   updatedAt: Timestamp
   duration?: number
   language?: Language
-  status: 'local' | 'uploaded' | 'processing' | 'complete'
+  status: 'local' | 'queued' | 'uploading' | 'processing' | 'synced'
   tags: string[]
   summary?: string
   transcript?: string
   workspace_id?: number
   is_personal: boolean
+  vps_id?: string
+  last_sync_attempt?: number
 }
 
 export interface MeetingMetadata {

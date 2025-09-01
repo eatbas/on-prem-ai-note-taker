@@ -38,7 +38,16 @@ export async function startMeeting(
 		throw new Error('User ID not found. Please check your setup.')
 	}
 
-	return apiRequest<{ meetingId: string; message: string }>('/meetings/start', {
+	console.log('🚀 startMeeting: Calling API with payload:', {
+		title,
+		language,
+		tags,
+		scope,
+		userId
+	})
+
+	// Backend returns meeting_id (snake_case) but we need meetingId (camelCase)
+	const response = await apiRequest<{ meeting_id: string; message: string; job_id?: string; language?: string }>('/meetings/start', {
 		method: 'POST',
 		body: JSON.stringify({
 			title,
@@ -47,6 +56,28 @@ export async function startMeeting(
 			scope
 		})
 	})
+
+	console.log('📝 startMeeting: Raw API response:', response)
+	console.log('🔍 startMeeting: Response type:', typeof response)
+	console.log('🔍 startMeeting: Response keys:', response ? Object.keys(response) : 'No response')
+
+	if (!response) {
+		throw new Error('No response received from server')
+	}
+
+	if (!response.meeting_id) {
+		console.error('❌ startMeeting: No meeting_id in response:', response)
+		throw new Error('Invalid response: missing meeting_id')
+	}
+
+	// Convert snake_case to camelCase for frontend consistency
+	const normalizedResponse = {
+		meetingId: response.meeting_id,
+		message: response.message
+	}
+
+	console.log('✅ startMeeting: Normalized response:', normalizedResponse)
+	return normalizedResponse
 }
 
 export async function uploadMeetingAudio(

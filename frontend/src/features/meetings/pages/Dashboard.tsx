@@ -426,7 +426,6 @@ const Dashboard = memo(function Dashboard({
 			setSendingMeetings(prev => new Set(prev).add(meetingId))
 			
 			// 🚨 IMPORTANT: Immediately update meeting status to 'queued' to prevent duplicate processing
-			// and show processing status in UI
 			await db.meetings.update(meetingId, { 
 				status: 'queued', 
 				updatedAt: Date.now() 
@@ -435,19 +434,29 @@ const Dashboard = memo(function Dashboard({
 			// Force refresh the UI to show the updated status immediately
 			await refresh()
 			
-			// Now start the actual sync process
-			await syncMeeting(meetingId)
+			// 🚨 PHASE 3.2: Use async sync with progress tracking in Dashboard
+			await syncMeeting(meetingId, (progress: any) => {
+				console.log(`📊 Dashboard Sync Progress for ${meetingId}: ${progress.progress}% - ${progress.message}`)
+				
+				// Show non-intrusive progress updates
+				showToast(`🔄 ${progress.progress}% - ${progress.message}`, 'info')
+			})
 			
 			// Refresh again to get the final status
 			await refresh()
 			showToast('Meeting sent successfully! 🎉', 'success')
+			
 		} catch (err) {
 			console.error('Retry failed:', err)
 			const errorMessage = err instanceof Error ? err.message : 'Unknown error'
 			setError(`Failed to send meeting: ${errorMessage}`)
 			
 			// Show specific error messages based on error type
-			if (errorMessage.includes('Server error') || errorMessage.includes('500')) {
+			if (errorMessage.includes('VPS memory usage too high')) {
+				showToast('⚠️ VPS memory is currently too high. Please try again in a few minutes.', 'error')
+			} else if (errorMessage.includes('File size') && errorMessage.includes('exceeds current memory constraints')) {
+				showToast('📁 File too large for current VPS memory. Try a smaller file or wait for memory to clear.', 'error')
+			} else if (errorMessage.includes('Server error') || errorMessage.includes('500')) {
 				showToast('Server error: The AI backend may be having issues. Please try again later.', 'error')
 			} else if (errorMessage.includes('Cannot connect')) {
 				showToast('Connection error: Cannot reach the AI backend server.', 'error')
@@ -458,6 +467,10 @@ const Dashboard = memo(function Dashboard({
 			} else {
 				showToast(`Failed to send meeting: ${errorMessage}`, 'error')
 			}
+			
+			// Force refresh to show error status
+			await refresh()
+			
 		} finally {
 			// Remove loading state
 			setSendingMeetings(prev => {

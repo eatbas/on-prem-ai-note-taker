@@ -151,7 +151,6 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     setSending(true)
     try {
       // 🚨 IMPORTANT: Immediately update meeting status to 'queued' to prevent duplicate processing
-      // and show processing status in UI
       await db.meetings.update(meetingId, { 
         status: 'queued', 
         updatedAt: Date.now() 
@@ -160,15 +159,25 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
       // Force reload to show the updated status immediately
       await loadMeeting()
       
-      // Now start the actual sync process
-      await syncMeeting(meetingId)
+      // 🚨 PHASE 3.2: Use async sync with progress tracking
+      await syncMeeting(meetingId, (progress: any) => {
+        console.log(`📊 Sync Progress: ${progress.progress}% - ${progress.message}`)
+        showToast(`Processing: ${progress.progress}% - ${progress.message}`, 'info')
+      })
+      
       showToast('Meeting processed successfully', 'success')
       
-      // Reload again to get the final status
+      // Reload to get the final status
       await loadMeeting()
     } catch (error) {
       console.error('Failed to process meeting:', error)
-      showToast('Failed to process meeting', 'error')
+      
+      // Show specific error message
+      const errorMessage = error instanceof Error ? error.message : 'Failed to process meeting'
+      showToast(errorMessage, 'error')
+      
+      // Reload to show error status
+      await loadMeeting()
     } finally {
       setSending(false)
     }

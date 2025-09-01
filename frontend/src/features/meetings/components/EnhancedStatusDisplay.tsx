@@ -52,27 +52,47 @@ export default function EnhancedStatusDisplay({
           color: '#dc2626',
           bgColor: '#fee2e2'
         }
+      case 'local':
+        return {
+          icon: '🏠',
+          label: 'Local',
+          color: '#6b7280',
+          bgColor: '#f3f4f6'
+        }
       case 'queued':
         return {
           icon: '⏳',
-          label: 'Processing',
-          color: '#92400e',
+          label: 'Queued',
+          color: '#d97706',
           bgColor: '#fef3c7'
         }
-      case 'sent':
+      case 'uploading':
         return {
-          icon: '✅',
+          icon: '📤',
+          label: 'Uploading',
+          color: '#0369a1',
+          bgColor: '#dbeafe'
+        }
+      case 'processing':
+        return {
+          icon: '🤖',
+          label: 'Processing',
+          color: '#7c2d12',
+          bgColor: '#fed7aa'
+        }
+      case 'synced':
+        return {
+          icon: '☁️',
           label: 'Synced',
           color: '#166534',
           bgColor: '#dcfce7'
         }
-      case 'local':
       default:
         return {
-          icon: '📝',
-          label: 'Local',
-          color: '#dc2626',
-          bgColor: '#fee2e2'
+          icon: '❓',
+          label: 'Unknown',
+          color: '#6b7280',
+          bgColor: '#f3f4f6'
         }
     }
   }

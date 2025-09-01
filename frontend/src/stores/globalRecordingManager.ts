@@ -1,5 +1,5 @@
 // Global recording manager to persist recording state across navigation
-import { addChunk } from '../services'
+import { addChunk, db } from '../services'
 import { startMeeting } from '../services/api/meetings'
 
 export interface GlobalRecordingState {
@@ -139,7 +139,7 @@ class GlobalRecordingManager {
 		const state = this.getState()
 		console.log('🔔 Global Recording Manager: Notifying listeners of state change:', {
 			isRecording: state.isRecording,
-			meetingId: state.meetingId?.slice(0, 8) + '...',
+			meetingId: state.meetingId ? state.meetingId.slice(0, 8) + '...' : 'none',
 			recordingTime: state.recordingTime,
 			listenerCount: this.listeners.size
 		})
@@ -160,20 +160,74 @@ class GlobalRecordingManager {
 			// Create meeting immediately with timestamp name using startMeeting API
 			const now = new Date()
 			const timestamp = now.toLocaleString()
-			const meetingResult = await startMeeting(
-				`Meeting ${timestamp}`, 
-				options.language, 
-				[], 
-				options.scope || 'personal'
-			)
+			const meetingTitle = `Meeting ${timestamp}`
+			
+			console.log('🚀 Starting meeting creation...')
+			console.log('📡 API Configuration:', {
+				language: options.language,
+				scope: options.scope || 'personal',
+				title: meetingTitle
+			})
+			
+			let meetingResult
+			try {
+				meetingResult = await startMeeting(
+					meetingTitle, 
+					options.language, 
+					[], 
+					options.scope || 'personal'
+				)
+			} catch (apiError) {
+				console.error('❌ Backend API call failed:', apiError)
+				throw new Error(`Failed to create meeting on server: ${apiError instanceof Error ? apiError.message : 'Unknown error'}`)
+			}
+			
+			console.log('📝 Meeting creation result:', meetingResult)
 			const meetingId = meetingResult.meetingId
+			
+			// Validate meetingId before proceeding
+			if (!meetingId || typeof meetingId !== 'string' || meetingId.trim() === '') {
+				console.error('❌ Invalid meetingId received:', meetingId)
+				throw new Error('Failed to create meeting: Invalid meeting ID received from server')
+			}
 			
 			console.log('📝 Created meeting with scope:', {
 				id: meetingId.slice(0, 8) + '...',
-				title: `Meeting ${timestamp}`,
+				title: meetingTitle,
 				language: options.language,
 				scope: options.scope || 'personal'
 			})
+			
+			// 🚨 CRITICAL: Store meeting locally in database for immediate access
+			// This prevents "Meeting Not Found" errors when navigating to the meeting
+			const localMeeting = {
+				id: meetingId.trim(), // Ensure no whitespace
+				title: meetingTitle,
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+				tags: [],
+				status: 'local' as const,
+				language: options.language,
+				duration: 0,
+				workspace_id: options.scope === 'workspace' ? null : null, // Will be set by backend
+				is_personal: options.scope === 'personal'
+			}
+			
+			console.log('💾 Attempting to store meeting locally:', {
+				id: localMeeting.id.slice(0, 8) + '...',
+				title: localMeeting.title,
+				status: localMeeting.status
+			})
+			
+			try {
+				await db.meetings.put(localMeeting)
+				console.log('✅ Meeting stored locally in database successfully')
+			} catch (dbError) {
+				console.error('❌ Failed to store meeting in local database:', dbError)
+				console.error('Meeting object that failed to store:', localMeeting)
+				// Don't throw here - recording can continue even if local storage fails
+				this.state.error = 'Warning: Meeting created but not stored locally'
+			}
 			
 			// Reset chunk indices
 			this.state.micChunkIndex = 0

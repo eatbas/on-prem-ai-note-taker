@@ -6,41 +6,187 @@ import { getMeeting } from './meetingOperations'
 import { assembleFileFromChunks, assembleFilesByAudioType } from './fileOperations'
 import { getChunks } from './chunkOperations'
 import { combineTranscriptsWithSpeakers } from './offlineUtils'
+import { performDuplicateCheck, markMeetingAsSynced } from '../sync/duplicateChecker'
+import { syncMeetingAsync, checkVpsMemoryStatus, syncMeetingWithRetry, RateLimitError, type JobProgress } from '../api/asyncMeetingSync'
 
-export async function syncMeeting(meetingId: string): Promise<void> {
+/**
+ * 🚨 PHASE 3.2: Async Meeting Sync with Progress Tracking
+ * 
+ * This function now uses async processing to prevent VPS freezing.
+ * It provides real-time progress updates and maintains all existing
+ * duplicate prevention and error handling logic.
+ */
+export async function syncMeeting(meetingId: string, onProgress?: (progress: JobProgress) => void): Promise<void> {
 	const meeting = await db.meetings.get(meetingId)
 	if (!meeting) {
 		throw new Error('Meeting not found')
 	}
 	
+	console.log(`🔍 Starting async sync for meeting ${meetingId}: ${meeting.title}`)
+	
+	// PHASE 2: Duplicate prevention check
+	console.log(`🔍 Checking for duplicates before sync...`)
+	const duplicateCheck = await performDuplicateCheck(meetingId)
+	
+	if (duplicateCheck.isDuplicate && !duplicateCheck.shouldSync) {
+		console.log(`⏭️ Skipping sync for ${meetingId}: ${duplicateCheck.reason}`)
+		
+		// Mark as synced if it's confirmed to exist on VPS
+		if (duplicateCheck.reason.includes('already exists on VPS')) {
+			await markMeetingAsSynced(meetingId)
+		}
+		
+		return
+	}
+	
+	console.log(`✅ Duplicate check passed: ${duplicateCheck.reason}`)
+	
+	// 🚨 PHASE 3.2: Check VPS memory status before processing
+	console.log(`💾 Checking VPS memory status...`)
+	const memoryStatus = await checkVpsMemoryStatus()
+	console.log(`💾 VPS Memory: ${memoryStatus.memoryUsage.toFixed(1)}MB - ${memoryStatus.recommendation}`)
+	
+	if (!memoryStatus.canProcess) {
+		throw new Error(`VPS memory usage too high (${memoryStatus.memoryUsage.toFixed(1)}MB). Please try again later.`)
+	}
+	
+	// Update status to queued and record sync attempt
+	await db.meetings.update(meetingId, { 
+		status: 'queued', 
+		last_sync_attempt: Date.now(),
+		updatedAt: Date.now() 
+	})
+	
 	const file = await assembleFileFromChunks(meetingId)
 	if (file.size === 0) {
+		await db.meetings.update(meetingId, { status: 'local', updatedAt: Date.now() })
 		throw new Error('No audio data found for this meeting')
 	}
 	
-	console.log(`Syncing meeting ${meetingId}, file size: ${(file.size / 1024 / 1024).toFixed(2)} MB`)
+	const fileSizeMB = file.size / 1024 / 1024
+	console.log(`🚀 Starting async sync for meeting ${meetingId}, file size: ${fileSizeMB.toFixed(2)} MB`)
 	
 	try {
-		// Ensure we always pass a valid language, defaulting to 'auto' for undefined
+		// Create enhanced progress tracking
+		const enhancedProgressCallback = async (progress: JobProgress) => {
+			console.log(`📊 Job ${progress.jobId} - ${progress.phase}: ${progress.progress}% - ${progress.message}`)
+			
+			// Update local meeting status based on job progress
+			let localStatus: 'queued' | 'uploading' | 'processing' | 'synced' = 'queued'
+			
+			if (progress.phase === 'QUEUED') {
+				localStatus = 'queued'
+			} else if (progress.phase === 'TRANSCRIBING' && progress.progress < 20) {
+				localStatus = 'uploading'
+			} else if (progress.phase === 'TRANSCRIBING' || progress.phase === 'SUMMARIZING') {
+				localStatus = 'processing'
+			}
+			
+			// Update local status
+			await db.meetings.update(meetingId, { 
+				status: localStatus, 
+				updatedAt: Date.now() 
+			})
+			
+			// Call user-provided progress callback
+			if (onProgress) {
+				onProgress(progress)
+			}
+		}
+		
+		// 🚨 PHASE 3.2 & 3.3: Use async processing with rate limiting instead of blocking call
+		const language = meeting.language || 'auto'
+		
+		try {
+			await syncMeetingWithRetry(meetingId, file, language, enhancedProgressCallback, (rateLimitInfo) => {
+				console.warn(`🚫 Rate limited during sync:`, rateLimitInfo)
+				// Store rate limit info for user feedback
+				console.log(`⏰ Retry recommended in ${rateLimitInfo.retryAfter} seconds`)
+			})
+		} catch (error) {
+			if (error instanceof RateLimitError) {
+				// Provide specific rate limiting feedback
+				throw new Error(`VPS is currently busy. ${error.message} Please try again in ${Math.ceil(error.retryAfter / 60)} minutes.`)
+			}
+			throw error
+		}
+		
+		// Mark meeting as synced
+		await markMeetingAsSynced(meetingId, meetingId)
+		
+		console.log(`✅ Successfully completed async sync for meeting ${meetingId}`)
+		
+		// TODO: In Phase 4, we'll implement local data cleanup after sync
+		// For now, keep data locally for debugging and rollback capability
+		
+	} catch (e) {
+		// Revert to local status on failure
+		await db.meetings.update(meetingId, { 
+			status: 'local', 
+			updatedAt: Date.now() 
+		})
+		console.error(`❌ Failed to sync meeting ${meetingId}:`, e)
+		throw e
+	}
+}
+
+/**
+ * Legacy sync function for backward compatibility
+ * This still uses the old blocking method as a fallback
+ */
+export async function syncMeetingBlocking(meetingId: string): Promise<void> {
+	console.log(`⚠️ Using legacy blocking sync for meeting ${meetingId}`)
+	
+	const meeting = await db.meetings.get(meetingId)
+	if (!meeting) {
+		throw new Error('Meeting not found')
+	}
+	
+	// Duplicate prevention check
+	const duplicateCheck = await performDuplicateCheck(meetingId)
+	if (duplicateCheck.isDuplicate && !duplicateCheck.shouldSync) {
+		if (duplicateCheck.reason.includes('already exists on VPS')) {
+			await markMeetingAsSynced(meetingId)
+		}
+		return
+	}
+	
+	// Update status to queued
+	await db.meetings.update(meetingId, { 
+		status: 'queued', 
+		last_sync_attempt: Date.now(),
+		updatedAt: Date.now() 
+	})
+	
+	const file = await assembleFileFromChunks(meetingId)
+	if (file.size === 0) {
+		await db.meetings.update(meetingId, { status: 'local', updatedAt: Date.now() })
+		throw new Error('No audio data found for this meeting')
+	}
+	
+	try {
+		// Use old blocking method
 		const language = meeting.language || 'auto'
 		const res = await transcribeAndSummarize(file, { language })
+		
+		// Save results locally
 		await db.notes.put({ 
 			meetingId, 
 			transcript: res.transcript.text, 
 			createdAt: Date.now(), 
 			summary: res.summary 
 		})
-		await db.meetings.update(meetingId, { 
-			status: 'sent', 
-			updatedAt: Date.now() 
-		})
-		console.log(`Successfully synced meeting ${meetingId}`)
+		
+		// Mark as synced
+		await markMeetingAsSynced(meetingId, meetingId)
+		
+		console.log(`✅ Successfully synced meeting ${meetingId} (blocking method)`)
+		
 	} catch (e) {
 		await db.meetings.update(meetingId, { 
-			status: 'queued', 
+			status: 'local', 
 			updatedAt: Date.now() 
 		})
-		console.error(`Failed to sync meeting ${meetingId}:`, e)
 		throw e
 	}
 }
@@ -59,8 +205,8 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(meeting
 	}
 	
 	// 🚨 CRITICAL: Check if meeting is already processed to prevent duplicate sending
-	if (meeting.status === 'sent') {
-		console.log(`✅ Meeting ${meetingId} already processed (status: sent). Skipping to prevent duplicate.`)
+	if (meeting.status === 'synced') {
+		console.log(`✅ Meeting ${meetingId} already processed (status: synced). Skipping to prevent duplicate.`)
 		return
 	}
 	
@@ -138,8 +284,10 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(meeting
 				// Check for close matches
 				const availableIds = Object.keys(chunksByMeeting)
 				availableIds.forEach(id => {
-					if (id.includes(meetingId.slice(8, 16)) || meetingId.includes(id.slice(8, 16))) {
-						console.error(`🔍 Potential match found: ${id} vs ${meetingId}`)
+					if (meetingId && id && meetingId.length > 16 && id.length > 16) {
+						if (id.includes(meetingId.slice(8, 16)) || meetingId.includes(id.slice(8, 16))) {
+							console.error(`🔍 Potential match found: ${id} vs ${meetingId}`)
+						}
 					}
 				})
 			}
@@ -175,7 +323,7 @@ export async function autoProcessMeetingRecordingWithWhisperOptimization(meeting
 		
 		// Update meeting status and title if provided
 		const updateData: any = { 
-			status: 'sent', 
+			status: 'synced', 
 			updatedAt: Date.now() 
 		}
 		if (title && title.trim()) {

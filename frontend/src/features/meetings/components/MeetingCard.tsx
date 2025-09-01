@@ -39,26 +39,24 @@ export default function MeetingCard({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'complete': return '#22c55e'
-      case 'processing': return '#f59e0b'
-      case 'queued': return '#f59e0b'  // Show queued as processing
-      case 'uploaded': return '#3b82f6'
-      case 'recording': return '#dc2626'
-      case 'sent': return '#22c55e'
       case 'local': return '#6b7280'
+      case 'queued': return '#d97706'
+      case 'uploading': return '#0369a1'
+      case 'processing': return '#7c2d12'
+      case 'synced': return '#22c55e'
+      case 'recording': return '#dc2626'
       default: return '#6b7280'
     }
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'complete': return '✅'
-      case 'processing': return '⏳'
-      case 'queued': return '⏳'  // Show queued as processing
-      case 'uploaded': return '☁️'
+      case 'local': return '🏠'
+      case 'queued': return '⏳'
+      case 'uploading': return '📤'
+      case 'processing': return '🤖'
+      case 'synced': return '☁️'
       case 'recording': return '🎙️'
-      case 'sent': return '☁️'
-      case 'local': return '💾'
       default: return '❓'
     }
   }
@@ -168,37 +166,43 @@ export default function MeetingCard({
           gap: '8px',
           marginLeft: '16px'
         }}>
-          <button
-            onClick={(e) => {
-              e.stopPropagation()
-              onSync(meeting.id)
-            }}
-            disabled={sending || meeting.status === 'queued' || meeting.status === 'sent'}
-            style={{
-              padding: '6px 12px',
-              backgroundColor: (sending || meeting.status === 'queued' || meeting.status === 'sent') ? '#9ca3af' : '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '12px',
-              fontWeight: '500',
-              cursor: (sending || meeting.status === 'queued' || meeting.status === 'sent') ? 'not-allowed' : 'pointer',
-              opacity: (sending || meeting.status === 'queued' || meeting.status === 'sent') ? 0.6 : 1,
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              if (!sending && meeting.status !== 'queued' && meeting.status !== 'sent') {
-                e.currentTarget.style.backgroundColor = '#2563eb'
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!sending && meeting.status !== 'queued' && meeting.status !== 'sent') {
-                e.currentTarget.style.backgroundColor = '#3b82f6'
-              }
-            }}
-          >
-            {(sending || meeting.status === 'queued') ? '⏳' : meeting.status === 'sent' ? '✅' : '🔄'} {meeting.status === 'sent' ? 'Sent' : (sending || meeting.status === 'queued') ? 'Processing' : 'Process'}
-          </button>
+                     <button
+             onClick={(e) => {
+               e.stopPropagation()
+               onSync(meeting.id)
+             }}
+             disabled={sending || ['queued', 'uploading', 'processing', 'synced'].includes(meeting.status)}
+             style={{
+               padding: '6px 12px',
+               backgroundColor: (sending || ['queued', 'uploading', 'processing', 'synced'].includes(meeting.status)) ? '#9ca3af' : '#3b82f6',
+               color: 'white',
+               border: 'none',
+               borderRadius: '6px',
+               fontSize: '12px',
+               fontWeight: '500',
+               cursor: (sending || ['queued', 'uploading', 'processing', 'synced'].includes(meeting.status)) ? 'not-allowed' : 'pointer',
+               opacity: (sending || ['queued', 'uploading', 'processing', 'synced'].includes(meeting.status)) ? 0.6 : 1,
+               transition: 'all 0.2s ease'
+             }}
+             onMouseEnter={(e) => {
+               if (!sending && !['queued', 'uploading', 'processing', 'synced'].includes(meeting.status)) {
+                 e.currentTarget.style.backgroundColor = '#2563eb'
+               }
+             }}
+             onMouseLeave={(e) => {
+               if (!sending && !['queued', 'uploading', 'processing', 'synced'].includes(meeting.status)) {
+                 e.currentTarget.style.backgroundColor = '#3b82f6'
+               }
+             }}
+           >
+             {getStatusIcon(meeting.status)} {
+               meeting.status === 'synced' ? 'Synced' :
+               meeting.status === 'processing' ? 'Processing' :
+               meeting.status === 'uploading' ? 'Uploading' :
+               meeting.status === 'queued' ? 'Queued' :
+               sending ? 'Processing' : 'Sync'
+             }
+           </button>
 
           <button
             onClick={(e) => {

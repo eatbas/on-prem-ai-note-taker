@@ -1,18 +1,24 @@
 import Dexie, { Table } from 'dexie'
 
+// Enhanced meeting status flow for better tracking and VPS optimization
+export type MeetingStatus = 'local' | 'queued' | 'uploading' | 'processing' | 'synced'
+
 export type Meeting = {
 	id: string
 	title: string
 	createdAt: number
 	updatedAt: number
 	tags: string[]
-	status: 'local' | 'queued' | 'sent'
+	status: MeetingStatus
 	language?: 'tr' | 'en' | 'auto'  // Meeting language for transcription
 	// Optional metadata for display
 	duration?: number
 	// Workspace support
 	workspace_id?: number
 	is_personal: boolean
+	// Sync tracking
+	vps_id?: string  // ID on VPS if synced
+	last_sync_attempt?: number  // Timestamp of last sync attempt
 }
 
 export type AudioType = 'microphone' | 'system' | 'speaker' | 'mixed'
@@ -84,6 +90,29 @@ export class AppDB extends Dexie {
 				}
 				if (meeting.workspace_id === undefined) {
 					meeting.workspace_id = null
+				}
+			})
+		})
+		
+		// Version 4: Enhanced sync tracking and status types
+		this.version(4).stores({
+			meetings: 'id, createdAt, updatedAt, status, *tags, title, workspace_id, is_personal, vps_id, last_sync_attempt',
+			chunks: 'id, meetingId, index, createdAt, audioType',
+			notes: 'meetingId, createdAt',
+			workspaces: 'id, name, is_active, createdAt',
+		}).upgrade(trans => {
+			// Migrate existing status types and add sync tracking fields
+			return trans.table('meetings').toCollection().modify((meeting: any) => {
+				// Convert old 'sent' status to 'synced'
+				if (meeting.status === 'sent') {
+					meeting.status = 'synced'
+				}
+				// Add sync tracking fields
+				if (meeting.vps_id === undefined) {
+					meeting.vps_id = null
+				}
+				if (meeting.last_sync_attempt === undefined) {
+					meeting.last_sync_attempt = null
 				}
 			})
 		})

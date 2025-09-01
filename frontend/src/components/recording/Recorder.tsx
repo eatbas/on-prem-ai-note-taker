@@ -144,8 +144,10 @@ export default function Recorder({
         scope: config.scope
       })
 
+      // Always close the modal, regardless of success or failure
+      setShowModal(false)
+
       if (result.success && result.meetingId) {
-        setShowModal(false)
         onCreated(result.meetingId)
 
         // Show system audio reminder notification
@@ -166,9 +168,16 @@ export default function Recorder({
         }
 
         console.log('🎙️ Dual-channel recording started successfully')
+      } else {
+        // Show error if recording failed
+        showToast('❌ Failed to start recording. Please try again.', 'error')
+        console.error('Recording failed:', result)
       }
     } catch (error) {
+      // Always close the modal even on error
+      setShowModal(false)
       console.error('Failed to start recording:', error)
+      showToast(`❌ Recording error: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error')
     }
   }
 

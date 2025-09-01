@@ -4,6 +4,7 @@ import os
 import tempfile
 import json
 import asyncio
+import logging
 from typing import Any, Dict, Optional
 from datetime import datetime
 
@@ -20,8 +21,9 @@ from .models.user import get_or_create_user
 from .core.utils import get_whisper_model, validate_language, require_basic_auth
 from .core.prompts import get_single_summary_prompt
 
-# Initialize router
+# Initialize router and logger
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+logger = logging.getLogger(__name__)
 
 # Initialize Ollama client
 _ollama_client = OllamaClient(
@@ -70,8 +72,21 @@ async def process_transcribe_and_summarize_job(
     language: str,
     user_id: str
 ):
-    """Background task to process transcription and summarization"""
+    """Background task to process transcription and summarization with memory management"""
+    from .core.memory_manager import memory_manager, validate_file_size
+    
     try:
+        # 🚨 PHASE 3.1: Validate file size against memory constraints
+        if not validate_file_size(len(file_content)):
+            error_msg = f"File too large for current memory constraints: {len(file_content) / 1024 / 1024:.1f}MB"
+            logger.error(error_msg)
+            job_store.update(job_id, phase=Phase.ERROR, progress=0.0, message=error_msg)
+            raise ValueError(error_msg)
+        
+        # Log initial memory state
+        initial_memory = memory_manager.get_memory_usage()
+        logger.info(f"💾 Starting job {job_id} with memory usage: {initial_memory.get('process', {}).get('rss_mb', 0):.1f}MB")
+        
         # Update job to processing
         job_store.update(job_id, phase=Phase.TRANSCRIBING, progress=5.0, message="Starting transcription...")
         
@@ -84,11 +99,18 @@ async def process_transcribe_and_summarize_job(
             tmp_path = tmp.name
         
         try:
+            # 🚨 PHASE 3.1: Monitor memory before model loading
+            memory_manager.monitor_memory_usage()
+            
             # Get Whisper model
             model = get_whisper_model()
             job_store.update(job_id, progress=10.0, message="Model loaded, transcribing audio...")
             
+            # 🚨 PHASE 3.1: Monitor memory before transcription
+            memory_manager.monitor_memory_usage()
+            
             # Transcribe with configured quality settings
+            logger.info(f"🎵 Starting transcription for {file_name} ({len(file_content) / 1024 / 1024:.1f}MB)")
             segments, info = model.transcribe(
                 tmp_path,
                 language=validated_language if validated_language != "auto" else None,
@@ -106,6 +128,10 @@ async def process_transcribe_and_summarize_job(
                 compression_ratio_threshold=settings.whisper_compression_ratio_threshold,
                 log_prob_threshold=settings.whisper_log_prob_threshold
             )
+            
+            # 🚨 PHASE 3.1: Monitor memory after transcription
+            memory_manager.monitor_memory_usage()
+            logger.info(f"✅ Transcription completed for {file_name}")
             
             # Process segments with progress updates
             segments_out = []
@@ -218,14 +244,46 @@ async def process_transcribe_and_summarize_job(
             )
             
         finally:
+            # 🚨 PHASE 3.1: Critical memory cleanup after processing
+            try:
+                logger.info(f"🧹 Starting memory cleanup for job {job_id}")
+                
+                # Force Whisper model cleanup
+                cleanup_success = memory_manager.cleanup_whisper_model(force=True)
+                
+                # Log final memory state
+                final_memory = memory_manager.get_memory_usage()
+                final_mb = final_memory.get('process', {}).get('rss_mb', 0)
+                initial_mb = initial_memory.get('process', {}).get('rss_mb', 0)
+                memory_freed = initial_mb - final_mb
+                
+                logger.info(f"💾 Memory cleanup completed for job {job_id}")
+                logger.info(f"📊 Memory stats: Initial: {initial_mb:.1f}MB, Final: {final_mb:.1f}MB, Freed: {memory_freed:.1f}MB")
+                
+                if cleanup_success:
+                    logger.info(f"✅ Whisper model cleanup successful for job {job_id}")
+                else:
+                    logger.warning(f"⚠️ Whisper model cleanup had issues for job {job_id}")
+                    
+            except Exception as cleanup_error:
+                logger.error(f"❌ Memory cleanup failed for job {job_id}: {cleanup_error}")
+            
             # Cleanup temp file
             try:
                 os.remove(tmp_path)
-            except OSError:
-                pass
+                logger.debug(f"🗑️ Temp file removed: {tmp_path}")
+            except OSError as e:
+                logger.warning(f"Failed to remove temp file {tmp_path}: {e}")
                 
     except Exception as e:
-        # Job failed
+        # Job failed - ensure cleanup even on failure
+        try:
+            from .core.memory_manager import memory_manager
+            logger.error(f"❌ Job {job_id} failed, forcing emergency cleanup")
+            memory_manager.cleanup_whisper_model(force=True)
+        except Exception as emergency_cleanup_error:
+            logger.error(f"❌ Emergency cleanup failed: {emergency_cleanup_error}")
+        
         error_message = f"Job failed: {str(e)}"
         job_store.update(
             job_id,
@@ -255,10 +313,20 @@ async def submit_transcribe_and_summarize_job(
     # Read and validate file size
     content = await file.read()
     size_mb = len(content) / (1024 * 1024)
+    
+    # 🚨 PHASE 3.1: Check both size limit and memory constraints
+    from .core.memory_manager import validate_file_size
+    
     if size_mb > settings.max_upload_mb:
         raise HTTPException(
             status_code=413, 
             detail=f"File too large: {size_mb:.1f} MB > {settings.max_upload_mb} MB"
+        )
+    
+    if not validate_file_size(len(content)):
+        raise HTTPException(
+            status_code=413,
+            detail=f"File size {size_mb:.1f} MB exceeds current memory constraints. Please try again later or upload a smaller file."
         )
     
     # Validate language
@@ -392,3 +460,67 @@ async def stream_job_events(
             "Access-Control-Allow-Headers": "*"
         }
     )
+
+
+# 🚨 PHASE 3.1: Memory monitoring endpoints
+@router.get("/memory/stats")
+async def get_memory_stats(
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    _: None = Depends(require_basic_auth),
+):
+    """Get current VPS memory usage statistics"""
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    
+    try:
+        from .core.memory_manager import get_memory_stats
+        memory_stats = get_memory_stats()
+        
+        return {
+            "status": "ok",
+            "timestamp": datetime.utcnow().isoformat(),
+            "memory": memory_stats,
+            "message": "Memory statistics retrieved successfully"
+        }
+    except Exception as e:
+        logger.error(f"Failed to get memory stats: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to get memory statistics: {str(e)}")
+
+
+@router.post("/memory/cleanup")
+async def force_memory_cleanup(
+    x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
+    _: None = Depends(require_basic_auth),
+):
+    """Force emergency memory cleanup (admin operation)"""
+    if not x_user_id:
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+    
+    try:
+        from .core.memory_manager import emergency_cleanup
+        
+        # Get memory before cleanup
+        before_stats = get_memory_stats()
+        before_mb = before_stats.get('process', {}).get('rss_mb', 0)
+        
+        # Force cleanup
+        cleanup_success = emergency_cleanup()
+        
+        # Get memory after cleanup
+        after_stats = get_memory_stats()
+        after_mb = after_stats.get('process', {}).get('rss_mb', 0)
+        
+        memory_freed = before_mb - after_mb
+        
+        return {
+            "status": "completed",
+            "timestamp": datetime.utcnow().isoformat(),
+            "cleanup_success": cleanup_success,
+            "memory_freed_mb": round(memory_freed, 2),
+            "memory_before_mb": round(before_mb, 2),
+            "memory_after_mb": round(after_mb, 2),
+            "message": f"Emergency cleanup completed. Freed {memory_freed:.1f}MB of memory."
+        }
+    except Exception as e:
+        logger.error(f"Emergency cleanup failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Emergency cleanup failed: {str(e)}")

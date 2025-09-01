@@ -22,8 +22,16 @@ console.log('🔗 Connecting to VPS backend at:', 'http://95.111.244.159:8000/ap
 // Expose desktop capture API for system audio recording
 contextBridge.exposeInMainWorld('desktopCapture', {
 	getSources: async (types) => {
-		const { desktopCapturer } = require('electron')
-		return await desktopCapturer.getSources({ types, fetchWindowIcons: false })
+		try {
+			const { desktopCapturer } = require('electron')
+			if (!desktopCapturer || !desktopCapturer.getSources) {
+				throw new Error('desktopCapturer.getSources is not available')
+			}
+			return await desktopCapturer.getSources({ types, fetchWindowIcons: false })
+		} catch (error) {
+			console.error('❌ getSources failed:', error)
+			throw error
+		}
 	},
 	
 	// Modern system audio capture using getDisplayMedia
@@ -101,6 +109,11 @@ contextBridge.exposeInMainWorld('desktopCapture', {
 		try {
 			console.log('🔊 Attempting desktop capturer system audio (automatic)...')
 			const { desktopCapturer } = require('electron')
+			
+			// Check if desktopCapturer and getSources are available
+			if (!desktopCapturer || !desktopCapturer.getSources) {
+				throw new Error('desktopCapturer.getSources is not available')
+			}
 			
 			// Get all available sources
 			const sources = await desktopCapturer.getSources({ 

@@ -25,6 +25,7 @@ import { NotificationProvider } from './contexts/NotificationContext'
 import { NotificationContainer } from './components/common'
 import { loadBackgroundProcessor, preloadCriticalServices } from './lib/serviceLoader'
 import './services/cleanupJobs' // Import cleanup utilities for emergency use
+import { cleanupSyncedMeetings } from './services/sync/duplicateChecker'
 
 const isElectron = typeof navigator !== 'undefined' && 
                   navigator.userAgent.toLowerCase().includes('electron') &&
@@ -84,6 +85,9 @@ export default function App() {
           })
           console.log('🔄 VPS health state updated manually')
         }
+        
+        // 🧹 PHASE 2: Cleanup synced meetings to prevent duplicates
+        await cleanupSyncedMeetings()
       } catch (error) {
         console.error('❌ Manual VPS health check failed:', error)
       }
