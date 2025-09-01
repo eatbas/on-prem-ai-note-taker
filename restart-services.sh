@@ -2,7 +2,10 @@
 
 # ===== On-Prem AI Note Taker - VPS Service Restart Script (ENHANCED v4.0) =====
 # This script restarts all services with MAXIMUM ACCURACY configuration
-# Run this script: ./restart-services.sh
+# 
+# Usage:
+#   ./restart-services.sh     - Full restart with optimizations (default)
+#   ./restart-services.sh r   - Quick backend restart for code updates
 # 
 # 🏆 MAXIMUM ACCURACY OPTIMIZATIONS:
 # - Whisper large-v3 model (70-80% better accuracy than base/tiny)
@@ -13,6 +16,12 @@
 # - Intelligent model downloading and verification
 
 set -e  # Exit on any error
+
+# Parse command line arguments
+QUICK_MODE="false"
+if [ "$1" = "r" ]; then
+    QUICK_MODE="true"
+fi
 
 echo "🚀 Starting ENHANCED VPS Service Restart Process (v4.0)..."
 echo "============================================================="
@@ -285,6 +294,37 @@ manage_models() {
     echo "   📁 Ollama models: Docker volume (preserved across restarts)"
 }
 
+# Function to quick restart backend only
+quick_restart_backend() {
+    echo ""
+    echo "⚡ Quick Backend Restart for Code Updates..."
+    echo "=========================================="
+    
+    # Check if Docker is running
+    check_docker
+    
+    echo "🛑 Stopping backend container..."
+    docker compose stop backend || true
+    
+    echo "🗑️  Removing backend container..."
+    docker compose rm -f backend || true
+    
+    echo "🚀 Starting backend with build..."
+    docker compose up -d --build backend
+    
+    echo "✅ Backend restarted successfully"
+    
+    # Quick status check
+    echo ""
+    echo "📊 Backend Status:"
+    docker compose ps backend
+    
+    echo ""
+    echo "⚡ Quick restart completed!"
+    echo "🌐 Backend API: http://95.111.244.159:8000"
+    echo "📝 Backend logs: docker compose logs -f backend"
+}
+
 # Function to start services
 start_services() {
     echo ""
@@ -380,6 +420,19 @@ show_final_status() {
 
 # Main execution
 main() {
+    if [ "$QUICK_MODE" = "true" ]; then
+        echo "⚡ QUICK BACKEND RESTART MODE"
+        echo "============================="
+        echo "This will only restart the backend container for code updates."
+        echo "Use './restart-services.sh' for full restart with optimizations."
+        echo ""
+        
+        # Quick restart backend only
+        quick_restart_backend
+        
+        return
+    fi
+    
     echo "🏆 ENHANCED VPS Service Restart Script"
     echo "======================================"
     echo "This script will:"
@@ -433,7 +486,11 @@ main() {
 }
 
 # Run main function
-echo "🚀 Starting simplified script execution..."
+if [ "$QUICK_MODE" = "true" ]; then
+    echo "⚡ Starting quick backend restart..."
+else
+    echo "🚀 Starting full service restart with optimizations..."
+fi
 
 # Call main function directly
 main
