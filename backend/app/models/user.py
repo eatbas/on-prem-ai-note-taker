@@ -23,8 +23,10 @@ class User(Base):
     
     # Relationships
     # 🚨 MULTI-WORKSPACE: Many-to-many relationship with workspaces
-    user_workspaces = relationship("UserWorkspace", back_populates="user", cascade="all, delete-orphan")
-    workspaces = relationship("Workspace", secondary="user_workspaces", back_populates="users", viewonly=True)
+    user_workspaces = relationship("UserWorkspace", back_populates="user", cascade="all, delete-orphan", foreign_keys="[UserWorkspace.user_id]")
+    workspaces = relationship("Workspace", secondary="user_workspaces", back_populates="users", viewonly=True, 
+                             primaryjoin="User.id == UserWorkspace.user_id",
+                             secondaryjoin="Workspace.id == UserWorkspace.workspace_id")
     
     meetings = relationship("Meeting", back_populates="user")
     jobs = relationship("Job", back_populates="user")
@@ -47,6 +49,13 @@ class User(Base):
         for uw in self.user_workspaces:
             if uw.workspace_id == workspace_id:
                 return uw.role
+        return None
+    
+    @property
+    def workspace_id(self) -> Optional[int]:
+        """DEPRECATED: Backward compatibility property. Returns primary workspace ID."""
+        if self.user_workspaces:
+            return self.user_workspaces[0].workspace_id
         return None
 
 

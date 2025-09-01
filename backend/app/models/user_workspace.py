@@ -24,7 +24,7 @@ class UserWorkspace(Base):
     assigned_by = Column(String, ForeignKey("users.id"), nullable=True)  # Who assigned this user
     
     # Relationships
-    user = relationship("User", back_populates="user_workspaces")
+    user = relationship("User", back_populates="user_workspaces", foreign_keys=[user_id])
     workspace = relationship("Workspace", back_populates="user_workspaces")
     assigned_by_user = relationship("User", foreign_keys=[assigned_by])
 

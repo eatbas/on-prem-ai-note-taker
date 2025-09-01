@@ -4,6 +4,16 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+class UserWorkspace(BaseModel):
+    """Workspace info for a user"""
+    id: int
+    name: str
+    description: str
+    role: str
+    is_responsible: bool
+    assigned_at: str
+
+
 class MeetingResponse(BaseModel):
     id: str
     title: str
@@ -44,6 +54,8 @@ class AdminUserResponse(BaseModel):
     meeting_count: int
     workspace_id: Optional[int] = None
     workspace_name: Optional[str] = None
+    workspaces: List[UserWorkspace] = []
+    total_workspaces: int = 0
 
 
 class AdminMeetingResponse(BaseModel):

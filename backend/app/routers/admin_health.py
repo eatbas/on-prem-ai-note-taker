@@ -15,7 +15,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from ..core.deps import get_db, require_basic_auth
+from ..core.deps import get_db
+from ..core.utils import require_basic_auth
 from ..core.config import settings
 from ..models.meeting import Meeting
 from ..models.job import Job

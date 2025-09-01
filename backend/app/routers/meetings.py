@@ -52,7 +52,7 @@ async def get_user_profile(
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    """Get current user profile including workspace information"""
+    """Get current user profile including multi-workspace information"""
     if not x_user_id:
         raise HTTPException(status_code=400, detail="X-User-Id header required")
     
@@ -63,22 +63,38 @@ async def get_user_profile(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Get workspace information if user has one
+    # 🚨 MULTI-WORKSPACE: Get workspace information using WorkspaceService
+    from ..services.workspace_service import WorkspaceService
+    workspace_service = WorkspaceService(db)
+    
+    # Get all user workspaces
+    user_workspaces = workspace_service.get_user_workspaces(user_id)
+    responsible_workspaces = workspace_service.get_responsible_workspaces(user_id)
+    
+    # Legacy single workspace info (for backward compatibility)
     workspace_info = None
-    if user.workspace_id:
-        workspace = db.query(Workspace).filter(Workspace.id == user.workspace_id).first()
-        if workspace:
-            workspace_info = {
-                "id": workspace.id,
-                "name": workspace.name,
-                "description": workspace.description
-            }
+    if user_workspaces:
+        # Use first workspace as primary for legacy field
+        primary_workspace = user_workspaces[0]
+        workspace_info = {
+            "id": primary_workspace["id"],
+            "name": primary_workspace["name"],
+            "description": primary_workspace["description"],
+            "role": primary_workspace["role"],
+            "is_responsible": primary_workspace["is_responsible"],
+            "assigned_at": primary_workspace["assigned_at"]
+        }
     
     return {
         "id": user.id,
         "username": user.username,
+        # Legacy fields for backward compatibility
         "workspace": workspace_info,
-        "has_workspace": workspace_info is not None
+        "has_workspace": len(user_workspaces) > 0,
+        # 🚨 MULTI-WORKSPACE: New fields for frontend
+        "workspaces": user_workspaces,
+        "responsible_workspaces": responsible_workspaces,
+        "total_workspaces": len(user_workspaces)
     }
 
 
@@ -799,13 +815,13 @@ async def auto_process_meeting(
 async def process_meeting_async(
     meeting_id: str,
     request: Request,  # 🚨 PHASE 3.3: Add request for rate limiting
+    _auth: None = Depends(require_basic_auth),
+    db: Session = Depends(get_db),
     audio_file: UploadFile = File(...),
     language: Optional[str] = Form(default="auto"),
     use_celery: Optional[bool] = Form(default=True),  # 🚨 PHASE 3.4: Choose processing method
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    _auth: None = Depends(require_basic_auth),
-    db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
     """
     🚨 PHASE 3.2: Process meeting audio asynchronously to prevent VPS freezing.

@@ -22,6 +22,7 @@ from .meetings import (
     StartMeetingResponse,
     AdminUserResponse,
     AdminMeetingResponse,
+    UserWorkspace,
 )
 from .chat import (
     ChatRequest,
@@ -48,6 +49,7 @@ __all__ = [
     "StartMeetingResponse",
     "AdminUserResponse",
     "AdminMeetingResponse",
+    "UserWorkspace",
     # Chat schemas
     "ChatRequest",
     "ChatResponse",

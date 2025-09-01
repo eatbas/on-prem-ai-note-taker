@@ -167,7 +167,9 @@ class CallbackTask(Task):
 celery_app.Task = CallbackTask
 
 # Worker startup/shutdown hooks
-@celery_app.signal('worker_process_init')
+from celery.signals import worker_process_init as celery_worker_init
+
+@celery_worker_init.connect
 def worker_process_init(sender=None, conf=None, **kwargs):
     """Initialize worker process"""
     logger.info("🚀 Celery worker process starting...")
@@ -180,7 +182,9 @@ def worker_process_init(sender=None, conf=None, **kwargs):
     except Exception as e:
         logger.warning(f"⚠️ Failed to initialize memory manager: {e}")
 
-@celery_app.signal('worker_process_shutdown')
+from celery.signals import worker_process_shutdown as celery_worker_shutdown
+
+@celery_worker_shutdown.connect
 def worker_process_shutdown(sender=None, conf=None, **kwargs):
     """Cleanup on worker shutdown"""
     logger.info("🛑 Celery worker process shutting down...")

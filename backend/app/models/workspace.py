@@ -21,7 +21,9 @@ class Workspace(Base):
     
     # 🚨 MULTI-WORKSPACE: Many-to-many relationships
     user_workspaces = relationship("UserWorkspace", back_populates="workspace", cascade="all, delete-orphan")
-    users = relationship("User", secondary="user_workspaces", back_populates="workspaces", viewonly=True)
+    users = relationship("User", secondary="user_workspaces", back_populates="workspaces", viewonly=True,
+                        primaryjoin="Workspace.id == UserWorkspace.workspace_id",
+                        secondaryjoin="User.id == UserWorkspace.user_id")
     
     meeting_workspaces = relationship("MeetingWorkspace", back_populates="workspace", cascade="all, delete-orphan")
     meetings = relationship("Meeting", secondary="meeting_workspaces", back_populates="workspaces", viewonly=True)

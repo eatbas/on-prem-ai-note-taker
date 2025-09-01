@@ -15,12 +15,15 @@ slowapi==0.1.9
 celery[redis]==5.3.4
 kombu==5.3.4
 
-# 🚨 PHASE 4.2: Speaker Diarization (CPU-optimized for VPS)
+# 🚨 PHASE 4.2: Speaker Diarization (CPU-optimized for VPS)  
 pyannote.audio==3.1.1
+# PyTorch (will use CPU in Docker environment without CUDA)
 torch==2.1.0
 torchaudio==2.1.0
 speechbrain==0.5.16
 huggingface_hub>=0.19.0
 librosa>=0.9.0
 soundfile>=0.12.0
+# Additional dependencies for backend health monitoring
+psutil>=5.9.0
 
