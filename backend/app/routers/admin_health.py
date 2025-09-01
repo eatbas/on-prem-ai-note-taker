@@ -33,7 +33,7 @@ except ImportError:
 logger = logging.getLogger(__name__)
 
 router = APIRouter(
-    prefix="/admin/health",
+    prefix="/api/admin/health",
     tags=["admin", "health"],
     dependencies=[Depends(require_basic_auth)]
 )

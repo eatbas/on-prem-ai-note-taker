@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useToast } from '../../../../components/common'
+import { apiBase, getApiHeaders } from '../../../../services/api/core'
 
 interface SystemHealth {
   vps: {
@@ -63,10 +64,13 @@ export default function ProductionHealthDashboard() {
 
   const fetchHealthData = async () => {
     try {
-      // Simulate health data fetching
-      // In production, these would be real API calls
-      const healthResponse = await fetch('/api/admin/health/comprehensive')
-      const metricsResponse = await fetch('/api/admin/metrics/performance')
+      // Use centralized API base and headers so it works in dev/prod
+      const healthResponse = await fetch(`${apiBase}/admin/health/comprehensive`, {
+        headers: { ...getApiHeaders() }
+      })
+      const metricsResponse = await fetch(`${apiBase}/admin/health/performance`, {
+        headers: { ...getApiHeaders() }
+      })
       
       if (healthResponse.ok && metricsResponse.ok) {
         setHealth(await healthResponse.json())

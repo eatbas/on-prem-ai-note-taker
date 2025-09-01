@@ -27,7 +27,6 @@ from .routers import (
     workspaces_router,
     queue_router,
     job_router,
-    progress_router,
     tags_router,
 )
 from .routers.admin_health import router as admin_health_router
@@ -87,7 +86,6 @@ app.include_router(workspaces_router)
 app.include_router(tags_router)
 app.include_router(queue_router)
 app.include_router(job_router)
-app.include_router(progress_router)
 app.include_router(jobs_router)  # Keep existing jobs router for compatibility
 
 

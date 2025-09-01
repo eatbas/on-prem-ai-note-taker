@@ -1,7 +1,7 @@
 import React, { useEffect, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useToast } from '../../../components/common'
-import { ProgressDashboard, JobQueue } from '../../../components/queue'
+import { JobQueue } from '../../../components/queue'
 
 // Import organized admin components
 import {
@@ -85,7 +85,7 @@ interface Stats {
 
 const AdminDashboard = memo(function AdminDashboard() {
   const navigate = useNavigate()
-  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'workspaces' | 'tools' | 'jobs' | 'progress' | 'health'>('stats')
+  const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'workspaces' | 'tools' | 'jobs' | 'health'>('stats')
   
   // Data state
   const [stats, setStats] = useState<Stats | null>(null)
@@ -114,7 +114,6 @@ const AdminDashboard = memo(function AdminDashboard() {
     { key: 'workspaces', label: '🏢 Workspaces', description: 'Workspace management' },
     { key: 'tools', label: '🔧 Tools', description: 'Administrative tools' },
     { key: 'jobs', label: '⚙️ Jobs', description: 'Background jobs' },
-    { key: 'progress', label: '📈 Progress', description: 'System progress' },
     { key: 'health', label: '🔍 Health', description: 'Production monitoring' }
   ]
 
@@ -427,8 +426,6 @@ const AdminDashboard = memo(function AdminDashboard() {
         )
       case 'jobs':
         return <JobQueue online={true} vpsUp={true} />
-      case 'progress':
-        return <ProgressDashboard online={true} vpsUp={true} />
       case 'health':
         return <ProductionHealthDashboard />
       default:

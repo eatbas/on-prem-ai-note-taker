@@ -8,7 +8,6 @@ from .health import router as health_router
 from .chat import router as chat_router
 from .queue_management import router as queue_router
 from .job_management import router as job_router
-from .progress import router as progress_router
 from .tags import router as tags_router
 
 __all__ = [
@@ -20,6 +19,5 @@ __all__ = [
     "chat_router",
     "queue_router",
     "job_router",
-    "progress_router",
     "tags_router",
 ]
