@@ -300,11 +300,15 @@ app.whenReady().then(async () => {
 		console.log('👤 Auth User:', process.env.BASIC_AUTH_USERNAME || 'Not configured')
 		console.log('🌐 Development Mode: Always connects to VPS for AI services')
 		
-		// Enable system audio capture features
-		console.log('🎵 Enabling system audio capture features...')
-		app.commandLine.appendSwitch('enable-features', 'WebCodecs,WebRtcUseMinMaxVEADimensions')
-		app.commandLine.appendSwitch('disable-features', 'UseChromeOSDirectVideoDecoder')
+		// Simplified audio capture (like Meeting Minutes and other AI note-takers)
+		console.log('🎵 Enabling simple audio capture...')
 		app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+		
+		// Platform-specific audio optimization (minimal approach)
+		if (process.platform === 'darwin') {
+			// Only on macOS - enable system audio loopback
+			app.commandLine.appendSwitch('enable-features', 'MacLoopbackAudio')
+		}
 		
 		// Test system audio capture capabilities
 		try {
