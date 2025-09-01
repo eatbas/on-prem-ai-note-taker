@@ -122,11 +122,21 @@ async def transcribe(
                 logger.warning(f"Could not determine audio duration: {e}, disabling VAD for safety")
                 use_vad = False  # Disable VAD if we can't determine duration
             
+            # Heuristic: for very short clips, force Turkish to avoid mis-detection
+            transcribe_language = validated_language if validated_language != "auto" else None
+            if transcribe_language is None:
+                try:
+                    if audio_duration is not None and audio_duration < 10.0:
+                        transcribe_language = "tr"
+                        logger.info("Short clip detected (<10s). Forcing language='tr' for higher accuracy.")
+                except Exception:
+                    pass
+
             # Transcription with configurable quality settings
             try:
                 segments, info = model.transcribe(
                     tmp_path,
-                    language=validated_language if validated_language != "auto" else None,
+                    language=transcribe_language,
                     vad_filter=use_vad,
                     vad_parameters=dict(
                         min_silence_duration_ms=settings.whisper_vad_min_silence_ms,
@@ -147,7 +157,7 @@ async def transcribe(
                     # Retry without VAD filter
                     segments, info = model.transcribe(
                         tmp_path,
-                        language=validated_language if validated_language != "auto" else None,
+                        language=transcribe_language,
                         vad_filter=False,  # Disable VAD completely
                         beam_size=settings.whisper_beam_size,
                         best_of=settings.whisper_best_of,
@@ -283,6 +293,23 @@ async def transcribe_and_summarize(
         # Update meeting duration if available
         if transcript.duration:
             meeting.duration = transcript.duration
+
+        # Safety: avoid hallucinated summaries on extremely short transcripts
+        text_word_count = len((transcript.text or "").strip().split())
+        if text_word_count < 3:
+            summary = (
+                f"Kısa deneme kaydı: '{transcript.text.strip()}'" if transcript.text.strip() 
+                else "Kayıtta anlaşılır konuşma tespit edilmedi."
+            )
+            # Save summary to database and return early
+            summary_obj = Summary(
+                meeting_id=meeting_id,
+                summary_text=summary,
+                model_used=settings.ollama_model,
+            )
+            db.add(summary_obj)
+            db.commit()
+            return TranscribeAndSummarizeResponse(transcript=transcript, summary=summary)
         
         # Choose language for summary prompt
         try:

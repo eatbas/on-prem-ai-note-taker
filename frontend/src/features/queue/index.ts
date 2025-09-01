@@ -5,7 +5,6 @@
 
 // Components
 export { default as JobQueue } from '../../components/queue/JobQueue'
-export { default as ProgressDashboard } from '../../components/queue/ProgressDashboard'
 export { default as ProgressTracker } from '../../components/queue/ProgressTracker'
 export { default as QueueProcessor } from '../../components/queue/QueueProcessor'
 

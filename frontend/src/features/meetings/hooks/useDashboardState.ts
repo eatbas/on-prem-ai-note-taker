@@ -1,23 +1,27 @@
+import type React from 'react'
 import { useState, useCallback, useEffect } from 'react'
 import { listMeetings, getMeetings, syncMeeting as syncMeetingService, updateMeeting, deleteMeetingLocally, deleteAudioChunksLocally, deleteMeeting, db } from '../../../services'
 
 export interface DashboardState {
   // Meetings data
   meetings: any[]
+  vpsMeetings: any[]
   sendingMeetings: Set<string>
   
   // Loading states
   loading: boolean
+  vpsLoading: boolean
   
   // Error states
   error: string | null
+  vpsError: string | null
   
   // Pagination
   currentPage: number
   meetingsPerPage: number
   
   // Active tab
-  activeTab: 'local' | 'llama' | 'workspace'
+  activeTab: 'local' | 'llama' | 'workspace' | 'vps'
   activeWorkspaceSubTab: 'all' | number
   
   // Context menu
@@ -38,20 +42,23 @@ export function useDashboardState(
 ) {
   // Core state
   const [meetings, setMeetings] = useState<any[]>([])
+  const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
   const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
   
   // Loading states
   const [loading, setLoading] = useState(false)
+  const [vpsLoading, setVpsLoading] = useState(false)
   
   // Error states
   const [error, setError] = useState<string | null>(null)
+  const [vpsError, setVpsError] = useState<string | null>(null)
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const meetingsPerPage = 3
   
   // Tabs
-  const [activeTab, setActiveTab] = useState<'local' | 'llama' | 'workspace'>('local')
+  const [activeTab, setActiveTab] = useState<'local' | 'llama' | 'workspace' | 'vps'>('local')
   const [activeWorkspaceSubTab, setActiveWorkspaceSubTab] = useState<'all' | number>('all')
   
   // Context menu
@@ -76,7 +83,7 @@ export function useDashboardState(
         console.log('📁 Loaded local meetings:', localMeetings.length)
         setMeetings(localMeetings)
         
-        // Try to fetch from backend and merge
+        // Try to fetch from backend and only enrich local meetings
         try {
           console.log('🌐 Attempting to fetch from VPS backend...')
           const backendMeetings = await getMeetings()
@@ -88,16 +95,15 @@ export function useDashboardState(
           
           // Only merge if we have a valid array
           if (Array.isArray(backendMeetings)) {
-            // Overlay with backend data
+            // Overlay with backend data but only for meetings existing locally
             for (const m of backendMeetings as any[]) {
               const existing = byId.get(m.id)
+              if (!existing) continue // skip server-only meetings to avoid duplicates
               // Merge backend data with local data, preferring backend for processed content
               byId.set(m.id, { 
                 ...existing, 
                 ...m, 
-                // Keep local status if it's more recent or unsent
                 status: existing?.status === 'local' ? existing.status : m.status || 'sent',
-                // Keep local tags and title if they exist
                 tags: existing?.tags || [],
                 title: existing?.title || m.title
               })
@@ -105,7 +111,7 @@ export function useDashboardState(
           }
           
           const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          console.log('🔄 Merged meetings:', mergedMeetings.length)
+          console.log('🔄 Enriched local meetings with server data:', mergedMeetings.length)
           setMeetings(mergedMeetings)
           
           // Clear any previous errors on success

@@ -40,6 +40,7 @@ const Dashboard = memo(function Dashboard({
 }) {
 	const [meetings, setMeetings] = useState<any[]>([])
 	const [loading, setLoading] = useState(false)
+	const [serverLoading, setServerLoading] = useState(false)
 	const [error, setError] = useState<string | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
@@ -92,46 +93,44 @@ const Dashboard = memo(function Dashboard({
 				console.log('📁 Loaded local meetings:', localMeetings.length)
 				setMeetings(localMeetings)
 				
-				// Try to fetch from backend and merge
+				// Try to fetch from backend in the background and only enrich existing locals
 				try {
+					setServerLoading(true)
 					console.log('🌐 Attempting to fetch from VPS backend...')
 					const backendMeetings = await getMeetings()
 					console.log('☁️ Loaded VPS meetings:', Array.isArray(backendMeetings) ? backendMeetings.length : 'Invalid response')
 					
+					// Build a map of local meetings
 					const byId = new Map<string, any>()
-					// Start with local meetings to preserve any unsent ones
 					for (const m of localMeetings) byId.set(m.id, m)
 					
-					// Only merge if we have a valid array
+					// Only overlay server data for meetings that already exist locally
 					if (Array.isArray(backendMeetings)) {
-						// Overlay with backend data
 						for (const m of backendMeetings as any[]) {
 							const existing = byId.get(m.id)
-							// Merge backend data with local data, preferring backend for processed content
-							byId.set(m.id, { 
-								...existing, 
-								...m, 
-								// Keep local status if it's more recent or unsent
+							if (!existing) continue // skip server-only meetings to avoid duplicates
+							byId.set(m.id, {
+								...existing,
+								...m,
 								status: existing?.status === 'local' ? existing.status : m.status || 'sent',
-								// Keep local tags and title if they exist
 								tags: existing?.tags || [],
 								title: existing?.title || m.title
 							})
 						}
+						const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
+						console.log('🔄 Enriched local meetings with server data:', mergedMeetings.length)
+						setMeetings(mergedMeetings)
 					}
-					
-					const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-					console.log('🔄 Merged meetings:', mergedMeetings.length)
-					setMeetings(mergedMeetings)
 					
 					// Clear any previous errors on success
 					setError(null)
-					console.log('✅ Successfully loaded VPS meetings without errors')
-					
+					console.log('✅ Successfully fetched VPS data (locals only shown)')
 				} catch (backendErr) {
 					// Backend failed, but we still have local data
 					console.error('❌ Backend fetch failed with error:', backendErr)
 					setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
+				} finally {
+					setServerLoading(false)
 				}
 			} else {
 				// Use local data when offline
@@ -777,6 +776,19 @@ const Dashboard = memo(function Dashboard({
 
 			{activeTab === 'local' && (
 				<>
+					{serverLoading && (
+						<div style={{ 
+							textAlign: 'center', 
+							padding: 12, 
+							backgroundColor: '#eff6ff', 
+							border: '1px solid #bfdbfe', 
+							borderRadius: 6, 
+							marginBottom: 12,
+							color: '#1e40af'
+						}}>
+							☁️ Loading meetings from the server...
+						</div>
+					)}
 					{loading && (
 						<div style={{ textAlign: 'center', padding: 20 }}>
 							Loading local meetings...
