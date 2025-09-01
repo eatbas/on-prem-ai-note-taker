@@ -34,6 +34,7 @@ from ..core.config import settings
 from ..database import get_db
 from ..models import Meeting, Transcription, Summary, Speaker, SpeakerSegment
 from ..models import User, Workspace
+from ..models.user_workspace import MeetingWorkspace
 from ..models.user import get_or_create_user, get_or_create_user_from_header
 from ..core.utils import require_basic_auth, get_whisper_model, validate_language
 from ..clients.ollama_client import OllamaClient
@@ -375,14 +376,17 @@ async def list_meetings(
         raise HTTPException(status_code=404, detail="User not found")
     
     # Build access control filter
-    # Users can see: 1) Their own meetings, 2) Meetings from their workspace
+    # Users can see: 1) Their own meetings, 2) Meetings from their workspace (via MeetingWorkspace)
     access_filters = [Meeting.user_id == user_id]
     
     if current_user.workspace_id:
-        # Add workspace meetings filter
+        # Meetings that are associated to user's (primary) workspace
+        workspace_meeting_ids = (
+            db.query(MeetingWorkspace.meeting_id)
+            .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+        )
         access_filters.append(
-            (Meeting.workspace_id == current_user.workspace_id) & 
-            (Meeting.is_personal == False)
+            (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
         )
     
     # Apply access control
@@ -393,9 +397,12 @@ async def list_meetings(
         query = query.filter(Meeting.is_personal == True)
     elif scope == "workspace":
         if current_user.workspace_id:
+            workspace_meeting_ids = (
+                db.query(MeetingWorkspace.meeting_id)
+                .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+            )
             query = query.filter(
-                (Meeting.workspace_id == current_user.workspace_id) & 
-                (Meeting.is_personal == False)
+                (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
             )
         else:
             # User has no workspace, return empty for workspace scope
@@ -448,6 +455,8 @@ async def list_meetings(
             except (json.JSONDecodeError, TypeError):
                 tags = []
         
+        # Determine primary workspace id for backward compatibility field
+        primary_ws = meeting.get_primary_workspace()
         response.append(MeetingResponse(
             id=meeting.id,
             title=meeting.title,
@@ -458,7 +467,7 @@ async def list_meetings(
             duration=meeting.duration,
             language=meeting.language or "auto",
             tags=tags,
-            workspace_id=meeting.workspace_id,
+            workspace_id=(primary_ws.id if primary_ws else None),
             is_personal=meeting.is_personal,
         ))
     
@@ -484,10 +493,12 @@ async def get_meeting(
     access_filters = [Meeting.user_id == user_id]
     
     if current_user.workspace_id:
-        # Add workspace meetings filter
+        workspace_meeting_ids = (
+            db.query(MeetingWorkspace.meeting_id)
+            .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+        )
         access_filters.append(
-            (Meeting.workspace_id == current_user.workspace_id) & 
-            (Meeting.is_personal == False)
+            (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
         )
     
     meeting = db.query(Meeting).filter(
@@ -514,6 +525,7 @@ async def get_meeting(
         except (json.JSONDecodeError, TypeError):
             tags = []
     
+    primary_ws = meeting.get_primary_workspace()
     return MeetingResponse(
         id=meeting.id,
         title=meeting.title,
@@ -524,7 +536,7 @@ async def get_meeting(
         duration=meeting.duration,
         language=meeting.language or "auto",
         tags=tags,
-        workspace_id=meeting.workspace_id,
+        workspace_id=(primary_ws.id if primary_ws else None),
         is_personal=meeting.is_personal,
     )
 
@@ -686,11 +698,15 @@ async def start_meeting(
         title=request.title,
         language=validated_language,
         tags=json.dumps(request.tags) if request.tags else None,
-        workspace_id=workspace_id,
         is_personal=is_personal,
     )
     db.add(meeting)
     db.commit()
+    
+    # Associate meeting to workspace via junction table (primary association)
+    if workspace_id is not None:
+        db.add(MeetingWorkspace(meeting_id=meeting_id, workspace_id=workspace_id, is_primary=True))
+        db.commit()
     
     # Create job for processing
     job_id = f"meeting_{meeting_id[:8]}_{datetime.utcnow().strftime('%H%M%S')}"
@@ -877,9 +893,12 @@ async def process_meeting_async(
     # Build access control filter
     access_filters = [Meeting.user_id == user_id]
     if current_user.workspace_id:
+        workspace_meeting_ids = (
+            db.query(MeetingWorkspace.meeting_id)
+            .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+        )
         access_filters.append(
-            (Meeting.workspace_id == current_user.workspace_id) & 
-            (Meeting.is_personal == False)
+            (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
         )
     
     meeting = db.query(Meeting).filter(
@@ -1029,9 +1048,12 @@ async def get_meeting_processing_status(
     
     access_filters = [Meeting.user_id == user_id]
     if current_user.workspace_id:
+        workspace_meeting_ids = (
+            db.query(MeetingWorkspace.meeting_id)
+            .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+        )
         access_filters.append(
-            (Meeting.workspace_id == current_user.workspace_id) & 
-            (Meeting.is_personal == False)
+            (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
         )
     
     meeting = db.query(Meeting).filter(
@@ -1316,9 +1338,12 @@ async def stream_meeting_audio(
     # Build access control filter
     access_filters = [Meeting.user_id == user_id]
     if current_user.workspace_id:
+        workspace_meeting_ids = (
+            db.query(MeetingWorkspace.meeting_id)
+            .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+        )
         access_filters.append(
-            (Meeting.workspace_id == current_user.workspace_id) & 
-            (Meeting.is_personal == False)
+            (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
         )
     
     meeting = db.query(Meeting).filter(
@@ -1431,9 +1456,12 @@ async def get_meeting_audio_metadata(
     # Build access control filter
     access_filters = [Meeting.user_id == user_id]
     if current_user.workspace_id:
+        workspace_meeting_ids = (
+            db.query(MeetingWorkspace.meeting_id)
+            .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+        )
         access_filters.append(
-            (Meeting.workspace_id == current_user.workspace_id) & 
-            (Meeting.is_personal == False)
+            (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
         )
     
     meeting = db.query(Meeting).filter(
@@ -1533,9 +1561,12 @@ async def get_synced_meeting_ids(
         query = query.filter(Meeting.is_personal == True)
     elif scope == "workspace":
         if current_user.workspace_id:
+            workspace_meeting_ids = (
+                db.query(MeetingWorkspace.meeting_id)
+                .filter(MeetingWorkspace.workspace_id == current_user.workspace_id)
+            )
             query = query.filter(
-                (Meeting.workspace_id == current_user.workspace_id) & 
-                (Meeting.is_personal == False)
+                (Meeting.id.in_(workspace_meeting_ids)) & (Meeting.is_personal == False)
             )
         else:
             # User has no workspace, return empty for workspace scope

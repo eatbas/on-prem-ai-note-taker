@@ -138,7 +138,7 @@ class GlobalRecordingManager {
 	}
 
 	// Start recording with full audio handling and immediate meeting creation
-	async startRecording(options: RecordingOptions): Promise<{ success: boolean; meetingId?: string }> {
+	async startRecording(options: RecordingOptions): Promise<{ success: boolean; meetingId?: string; error?: string }> {
 		console.log('🎙️ Global Recording Manager: Starting recording with options:', options)
 		
 		try {
@@ -226,7 +226,7 @@ class GlobalRecordingManager {
 			// Start audio recording
 			const audioStarted = await this.startAudioRecording(options)
 			if (!audioStarted) {
-				return { success: false }
+				return { success: false, error: this.state.error || 'Failed to start audio recording' }
 			}
 			
 			// Set recording state
@@ -259,7 +259,7 @@ class GlobalRecordingManager {
 			this.state.error = errorMessage
 			console.error('❌ Global Recording Manager: Failed to start recording:', error)
 			this.notifyListeners()
-			return { success: false }
+			return { success: false, error: errorMessage }
 		}
 	}
 
@@ -421,6 +421,17 @@ class GlobalRecordingManager {
 	private async startAudioRecording(options: RecordingOptions): Promise<boolean> {
 		try {
 			console.log('🎙️ Starting simplified audio recording with options:', options)
+
+			// Proactively release monitoring streams from MicrophoneSelector to avoid device busy errors
+			if ((window as any).forceMicCleanup) {
+				try {
+					console.log('🧹 Pre-start: Releasing microphone monitoring streams...')
+					;(window as any).forceMicCleanup()
+					await new Promise(resolve => setTimeout(resolve, 50))
+				} catch (cleanupErr) {
+					console.warn('⚠️ Pre-start mic cleanup failed:', cleanupErr)
+				}
+			}
 			
 			// Method 1: Try to capture everything (mic + system audio) in one stream
 			let audioStream: MediaStream | null = null

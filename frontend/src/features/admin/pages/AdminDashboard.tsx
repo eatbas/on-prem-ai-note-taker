@@ -31,6 +31,7 @@ import {
   deactivateWorkspace,
   assignUserToWorkspace
 } from '../../../services/api/workspaces'
+import { apiBase, getApiHeaders } from '../../../services/api/core'
 import { config } from '../../../utils/envLoader'
 
 // Types
@@ -316,10 +317,12 @@ const AdminDashboard = memo(function AdminDashboard() {
       if (user?.workspaces) {
         for (const workspace of user.workspaces) {
           try {
-            // 🔧 FIX: Use correct endpoint - workspaces router is mounted at /api/admin/workspaces
-            const response = await fetch(`/api/admin/workspaces/users/${userId}/workspaces/${workspace.id}`, {
+            // Use centralized API base and headers (handles proxy and auth)
+            const response = await fetch(`${apiBase}/admin/workspaces/users/${userId}/workspaces/${workspace.id}`, {
               method: 'DELETE',
-              headers: { 'Authorization': 'Basic ' + btoa('admin:admin') }
+              headers: {
+                ...getApiHeaders()
+              }
             })
             if (!response.ok) {
               const errorText = await response.text()
@@ -336,12 +339,11 @@ const AdminDashboard = memo(function AdminDashboard() {
       // Add new workspace assignments
       for (const assignment of assignments) {
         try {
-          // 🔧 FIX: Use correct endpoint for workspace assignment
-          const response = await fetch(`/api/admin/workspaces/users/${userId}/workspaces`, {
+          // Use centralized API base and headers (handles proxy and auth)
+          const response = await fetch(`${apiBase}/admin/workspaces/users/${userId}/workspaces`, {
             method: 'POST',
             headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Basic ' + btoa('admin:admin')
+              ...getApiHeaders()
             },
             body: JSON.stringify(assignment)
           })

@@ -169,7 +169,8 @@ export default function Recorder({
         console.log('🎙️ Dual-channel recording started successfully')
       } else {
         // Show error if recording failed
-        showToast('❌ Failed to start recording. Please try again.', 'error')
+        const reason = (result as any).error || globalRecordingManager.getError() || 'Unknown error'
+        showToast(`❌ Failed to start recording: ${reason}`, 'error')
         console.error('Recording failed:', result)
       }
     } catch (error) {
