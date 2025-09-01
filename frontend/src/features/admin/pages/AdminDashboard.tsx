@@ -30,6 +30,15 @@ import {
 import { config } from '../../../utils/envLoader'
 
 // Types
+interface UserWorkspace {
+    id: number
+    name: string
+    description: string
+    role: string
+    is_responsible: boolean
+    assigned_at: string | null
+}
+
 interface User {
     id: string
     username: string
@@ -37,6 +46,9 @@ interface User {
     meeting_count: number
     workspace_id?: number
     workspace_name?: string
+    // 🚨 MULTI-WORKSPACE: New fields
+    workspaces?: UserWorkspace[]
+    total_workspaces?: number
 }
 
 interface AdminMeeting {
@@ -268,6 +280,48 @@ export default function AdminDashboard() {
         showToast('User workspace assignment updated', 'success')
     }
 
+    // 🚨 MULTI-WORKSPACE: New function for bulk workspace assignment
+    const handleAssignMultipleWorkspaces = async (userId: string, assignments: any[]) => {
+        try {
+            // Remove existing workspace assignments
+            const user = users.find(u => u.id === userId)
+            if (user?.workspaces) {
+                for (const workspace of user.workspaces) {
+                    try {
+                        await fetch(`/api/admin/workspaces/users/${userId}/workspaces/${workspace.id}`, {
+                            method: 'DELETE',
+                            headers: { 'Authorization': 'Basic ' + btoa('admin:admin') }
+                        })
+                    } catch (e) {
+                        console.warn('Failed to remove workspace assignment:', e)
+                    }
+                }
+            }
+
+            // Add new workspace assignments
+            for (const assignment of assignments) {
+                const response = await fetch(`/api/admin/workspaces/users/${userId}/workspaces`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Basic ' + btoa('admin:admin')
+                    },
+                    body: JSON.stringify(assignment)
+                })
+
+                if (!response.ok) {
+                    throw new Error(`Failed to assign workspace ${assignment.workspace_id}`)
+                }
+            }
+
+            await loadUsersData()
+            showToast('User workspace assignments updated successfully', 'success')
+        } catch (error) {
+            console.error('Failed to update workspace assignments:', error)
+            showToast('Failed to update workspace assignments', 'error')
+        }
+    }
+
     const tabs = [
         { key: 'stats', label: '📊 Statistics', description: 'System overview' },
         { key: 'users', label: '👥 Users', description: 'User management' },
@@ -300,6 +354,7 @@ export default function AdminDashboard() {
                         onSearchChange={setSearchTerm}
                         onDeleteUser={handleDeleteUser}
                         onAssignWorkspace={handleAssignWorkspace}
+                        onAssignMultipleWorkspaces={handleAssignMultipleWorkspaces}
                     />
                 )
             case 'meetings':

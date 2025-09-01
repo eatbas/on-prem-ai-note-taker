@@ -32,26 +32,52 @@ async def admin_list_users(
     db: Session = Depends(get_db),
 ) -> List[AdminUserResponse]:
     """Admin: List all users with meeting counts and workspace info"""
+    from ..services.workspace_service import WorkspaceService
+    
     users = db.query(User).all()
+    workspace_service = WorkspaceService(db)
     
     response = []
     for user in users:
         meeting_count = db.query(Meeting).filter(Meeting.user_id == user.id).count()
         
-        # Get workspace info if user has one
-        workspace_name = None
-        if user.workspace_id:
-            workspace = db.query(Workspace).filter(Workspace.id == user.workspace_id).first()
-            workspace_name = workspace.name if workspace else None
+        # 🚨 MULTI-WORKSPACE: Get multi-workspace info
+        user_workspaces = workspace_service.get_user_workspaces(user.id)
         
-        response.append(AdminUserResponse(
+        # Legacy single workspace info (for backward compatibility)
+        workspace_name = None
+        workspace_id = None
+        if user_workspaces:
+            # Use first workspace as primary for legacy fields
+            primary_workspace = user_workspaces[0]
+            workspace_id = primary_workspace['id']
+            workspace_name = primary_workspace['name']
+        
+        # Build response with both legacy and new multi-workspace data
+        user_response = AdminUserResponse(
             id=user.id,
             username=user.username,
             created_at=user.created_at.isoformat(),
             meeting_count=meeting_count,
-            workspace_id=user.workspace_id,
+            workspace_id=workspace_id,
             workspace_name=workspace_name,
-        ))
+        )
+        
+        # 🚨 MULTI-WORKSPACE: Add new fields dynamically
+        user_response.workspaces = [
+            {
+                'id': w['id'],
+                'name': w['name'],
+                'description': w['description'],
+                'role': w['role'],
+                'is_responsible': w['is_responsible'],
+                'assigned_at': w['assigned_at']
+            }
+            for w in user_workspaces
+        ]
+        user_response.total_workspaces = len(user_workspaces)
+        
+        response.append(user_response)
     
     return response
 

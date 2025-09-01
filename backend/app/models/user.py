@@ -62,29 +62,36 @@ def get_or_create_user_by_username(db: Session, username: str) -> User:
     Returns:
         User: The existing or newly created user
     """
+    # 🐛 FIX: Clean and normalize username to prevent ID issues
+    clean_username = username.strip()
+    
     # First, try to find user by username
-    user = db.query(User).filter(User.username == username).first()
+    user = db.query(User).filter(User.username == clean_username).first()
     
     if user:
         return user
     
     # If not found by username, try to find by user_id format
-    user_id = f"user_{username}"
+    user_id = f"user_{clean_username}"
     user = db.query(User).filter(User.id == user_id).first()
     
     if user:
         return user
     
+    # 🐛 FIX: Validate username before creating user ID
+    if not clean_username or clean_username == '':
+        raise ValueError("Username cannot be empty")
+    
     # Create new user if not found
     user = User(
         id=user_id,
-        username=username
+        username=clean_username
     )
     db.add(user)
     db.commit()
     db.refresh(user)
     
-    print(f"✅ Created new user '{username}'")
+    print(f"✅ Created new user '{clean_username}' with ID '{user_id}'")
     
     return user
 
@@ -102,12 +109,19 @@ def get_or_create_user_from_header(db: Session, x_user_id: Optional[str] = None)
         User: The existing or newly created user
     """
     if x_user_id:
-        # Extract username from user ID format: user_{username}
-        if x_user_id.startswith('user_'):
-            username = x_user_id[5:]  # Remove 'user_' prefix
-        else:
-            username = x_user_id
+        # 🐛 FIX: Clean and validate header value
+        clean_user_id = x_user_id.strip()
         
+        # Extract username from user ID format: user_{username}
+        if clean_user_id.startswith('user_'):
+            username = clean_user_id[5:]  # Remove 'user_' prefix
+            # 🐛 FIX: Validate extracted username
+            if not username or username == '':
+                raise ValueError(f"Invalid user ID format: '{clean_user_id}' - username cannot be empty")
+        else:
+            username = clean_user_id
+        
+        print(f"🔍 Extracting username '{username}' from header '{clean_user_id}'")
         return get_or_create_user_by_username(db, username)
     
     # Fallback to system username detection if no header provided
@@ -128,6 +142,16 @@ def get_or_create_user_by_system_detection(db: Session) -> User:
     if not username:
         username = os.environ.get('USER') or os.environ.get('USERNAME') or platform.node() or 'default'
     
+    # 🐛 FIX: Clean system-detected username
+    if username:
+        username = username.strip()
+        # Replace any problematic characters
+        username = username.replace(' ', '_').replace('\n', '').replace('\r', '')
+    
+    if not username or username == '':
+        username = 'default_system_user'
+    
+    print(f"🖥️ System detected username: '{username}'")
     return get_or_create_user_by_username(db, username)
 
 
