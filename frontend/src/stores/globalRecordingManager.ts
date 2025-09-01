@@ -440,26 +440,19 @@ class GlobalRecordingManager {
 				}
 			}
 			
-			// Method 1: Try to capture everything (mic + system audio) in one stream
-			let audioStream: MediaStream | null = null
-			
-			// First, try system audio + mic combined (like Meeting Minutes)
+			// Try to capture system (desktop) audio
+			let systemStream: MediaStream | null = null
 			if ((window as any).desktopCapture) {
 				try {
-					console.log('🔊 Attempting combined audio capture...')
-					audioStream = await (window as any).desktopCapture.captureSystemAudio()
-					if (audioStream) {
-						console.log('✅ Combined audio capture successful!')
-					}
+					console.log('🔊 Attempting system audio capture (desktop)...')
+					systemStream = await (window as any).desktopCapture.captureSystemAudio()
 				} catch (err) {
-					console.log('⚠️ Combined audio failed, trying microphone only:', err)
+					console.log('⚠️ System audio capture failed:', err)
 				}
 			}
-			
-			// Method 2: Fallback to microphone only (graceful degradation)
-			if (!audioStream) {
-				try {
-					console.log('🎤 Falling back to microphone-only recording...')
+
+			// Always capture microphone
+			console.log('🎤 Ensuring microphone capture...')
 			const micConstraints: MediaStreamConstraints = {
 				audio: {
 					deviceId: options.micDeviceId 
@@ -470,13 +463,37 @@ class GlobalRecordingManager {
 					autoGainControl: false,
 					sampleRate: 44100,
 					channelCount: 2
-						}
-					}
-					audioStream = await navigator.mediaDevices.getUserMedia(micConstraints)
-					console.log('✅ Microphone-only recording ready')
-				} catch (err) {
-					throw new Error(`Failed to access audio: ${err}`)
 				}
+			}
+			const micStream = await navigator.mediaDevices.getUserMedia(micConstraints)
+			console.log('✅ Microphone stream ready')
+
+			let finalStream: MediaStream | null = null
+
+			if (systemStream) {
+				try {
+					console.log('🎚️ Mixing mic + system audio into one stream...')
+					const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
+						sampleRate: 44100
+					}) as AudioContext
+					;(this as any)._audioContext = audioContext
+					const destination = audioContext.createMediaStreamDestination()
+					const micSource = audioContext.createMediaStreamSource(micStream)
+					micSource.connect(destination)
+					const sysSource = audioContext.createMediaStreamSource(systemStream)
+					sysSource.connect(destination)
+					finalStream = destination.stream
+					console.log('✅ Mixed stream created')
+				} catch (mixErr) {
+					console.warn('⚠️ Mixing failed; concatenating tracks as fallback:', mixErr)
+					finalStream = new MediaStream([
+						...systemStream.getAudioTracks(),
+						...micStream.getAudioTracks()
+					])
+				}
+			} else {
+				console.log('ℹ️ No system audio available, using mic-only')
+				finalStream = micStream
 			}
 			
 			// Create single MediaRecorder (simplified approach)
@@ -485,8 +502,8 @@ class GlobalRecordingManager {
 				bitsPerSecond: 128000
 			}
 			
-			this.state.micStream = audioStream
-			this.state.micRecorder = new MediaRecorder(audioStream, recordingOptions)
+			this.state.micStream = finalStream
+			this.state.micRecorder = new MediaRecorder(finalStream!, recordingOptions)
 			this.setupMicRecorderEvents()
 			
 			// Start recording with reasonable chunk size
@@ -653,6 +670,17 @@ class GlobalRecordingManager {
 			
 			// Aggressive cleanup to ensure microphone is fully released
 			console.log('🧹 Performing comprehensive cleanup to ensure microphone release...')
+			
+			// Close mixed AudioContext if present
+			try {
+				if ((this as any)._audioContext) {
+					await (this as any)._audioContext.close()
+					;(this as any)._audioContext = null
+					console.log('🗑️ Closed AudioContext')
+				}
+			} catch (e) {
+				console.warn('⚠️ Failed closing AudioContext:', e)
+			}
 			
 			// Force garbage collection if available (Electron/Node.js)
 			if (typeof global !== 'undefined' && global.gc) {

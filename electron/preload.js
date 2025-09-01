@@ -21,37 +21,62 @@ console.log('🔗 Connecting to VPS backend at:', 'http://95.111.244.159:8000/ap
 
 // Simplified audio capture API (like Meeting Minutes approach)
 contextBridge.exposeInMainWorld('desktopCapture', {
-	// Simple system audio capture - no complex fallbacks
+	// Windows: capture system audio from desktop source (drop video), fallback to getDisplayMedia
 	captureSystemAudio: async () => {
 		try {
-			console.log('🔊 Simple system audio capture (like Meeting Minutes)...')
-			
-			// Try getDisplayMedia audio-only (most compatible)
-			const stream = await navigator.mediaDevices.getDisplayMedia({ 
-				video: false,
+			console.log('🔊 Attempting system audio via desktopCapturer...')
+			const { desktopCapturer } = require('electron')
+			const sources = await desktopCapturer.getSources({
+				types: ['screen'],
+				thumbnailSize: { width: 0, height: 0 }
+			})
+			if (!sources || sources.length === 0) {
+				throw new Error('No screen sources available')
+			}
+			const source = sources[0]
+			console.log('🖥️ Using screen source:', source.name, source.id)
+			const stream = await navigator.mediaDevices.getUserMedia({
 				audio: {
-					echoCancellation: false,
-					noiseSuppression: false,
-					autoGainControl: false,
-					sampleRate: 44100,
-					channelCount: 2
+					mandatory: {
+						chromeMediaSource: 'desktop',
+						chromeMediaSourceId: source.id
+					}
+				},
+				video: {
+					mandatory: {
+						chromeMediaSource: 'desktop',
+						chromeMediaSourceId: source.id
+					}
 				}
 			})
-			
+			// Drop video tracks; keep audio only
+			stream.getVideoTracks().forEach(t => t.stop())
 			const audioTracks = stream.getAudioTracks()
 			if (audioTracks.length > 0) {
-				console.log('✅ Simple system audio capture successful!', {
-					trackCount: audioTracks.length,
+				console.log('✅ System audio capture successful via desktop source:', {
 					trackLabels: audioTracks.map(t => t.label)
 				})
 				return stream
 			}
-			
-			throw new Error('No audio tracks found')
-		} catch (error) {
-			console.log('⚠️ System audio not available, will use microphone only')
-			// Graceful degradation - let the main app handle microphone fallback
-			return null
+			throw new Error('No audio tracks on desktop stream')
+		} catch (e1) {
+			console.warn('⚠️ desktopCapturer path failed, falling back to getDisplayMedia:', e1)
+			try {
+				const stream = await navigator.mediaDevices.getDisplayMedia({
+					video: true,
+					audio: true
+				})
+				stream.getVideoTracks().forEach(t => t.stop())
+				const audioTracks = stream.getAudioTracks()
+				if (audioTracks.length > 0) {
+					console.log('✅ System audio via getDisplayMedia fallback')
+					return stream
+				}
+				throw new Error('No audio tracks on getDisplayMedia stream')
+			} catch (e2) {
+				console.log('⚠️ System audio not available (fallback to mic-only):', e2?.message || e2)
+				return null
+			}
 		}
 	}
 })
