@@ -4,23 +4,20 @@ import { listMeetings, getMeetings, syncMeeting as syncMeetingService, updateMee
 export interface DashboardState {
   // Meetings data
   meetings: any[]
-  vpsMeetings: any[]
   sendingMeetings: Set<string>
   
   // Loading states
   loading: boolean
-  vpsLoading: boolean
   
   // Error states
   error: string | null
-  vpsError: string | null
   
   // Pagination
   currentPage: number
   meetingsPerPage: number
   
   // Active tab
-  activeTab: 'local' | 'vps' | 'llama' | 'workspace'
+  activeTab: 'local' | 'llama' | 'workspace'
   activeWorkspaceSubTab: 'all' | number
   
   // Context menu
@@ -41,23 +38,20 @@ export function useDashboardState(
 ) {
   // Core state
   const [meetings, setMeetings] = useState<any[]>([])
-  const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
   const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
   
   // Loading states
   const [loading, setLoading] = useState(false)
-  const [vpsLoading, setVpsLoading] = useState(false)
   
   // Error states
   const [error, setError] = useState<string | null>(null)
-  const [vpsError, setVpsError] = useState<string | null>(null)
   
   // Pagination
   const [currentPage, setCurrentPage] = useState(1)
   const meetingsPerPage = 3
   
   // Tabs
-  const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'workspace'>('local')
+  const [activeTab, setActiveTab] = useState<'local' | 'llama' | 'workspace'>('local')
   const [activeWorkspaceSubTab, setActiveWorkspaceSubTab] = useState<'all' | number>('all')
   
   // Context menu

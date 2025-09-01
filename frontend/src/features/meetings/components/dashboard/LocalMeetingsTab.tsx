@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useCallback } from 'react'
 import MeetingCardEnhanced from './MeetingCardEnhanced'
-import PaginationControls from './PaginationControls'
 import { DashboardLoadingState } from './LoadingStates'
 import { SpeakerSearchEngine } from '../../utils/speakerSearch'
 
@@ -189,7 +188,7 @@ const LocalMeetingsTab: React.FC<LocalMeetingsTabProps> = ({
         }}>
           {hasFilters 
             ? 'Try adjusting your search terms or tag filters to find what you\'re looking for.'
-            : 'Start recording your first meeting to see it appear here. Your meetings will be automatically saved and organized.'
+            : 'Start recording your first meeting to see it appear here. Your meetings will be automatically saved locally and synced to the cloud when available.'
           }
         </p>
         
@@ -219,6 +218,7 @@ const LocalMeetingsTab: React.FC<LocalMeetingsTabProps> = ({
             }}>
               <li>Search works across titles, summaries, and transcripts</li>
               <li>Speaker names and conversations are also searchable</li>
+              <li>Includes both local and cloud-synced meetings</li>
               <li>Use tags to organize and filter your meetings</li>
             </ul>
           </div>
@@ -293,16 +293,68 @@ const LocalMeetingsTab: React.FC<LocalMeetingsTabProps> = ({
 
       {/* Pagination */}
       {filteredMeetings.length > meetingsPerPage && (
-        <PaginationControls
-          currentPage={currentPage}
-          totalPages={totalPages}
-          onPageChange={setCurrentPage}
-          startIndex={startIndex}
-          endIndex={endIndex}
-          totalItems={filteredMeetings.length}
-          itemsPerPage={meetingsPerPage}
-          itemName="meetings"
-        />
+        <div style={{ 
+          display: 'flex', 
+          justifyContent: 'center', 
+          alignItems: 'center', 
+          gap: '12px',
+          marginTop: '32px',
+          padding: '20px 0'
+        }}>
+          <button
+            onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+            disabled={currentPage === 1}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: currentPage === 1 ? '#f3f4f6' : '#3b82f6',
+              color: currentPage === 1 ? '#9ca3af' : 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            ← Previous
+          </button>
+
+          <div style={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            gap: '8px',
+            fontSize: '14px',
+            color: '#6b7280'
+          }}>
+            <span>Page</span>
+            <span style={{ 
+              fontWeight: 'bold', 
+              color: '#1f2937',
+              padding: '4px 8px',
+              backgroundColor: '#f3f4f6',
+              borderRadius: '4px'
+            }}>
+              {currentPage}
+            </span>
+            <span>of {totalPages}</span>
+          </div>
+
+          <button
+            onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+            disabled={currentPage === totalPages}
+            style={{
+              padding: '8px 12px',
+              backgroundColor: currentPage === totalPages ? '#f3f4f6' : '#3b82f6',
+              color: currentPage === totalPages ? '#9ca3af' : 'white',
+              border: 'none',
+              borderRadius: '6px',
+              fontSize: '14px',
+              cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Next →
+          </button>
+        </div>
       )}
 
       {/* Meeting Stats */}
@@ -322,7 +374,7 @@ const LocalMeetingsTab: React.FC<LocalMeetingsTabProps> = ({
         </div>
         {meetings.length > 0 && (
           <div style={{ fontSize: '11px', color: '#9ca3af' }}>
-            Total meetings: {meetings.length} • 
+            Total meetings: {meetings.length} (local + cloud-synced) • 
             This page: {startIndex + 1}-{Math.min(endIndex, filteredMeetings.length)}
           </div>
         )}

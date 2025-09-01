@@ -11,8 +11,8 @@ export { default as ContextMenu } from './ContextMenu'
 export { default as MeetingList } from './MeetingList'
 export { default as DashboardTabs } from './DashboardTabs'
 
-// Main refactored dashboard
-export { default as DashboardRefactored } from './DashboardRefactored'
+// Main dashboard component
+export { default as Dashboard } from './Dashboard'
 
 // Export individual loading components
 export { 

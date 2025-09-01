@@ -183,20 +183,6 @@ const Dashboard = memo(function Dashboard({
           />
         )
 
-      case 'vps':
-        return (
-          <VpsMeetingsTab
-            vpsMeetings={vpsMeetings}
-            vpsLoading={vpsLoading}
-            vpsError={vpsError}
-            vpsUp={vpsUp}
-            online={online}
-            onOpen={onOpen}
-            onContextMenu={handleContextMenu}
-            onRefreshVpsMeetings={refreshVpsMeetings}
-          />
-        )
-
       case 'workspace':
         return (
           <WorkspaceMeetingsTab

@@ -1,14 +1,24 @@
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, memo } from 'react'
 import { db, syncMeeting, updateMeetingTags, assembleFilesByAudioType, deleteMeetingLocally, deleteAudioChunksLocally } from '../../../services'
 import { useToast, TagsManager } from '../../../components/common'
-import { formatDuration } from '../../../utils'
-import config from '../../../utils/envLoader'
+import { LoadingSpinner, ErrorDisplay } from '../components/shared'
 
-// Import our new components
-import { MeetingHeader, MeetingSummary, MeetingTranscript, MeetingAudio } from '../components/meeting-view'
+// Import meeting view components
+import {
+  MeetingViewHeader,
+  MeetingSummary,
+  MeetingTranscript,
+  MeetingAudio
+} from '../components/meeting-view'
 import { MeetingSpeakers } from '../components/speakers'
+import DeleteConfirmationModal from '../components/meeting-view/DeleteConfirmationModal'
 
-export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
+interface MeetingViewProps {
+  meetingId: string
+  onBack?: () => void
+}
+
+const MeetingView = memo(function MeetingView({ meetingId, onBack }: MeetingViewProps) {
   // Core state
   const [meeting, setMeeting] = useState<any>(null)
   const [note, setNote] = useState<any>(null)
@@ -148,7 +158,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
     
     setSending(true)
     try {
-      // 🚨 IMPORTANT: Immediately update meeting status to 'queued' to prevent duplicate processing
+      // Update meeting status to 'queued' to prevent duplicate processing
       await db.meetings.update(meetingId, { 
         status: 'queued', 
         updatedAt: Date.now() 
@@ -157,7 +167,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
       // Force reload to show the updated status immediately
       await loadMeeting()
       
-      // 🚨 PHASE 3.2: Use async sync with progress tracking
+      // Use async sync with progress tracking
       await syncMeeting(meetingId, (progress: any) => {
         console.log(`📊 Sync Progress: ${progress.progress}% - ${progress.message}`)
         showToast(`Processing: ${progress.progress}% - ${progress.message}`, 'info')
@@ -196,6 +206,11 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
 
   const handleDelete = () => {
     setDeleteOperation('meeting')
+    setShowDeleteModal(true)
+  }
+
+  const handleDeleteAudio = () => {
+    setDeleteOperation('audio')
     setShowDeleteModal(true)
   }
 
@@ -267,68 +282,31 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
           />
         )
       case 'speakers':
-        return (
-          <MeetingSpeakers note={note} meeting={meeting} search={search} />
-        )
+        return <MeetingSpeakers note={note} meeting={meeting} search={search} />
       default:
         return null
     }
   }
 
-  // 🚀 STAGE 3 OPTIMIZATION: Proper loading and error handling
+  // Loading state
   if (loading) {
     return (
       <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#6b7280' }}>
-          <div style={{
-            width: '40px',
-            height: '40px',
-            border: '3px solid #e2e8f0',
-            borderTop: '3px solid #3b82f6',
-            borderRadius: '50%',
-            animation: 'spin 1s linear infinite',
-            margin: '0 auto 16px'
-          }} />
-          <p style={{ fontSize: '16px', fontWeight: '500' }}>Loading meeting...</p>
-        </div>
-        <style>
-          {`
-            @keyframes spin {
-              0% { transform: rotate(0deg); }
-              100% { transform: rotate(360deg); }
-            }
-          `}
-        </style>
+        <LoadingSpinner size="large" message="Loading meeting..." />
       </div>
     )
   }
 
+  // Error state
   if (error || !meeting) {
     return (
       <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ textAlign: 'center', color: '#dc2626', maxWidth: '400px', padding: '20px' }}>
-          <div style={{ fontSize: '48px', marginBottom: '16px' }}>❌</div>
-          <h2 style={{ margin: '0 0 8px 0', fontSize: '20px', fontWeight: '600' }}>Meeting Not Found</h2>
-          <p style={{ margin: '0 0 20px 0', color: '#6b7280' }}>
-            {error || 'The requested meeting could not be found.'}
-          </p>
-          {onBack && (
-            <button
-              onClick={onBack}
-              style={{
-                padding: '8px 16px',
-                backgroundColor: '#3b82f6',
-                color: 'white',
-                border: 'none',
-                borderRadius: '6px',
-                cursor: 'pointer',
-                fontSize: '14px',
-                fontWeight: '500'
-              }}
-            >
-              ← Back to Dashboard
-            </button>
-          )}
+        <div style={{ maxWidth: '400px', padding: '20px' }}>
+          <ErrorDisplay
+            title="Meeting Not Found"
+            message={error || 'The requested meeting could not be found.'}
+            onRetry={onBack ? () => onBack() : undefined}
+          />
         </div>
       </div>
     )
@@ -336,7 +314,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
 
   return (
     <div style={{ backgroundColor: '#f9fafb', minHeight: '100vh' }}>
-      <MeetingHeader
+      <MeetingViewHeader
         meeting={meeting}
         onBack={onBack}
         onTitleChange={handleTitleChange}
@@ -354,7 +332,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
         {renderTabContent()}
       </div>
 
-      {/* Tags - positioned after meeting details */}
+      {/* Tags Section */}
       <div style={{ 
         maxWidth: '1200px', 
         margin: '20px auto', 
@@ -375,64 +353,17 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{
-            backgroundColor: 'white',
-            padding: '24px',
-            borderRadius: '8px',
-            maxWidth: '400px',
-            textAlign: 'center'
-          }}>
-            <h3 style={{ marginBottom: '16px' }}>Confirm Delete</h3>
-            <p style={{ marginBottom: '24px', color: '#6b7280' }}>
-              Are you sure you want to delete this {deleteOperation}? This action cannot be undone.
-            </p>
-            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#f3f4f6',
-                  border: '1px solid #d1d5db',
-                  borderRadius: '6px',
-                  cursor: 'pointer'
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmDelete}
-                disabled={isDeleting}
-                style={{
-                  padding: '8px 16px',
-                  backgroundColor: '#ef4444',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '6px',
-                  cursor: isDeleting ? 'not-allowed' : 'pointer',
-                  opacity: isDeleting ? 0.6 : 1
-                }}
-              >
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmationModal
+        isOpen={showDeleteModal}
+        deleteOperation={deleteOperation}
+        isDeleting={isDeleting}
+        onConfirm={confirmDelete}
+        onCancel={() => setShowDeleteModal(false)}
+      />
 
       <ToastContainer />
     </div>
   )
-}
+})
+
+export default MeetingView

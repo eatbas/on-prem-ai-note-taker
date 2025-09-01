@@ -59,8 +59,7 @@ export default defineConfig(({ mode }) => {
             'audio-processing': [
               './src/lib/audioConfig.ts',
               './src/lib/audioCompression.ts', 
-              './src/services/streamingUploader.ts',
-              './src/hooks/useAudioRecorder.ts'
+              './src/services/streamingUploader.ts'
             ],
             
             // Admin features - loaded only when needed
