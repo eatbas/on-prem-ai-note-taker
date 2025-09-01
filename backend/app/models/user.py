@@ -3,7 +3,7 @@
 import os
 import platform
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import Column, String, DateTime, Integer, ForeignKey
 from sqlalchemy.orm import relationship, Session
 
@@ -18,13 +18,36 @@ class User(Base):
     username = Column(String, unique=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     
-    # Workspace relationship
-    workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)
+    # 🚨 MULTI-WORKSPACE: Removed direct workspace_id, now using many-to-many
+    # workspace_id = Column(Integer, ForeignKey("workspaces.id"), nullable=True)  # DEPRECATED
     
     # Relationships
-    workspace = relationship("Workspace", back_populates="users")
+    # 🚨 MULTI-WORKSPACE: Many-to-many relationship with workspaces
+    user_workspaces = relationship("UserWorkspace", back_populates="user", cascade="all, delete-orphan")
+    workspaces = relationship("Workspace", secondary="user_workspaces", back_populates="users", viewonly=True)
+    
     meetings = relationship("Meeting", back_populates="user")
     jobs = relationship("Job", back_populates="user")
+    
+    # Helper methods for workspace management
+    def get_workspaces(self) -> List["Workspace"]:
+        """Get all workspaces this user belongs to"""
+        return [uw.workspace for uw in self.user_workspaces]
+    
+    def get_responsible_workspaces(self) -> List["Workspace"]:
+        """Get workspaces this user is responsible for"""
+        return [uw.workspace for uw in self.user_workspaces if uw.is_responsible]
+    
+    def is_in_workspace(self, workspace_id: int) -> bool:
+        """Check if user belongs to a specific workspace"""
+        return any(uw.workspace_id == workspace_id for uw in self.user_workspaces)
+    
+    def get_role_in_workspace(self, workspace_id: int) -> Optional[str]:
+        """Get user's role in a specific workspace"""
+        for uw in self.user_workspaces:
+            if uw.workspace_id == workspace_id:
+                return uw.role
+        return None
 
 
 def get_or_create_user_by_username(db: Session, username: str) -> User:

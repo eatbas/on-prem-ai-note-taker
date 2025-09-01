@@ -8,6 +8,7 @@ from .summary import Summary
 from .speaker import Speaker, SpeakerSegment
 from .job import Job, JobStatus, JobType
 from .workspace import Workspace
+from .user_workspace import UserWorkspace, MeetingWorkspace
 
 __all__ = [
     "Base",
@@ -21,4 +22,6 @@ __all__ = [
     "JobStatus",
     "JobType",
     "Workspace",
+    "UserWorkspace",
+    "MeetingWorkspace",
 ]
