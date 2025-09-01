@@ -44,12 +44,21 @@ const Dashboard = memo(function Dashboard({
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
 	const [activeTab, setActiveTab] = useState<'local' | 'vps' | 'llama' | 'workspace'>('local')
+	// 🚨 MULTI-WORKSPACE: Add workspace sub-tab state
+	const [activeWorkspaceSubTab, setActiveWorkspaceSubTab] = useState<'all' | number>('all')
 	const [vpsMeetings, setVpsMeetings] = useState<any[]>([])
 	const [vpsLoading, setVpsLoading] = useState(false)
 	const [vpsError, setVpsError] = useState<string | null>(null)
 	const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
 	const { showToast, ToastContainer } = useToast()
-	const { workspace: userWorkspace, hasWorkspace } = useUserWorkspace()
+	const { 
+		workspace: userWorkspace, 
+		hasWorkspace,
+		workspaces: userWorkspaces,
+		responsibleWorkspaces,
+		totalWorkspaces,
+		hasMultipleWorkspaces
+	} = useUserWorkspace()
 	
 	// Context menu state
 	const [contextMenu, setContextMenu] = useState<{
@@ -685,8 +694,14 @@ const Dashboard = memo(function Dashboard({
 				overflow: 'hidden'
 			}}>
 				{[
-					{ id: 'local', label: '📁 Local Meetings', icon: '🏠' },
-					...(hasWorkspace ? [{ id: 'workspace', label: `🏢 ${userWorkspace?.name || 'Workspace'} Meetings`, icon: '🏢' }] : []),
+					{ id: 'local', label: '📁 Personal', icon: '🏠' },
+					...(hasWorkspace ? [{ 
+						id: 'workspace', 
+						label: hasMultipleWorkspaces 
+							? `🏢 Workspaces (${totalWorkspaces})` 
+							: `🏢 ${userWorkspace?.name || 'Workspace'}`, 
+						icon: '🏢' 
+					}] : []),
 					{ id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
 					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
 				].map((tab) => (
@@ -1459,7 +1474,7 @@ const Dashboard = memo(function Dashboard({
 							fontWeight: '600',
 							color: '#1e293b'
 						}}>
-							🏢 {userWorkspace?.name || 'Workspace'} Meetings
+							🏢 {hasMultipleWorkspaces ? 'Your Workspaces' : (userWorkspace?.name || 'Workspace')} Meetings
 						</h2>
 						<p style={{
 							margin: '0',
@@ -1467,11 +1482,31 @@ const Dashboard = memo(function Dashboard({
 							color: '#64748b',
 							lineHeight: '1.6'
 						}}>
-							Meetings shared with your workspace team. All workspace members can view these recordings.
+							{hasMultipleWorkspaces 
+								? `You're part of ${totalWorkspaces} workspaces. Switch between them to view specific meetings.`
+								: 'Meetings shared with your workspace team. All workspace members can view these recordings.'
+							}
 						</p>
 						
 						{/* Workspace Info */}
-						{userWorkspace && (
+						{hasMultipleWorkspaces && responsibleWorkspaces.length > 0 && (
+							<div style={{
+								marginTop: '16px',
+								padding: '12px',
+								backgroundColor: 'white',
+								borderRadius: '8px',
+								border: '1px solid #e2e8f0'
+							}}>
+								<span style={{
+									fontSize: '14px',
+									color: '#64748b',
+									fontWeight: '500'
+								}}>
+									👑 You're responsible for: {responsibleWorkspaces.map(w => w.name).join(', ')}
+								</span>
+							</div>
+						)}
+						{!hasMultipleWorkspaces && userWorkspace && (
 							<div style={{
 								display: 'flex',
 								justifyContent: 'center',
@@ -1496,19 +1531,126 @@ const Dashboard = memo(function Dashboard({
 						)}
 					</div>
 
+					{/* Workspace Sub-tabs */}
+					{hasWorkspace && (
+						<div style={{
+							display: 'flex',
+							borderBottom: '1px solid #e2e8f0',
+							marginBottom: '24px',
+							backgroundColor: 'white',
+							borderRadius: '8px 8px 0 0',
+							overflow: 'hidden',
+							border: '1px solid #e2e8f0'
+						}}>
+							{/* ALL tab */}
+							<button
+								onClick={() => setActiveWorkspaceSubTab('all')}
+								style={{
+									flex: 1,
+									padding: '12px 16px',
+									backgroundColor: activeWorkspaceSubTab === 'all' ? '#3b82f6' : '#f8fafc',
+									color: activeWorkspaceSubTab === 'all' ? 'white' : '#64748b',
+									border: 'none',
+									fontSize: '14px',
+									fontWeight: '600',
+									cursor: 'pointer',
+									transition: 'all 0.2s ease',
+									borderRight: '1px solid #e2e8f0'
+								}}
+								onMouseEnter={(e) => {
+									if (activeWorkspaceSubTab !== 'all') {
+										e.currentTarget.style.backgroundColor = '#e2e8f0'
+									}
+								}}
+								onMouseLeave={(e) => {
+									if (activeWorkspaceSubTab !== 'all') {
+										e.currentTarget.style.backgroundColor = '#f8fafc'
+									}
+								}}
+							>
+								📋 ALL
+							</button>
+							
+							{/* Individual workspace tabs */}
+							{userWorkspaces.map((workspace) => (
+								<button
+									key={workspace.id}
+									onClick={() => setActiveWorkspaceSubTab(workspace.id)}
+									style={{
+										flex: 1,
+										padding: '12px 16px',
+										backgroundColor: activeWorkspaceSubTab === workspace.id ? '#3b82f6' : '#f8fafc',
+										color: activeWorkspaceSubTab === workspace.id ? 'white' : '#64748b',
+										border: 'none',
+										fontSize: '14px',
+										fontWeight: '600',
+										cursor: 'pointer',
+										transition: 'all 0.2s ease',
+										borderRight: '1px solid #e2e8f0',
+										display: 'flex',
+										alignItems: 'center',
+										justifyContent: 'center',
+										gap: '4px'
+									}}
+									onMouseEnter={(e) => {
+										if (activeWorkspaceSubTab !== workspace.id) {
+											e.currentTarget.style.backgroundColor = '#e2e8f0'
+										}
+									}}
+									onMouseLeave={(e) => {
+										if (activeWorkspaceSubTab !== workspace.id) {
+											e.currentTarget.style.backgroundColor = '#f8fafc'
+										}
+									}}
+								>
+									<span>🏢</span>
+									<span>{workspace.name}</span>
+									{workspace.is_responsible && <span style={{ fontSize: '10px' }}>👑</span>}
+								</button>
+							))}
+						</div>
+					)}
+
 					{/* Workspace Meetings List */}
 					{hasWorkspace ? (
 						<div>
-							{/* Filter workspace meetings from the main meetings list */}
+							{/* Filter workspace meetings based on active sub-tab */}
 							{(() => {
-								const workspaceMeetings = meetings.filter(meeting => 
-									meeting.workspace_id === userWorkspace?.id && !meeting.is_personal
-								)
+								// Filter meetings based on active sub-tab
+								let filteredMeetings;
+								if (activeWorkspaceSubTab === 'all') {
+									// Show all workspace meetings
+									filteredMeetings = meetings.filter(meeting => 
+										userWorkspaces.some(w => w.id === meeting.workspace_id) && !meeting.is_personal
+									)
+								} else {
+									// Show meetings for specific workspace
+									filteredMeetings = meetings.filter(meeting => 
+										meeting.workspace_id === activeWorkspaceSubTab && !meeting.is_personal
+									)
+								}
+								const workspaceMeetings = filteredMeetings
 								
 								if (workspaceMeetings.length === 0) {
+									const workspaceName = activeWorkspaceSubTab === 'all' 
+										? 'any workspace' 
+										: userWorkspaces.find(w => w.id === activeWorkspaceSubTab)?.name || 'this workspace'
+									
 									return (
-										<div style={{ textAlign: 'center', padding: 40, opacity: 0.6 }}>
-											No workspace meetings found. Create a workspace meeting to get started!
+										<div style={{ 
+											textAlign: 'center', 
+											padding: 40, 
+											backgroundColor: '#f9fafb',
+											borderRadius: '8px',
+											border: '1px solid #e5e7eb'
+										}}>
+											<div style={{ fontSize: '48px', marginBottom: '16px' }}>📝</div>
+											<p style={{ margin: '0 0 8px 0', fontWeight: '500', color: '#374151' }}>
+												No meetings found in {workspaceName}
+											</p>
+											<p style={{ margin: '0', fontSize: '14px', color: '#6b7280' }}>
+												Create a workspace meeting to get started!
+											</p>
 										</div>
 									)
 								}
@@ -1545,22 +1687,31 @@ const Dashboard = memo(function Dashboard({
 											e.currentTarget.style.borderColor = 'transparent'
 										}}
 									>
-										{/* Workspace Badge */}
-										<div style={{
-											padding: '4px 8px',
-											backgroundColor: '#0ea5e9',
-											color: 'white',
-											borderRadius: '6px',
-											fontSize: '12px',
-											fontWeight: '600'
-										}}>
-											🏢 {userWorkspace?.name}
-										</div>
+										{/* Workspace Badge - show when viewing ALL or different workspace */}
+										{activeWorkspaceSubTab === 'all' && (
+											<div style={{
+												padding: '4px 8px',
+												backgroundColor: '#3b82f6',
+												color: 'white',
+												borderRadius: '6px',
+												fontSize: '10px',
+												fontWeight: '600'
+											}}>
+												🏢 {userWorkspaces.find(w => w.id === meeting.workspace_id)?.name || 'Unknown'}
+											</div>
+										)}
 										
 										{/* Meeting Info */}
 										<div style={{ flex: 1 }}>
-											<div style={{ fontWeight: '600', fontSize: '16px', marginBottom: '4px' }}>
-												{meeting.title}
+											<div style={{ 
+												display: 'flex', 
+												alignItems: 'center', 
+												gap: '8px',
+												marginBottom: '4px' 
+											}}>
+												<div style={{ fontWeight: '600', fontSize: '16px' }}>
+													{meeting.title}
+												</div>
 											</div>
 											<div style={{ fontSize: '14px', color: '#666' }}>
 												{new Date(meeting.createdAt || meeting.created_at).toLocaleDateString()} 
