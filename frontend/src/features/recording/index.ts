@@ -16,7 +16,7 @@ export { default as FloatingRecorder } from '../../components/recording/Floating
 
 
 // Hooks
-export { useAudioRecorder } from '../../hooks/useAudioRecorder'
+// Removed useAudioRecorder - now using simplified globalRecordingManager
 
 // Re-export types specific to recording
 export type {

@@ -9,13 +9,10 @@ export interface GlobalRecordingState {
 	chunkIndex: number
 	recordingInterval: number | null
 	startTime: number | null
-	// Audio recording state
+	// Simplified single-stream audio recording state
 	micStream: MediaStream | null
-	speakerStream: MediaStream | null
 	micRecorder: MediaRecorder | null
-	speakerRecorder: MediaRecorder | null
 	micChunkIndex: number
-	speakerChunkIndex: number
 	forceDataInterval: number | null
 	error: string | null
 	language: 'tr' | 'en' | 'auto'
@@ -23,7 +20,6 @@ export interface GlobalRecordingState {
 
 export interface RecordingOptions {
 	micDeviceId?: string
-	speakerDeviceId?: string
 	language: 'tr' | 'en' | 'auto'
 	showFloatingWidget?: boolean
 	scope?: 'personal' | 'workspace'
@@ -37,13 +33,10 @@ class GlobalRecordingManager {
 		chunkIndex: 0,
 		recordingInterval: null,
 		startTime: null,
-		// Audio recording state
+		// Simplified single-stream audio recording state
 		micStream: null,
-		speakerStream: null,
 		micRecorder: null,
-		speakerRecorder: null,
 		micChunkIndex: 0,
-		speakerChunkIndex: 0,
 		forceDataInterval: null,
 		error: null,
 		language: 'auto'
@@ -79,7 +72,6 @@ class GlobalRecordingManager {
 				chunkIndex: this.state.chunkIndex,
 				startTime: this.state.startTime,
 				micChunkIndex: this.state.micChunkIndex,
-				speakerChunkIndex: this.state.speakerChunkIndex,
 				language: this.state.language
 			}
 			localStorage.setItem('globalRecordingState', JSON.stringify(persistentState))
@@ -101,7 +93,6 @@ class GlobalRecordingManager {
 				this.state.chunkIndex = persistentState.chunkIndex
 				this.state.startTime = persistentState.startTime
 				this.state.micChunkIndex = persistentState.micChunkIndex || 0
-				this.state.speakerChunkIndex = persistentState.speakerChunkIndex || 0
 				this.state.language = persistentState.language || 'auto'
 				
 				// Notify listeners of restored state
@@ -229,9 +220,8 @@ class GlobalRecordingManager {
 				this.state.error = 'Warning: Meeting created but not stored locally'
 			}
 			
-			// Reset chunk indices
+			// Reset chunk index
 			this.state.micChunkIndex = 0
-			this.state.speakerChunkIndex = 0
 			
 			// Start audio recording
 			const audioStarted = await this.startAudioRecording(options)
@@ -304,11 +294,8 @@ class GlobalRecordingManager {
 			this.state.recordingInterval = null
 			this.state.startTime = null
 			this.state.micStream = null
-			this.state.speakerStream = null
 			this.state.micRecorder = null
-			this.state.speakerRecorder = null
 			this.state.micChunkIndex = 0
-			this.state.speakerChunkIndex = 0
 			this.state.forceDataInterval = null
 			this.state.error = null
 			
@@ -340,7 +327,7 @@ class GlobalRecordingManager {
 
 	// Check if recording was interrupted (restored from localStorage without active streams)
 	isRecordingInterrupted(): boolean {
-		return this.state.isRecording && !this.state.micRecorder && !this.state.speakerRecorder
+		return this.state.isRecording && !this.state.micRecorder
 	}
 
 	// Get interrupted recording info
@@ -373,11 +360,8 @@ class GlobalRecordingManager {
 		this.state.recordingInterval = null
 		this.state.startTime = null
 		this.state.micStream = null
-		this.state.speakerStream = null
 		this.state.micRecorder = null
-		this.state.speakerRecorder = null
 		this.state.micChunkIndex = 0
-		this.state.speakerChunkIndex = 0
 		this.state.forceDataInterval = null
 		this.state.error = null
 		this.notifyListeners()
@@ -433,12 +417,31 @@ class GlobalRecordingManager {
 		}
 	}
 	
-	// Start audio recording with dual-channel capture
+	// Simplified single-stream audio recording (like Meeting Minutes)
 	private async startAudioRecording(options: RecordingOptions): Promise<boolean> {
 		try {
-			console.log('🎙️ Starting audio recording with options:', options)
+			console.log('🎙️ Starting simplified audio recording with options:', options)
 			
-			// Get microphone stream with proper device constraints
+			// Method 1: Try to capture everything (mic + system audio) in one stream
+			let audioStream: MediaStream | null = null
+			
+			// First, try system audio + mic combined (like Meeting Minutes)
+			if ((window as any).desktopCapture) {
+				try {
+					console.log('🔊 Attempting combined audio capture...')
+					audioStream = await (window as any).desktopCapture.captureSystemAudio()
+					if (audioStream) {
+						console.log('✅ Combined audio capture successful!')
+					}
+				} catch (err) {
+					console.log('⚠️ Combined audio failed, trying microphone only:', err)
+				}
+			}
+			
+			// Method 2: Fallback to microphone only (graceful degradation)
+			if (!audioStream) {
+				try {
+					console.log('🎤 Falling back to microphone-only recording...')
 			const micConstraints: MediaStreamConstraints = {
 				audio: {
 					deviceId: options.micDeviceId 
@@ -449,212 +452,48 @@ class GlobalRecordingManager {
 					autoGainControl: false,
 					sampleRate: 44100,
 					channelCount: 2
+						}
+					}
+					audioStream = await navigator.mediaDevices.getUserMedia(micConstraints)
+					console.log('✅ Microphone-only recording ready')
+				} catch (err) {
+					throw new Error(`Failed to access audio: ${err}`)
 				}
 			}
 			
-			console.log('🎤 Using microphone constraints:', {
-				deviceId: options.micDeviceId,
-				hasConstraint: !!options.micDeviceId
-			})
-			
-			this.state.micStream = await navigator.mediaDevices.getUserMedia(micConstraints)
-			console.log('✅ Microphone stream obtained')
-			
-			// Get speaker/system audio stream using multiple methods
-			await this.setupSpeakerRecording(options)
-			
-			// Recording options
+			// Create single MediaRecorder (simplified approach)
 			const recordingOptions: MediaRecorderOptions = {
 				mimeType: 'audio/webm;codecs=opus',
 				bitsPerSecond: 128000
 			}
 			
-			// Create microphone recorder
-			this.state.micRecorder = new MediaRecorder(this.state.micStream, recordingOptions)
+			this.state.micStream = audioStream
+			this.state.micRecorder = new MediaRecorder(audioStream, recordingOptions)
 			this.setupMicRecorderEvents()
 			
-			// Create speaker recorder if we have speaker stream
-			if (this.state.speakerStream) {
-				this.state.speakerRecorder = new MediaRecorder(this.state.speakerStream, recordingOptions)
-				this.setupSpeakerRecorderEvents()
-			}
-			
-			// Use short chunks for reliability
+			// Start recording with reasonable chunk size
 			const chunkMs = 1000  // 1 second chunks
-			
-			// Start recording with short intervals for reliable data capture
-			console.log(`🎙️ Starting recording with ${chunkMs}ms chunks`)
+			console.log(`🎙️ Starting single-stream recording with ${chunkMs}ms chunks`)
 			this.state.micRecorder.start(chunkMs)
-			if (this.state.speakerRecorder) {
-				this.state.speakerRecorder.start(chunkMs)
-			}
 			
-			// Force data capture every 5 seconds as backup
+			// Simple backup data capture
 			this.state.forceDataInterval = window.setInterval(() => {
-				if (this.state.micRecorder && this.state.micRecorder.state === 'recording') {
-					console.log('🔄 Forcing mic data capture...')
+				if (this.state.micRecorder?.state === 'recording') {
 					this.state.micRecorder.requestData()
-				}
-				if (this.state.speakerRecorder && this.state.speakerRecorder.state === 'recording') {
-					console.log('🔄 Forcing speaker data capture...')
-					this.state.speakerRecorder.requestData()
 				}
 			}, 5000)
 			
-			console.log('🎙️ Dual recording started successfully')
+			console.log('✅ Simplified audio recording started successfully')
 			return true
 			
 		} catch (error) {
-			console.error('❌ Audio recording start failed:', error)
+			console.error('❌ Failed to start simplified audio recording:', error)
 			this.state.error = error instanceof Error ? error.message : 'Failed to start audio recording'
 			return false
 		}
 	}
 	
-	// Setup speaker/system audio recording with multiple fallback methods
-	private async setupSpeakerRecording(options: RecordingOptions): Promise<void> {
-		let speakerStream: MediaStream | null = null
-		
-		// Method 1: Try Electron-specific system audio capture (automatic)
-		if ((window as any).desktopCapture) {
-			try {
-				console.log('🔊 Attempting automatic system audio capture via Electron...')
-				speakerStream = await (window as any).desktopCapture.captureSystemAudio()
-				if (speakerStream) {
-					console.log('✅ Automatic system audio capture successful!')
-				}
-			} catch (err) {
-				console.warn('⚠️ Automatic system audio capture failed:', err)
-			}
-		}
-		
-		// Method 2: Try desktop capturer for system audio (Electron-specific, automatic)
-		if (!speakerStream && (window as any).desktopCapture) {
-			try {
-				console.log('🔊 Trying desktop capturer for system audio...')
-				speakerStream = await (window as any).desktopCapture.captureDesktopAudio()
-				if (speakerStream) {
-					console.log('✅ Desktop capturer system audio successful!')
-				}
-			} catch (err) {
-				console.warn('⚠️ Desktop capturer system audio failed:', err)
-			}
-		}
-		
-		// Method 3: Try Electron loopback device detection (automatic)
-		if (!speakerStream && (window as any).desktopCapture) {
-			try {
-				console.log('🔊 Trying Electron loopback device detection...')
-				speakerStream = await (window as any).desktopCapture.captureLoopbackAudio()
-				if (speakerStream) {
-					console.log('✅ Electron loopback device detection successful!')
-				}
-			} catch (err) {
-				console.warn('⚠️ Electron loopback device detection failed:', err)
-			}
-		}
-		
-		// Method 4: Try automatic loopback device detection
-		if (!speakerStream) {
-			try {
-				console.log('🔊 Attempting automatic loopback device detection...')
-				const devices = await navigator.mediaDevices.enumerateDevices()
-				
-				// Look for system audio loopback devices
-				const loopbackDevice = devices.find(device => 
-					device.kind === 'audioinput' && (
-						device.label.toLowerCase().includes('stereo mix') ||
-						device.label.toLowerCase().includes('what u hear') ||
-						device.label.toLowerCase().includes('loopback') ||
-						device.label.toLowerCase().includes('system audio') ||
-						device.label.toLowerCase().includes('monitor') ||
-						device.label.toLowerCase().includes('desktop audio')
-					)
-				)
-				
-				if (loopbackDevice) {
-					console.log('🔊 Found loopback device:', loopbackDevice.label)
-					speakerStream = await navigator.mediaDevices.getUserMedia({
-						audio: {
-							deviceId: { exact: loopbackDevice.deviceId },
-							echoCancellation: false,
-							noiseSuppression: false,
-							autoGainControl: false,
-							sampleRate: 44100,
-							channelCount: 2
-						}
-					})
-					console.log('✅ Loopback device system audio successful!')
-				} else {
-					console.log('📍 No loopback devices found. Available audio input devices:')
-					devices.filter(d => d.kind === 'audioinput').forEach(device => {
-						console.log(`  - ${device.label} (${device.deviceId.slice(0, 20)}...)`)
-					})
-				}
-			} catch (err) {
-				console.warn('⚠️ Loopback device detection failed:', err)
-			}
-		}
-		
-		// Method 5: Last resort - try traditional screen capture (requires user interaction)
-		if (!speakerStream) {
-			try {
-				console.log('🔊 Fallback: Requesting system audio via screen capture...')
-				
-				const screenStream = await navigator.mediaDevices.getDisplayMedia({
-					video: false, // Try audio-only first  
-					audio: {
-						echoCancellation: false,
-						noiseSuppression: false,
-						autoGainControl: false,
-						sampleRate: 44100,
-						channelCount: 2
-					} as any
-				})
-				
-				console.log('🖥️ Display media stream obtained, checking for audio tracks...')
-				
-				// Extract only audio tracks
-				const audioTracks = screenStream.getAudioTracks()
-				console.log(`🔊 Found ${audioTracks.length} audio tracks in screen capture`)
-				
-				if (audioTracks.length > 0) {
-					speakerStream = new MediaStream(audioTracks)
-					console.log('✅ Screen capture system audio successful!')
-					console.log('🔊 Audio track details:', audioTracks.map(track => ({
-						kind: track.kind,
-						label: track.label,
-						enabled: track.enabled,
-						readyState: track.readyState
-					})))
-				}
-				
-				// Stop video tracks if any
-				const videoTracks = screenStream.getVideoTracks()
-				if (videoTracks.length > 0) {
-					console.log(`📹 Stopping ${videoTracks.length} video tracks...`)
-					videoTracks.forEach(track => track.stop())
-				}
-				
-			} catch (err) {
-				console.warn('⚠️ Screen capture system audio failed:', err)
-			}
-		}
-		
-		// Summary of system audio capture attempt
-		if (speakerStream) {
-			const tracks = speakerStream.getAudioTracks()
-			console.log('🎉 System audio capture successful!', {
-				trackCount: tracks.length,
-				trackLabels: tracks.map(t => t.label),
-				trackStates: tracks.map(t => t.readyState)
-			})
-			this.state.speakerStream = speakerStream
-		} else {
-			console.warn('❌ All system audio capture methods failed')
-			console.warn('💡 System audio will not be recorded')
-		}
-	}
+	// Removed complex setupSpeakerRecording method - now using single stream approach
 	
 	// Setup microphone recorder event handlers
 	private setupMicRecorderEvents(): void {
@@ -685,47 +524,18 @@ class GlobalRecordingManager {
 		}
 	}
 	
-	// Setup speaker recorder event handlers
-	private setupSpeakerRecorderEvents(): void {
-		if (!this.state.speakerRecorder) return
-		
-		this.state.speakerRecorder.ondataavailable = async (event) => {
-			console.log(`🔊 Speaker data available: ${event.data?.size || 0} bytes`)
-			
-			if (event.data && event.data.size > 0 && this.state.meetingId) {
-				try {
-					console.log(`💾 Saving speaker chunk ${this.state.speakerChunkIndex} with meetingId: ${this.state.meetingId}`)
-					await addChunk(
-						this.state.meetingId, 
-						event.data, 
-						this.state.speakerChunkIndex, 
-						'speaker'
-					)
-					console.log(`✅ Speaker chunk ${this.state.speakerChunkIndex} saved: ${event.data.size} bytes`)
-					this.state.speakerChunkIndex++
-				} catch (error) {
-					console.error('❌ Failed to save speaker chunk:', error)
-					// Don't fail recording for speaker issues
-				}
-			} else {
-				console.warn(`⚠️ Empty speaker data: ${event.data?.size || 0} bytes, meetingId: ${this.state.meetingId}`)
-			}
-		}
-	}
+	// Removed setupSpeakerRecorderEvents - now using single-stream audio approach
 	
 	// Stop audio recording with proper cleanup
 	private async stopAudioRecording(): Promise<void> {
-		console.log('🛑 Stopping dual recording...')
+		console.log('🛑 Stopping simplified audio recording...')
 		
 		try {
 			console.log('🔍 Current recording state:', {
 				isRecording: this.state.isRecording,
 				hasMicRecorder: !!this.state.micRecorder,
-				hasSpeakerRecorder: !!this.state.speakerRecorder,
 				hasMicStream: !!this.state.micStream,
-				hasSpeakerStream: !!this.state.speakerStream,
-				micRecorderState: this.state.micRecorder?.state,
-				speakerRecorderState: this.state.speakerRecorder?.state
+				micRecorderState: this.state.micRecorder?.state
 			})
 			
 			const stopPromises: Promise<void>[] = []
@@ -766,35 +576,7 @@ class GlobalRecordingManager {
 				}
 			}
 			
-			// Stop speaker recorder with proper cleanup  
-			if (this.state.speakerRecorder) {
-				console.log('🔊 Stopping speaker recorder...')
-				
-				if (this.state.speakerRecorder.state === 'recording') {
-					// Request final data
-					this.state.speakerRecorder.requestData()
-					
-					// Create promise that resolves when recorder stops
-					const speakerStopPromise = new Promise<void>((resolve) => {
-						const handleStop = () => {
-							console.log('🔊 Speaker recorder stopped')
-							this.state.speakerRecorder?.removeEventListener('stop', handleStop)
-							resolve()
-						}
-						this.state.speakerRecorder?.addEventListener('stop', handleStop, { once: true })
-						
-						// Add timeout to prevent hanging
-						setTimeout(() => {
-							console.warn('⚠️ Speaker recorder stop timeout')
-							this.state.speakerRecorder?.removeEventListener('stop', handleStop)
-							resolve()
-						}, 5000)
-					})
-					
-					stopPromises.push(speakerStopPromise)
-					this.state.speakerRecorder.stop()
-				}
-			}
+			// Removed speaker recorder logic - now using single-stream audio approach
 			
 			// Wait for all recorders to stop properly
 			if (stopPromises.length > 0) {
@@ -822,21 +604,7 @@ class GlobalRecordingManager {
 				this.state.micStream = null
 			}
 			
-			// Stop speaker streams aggressively
-			if (this.state.speakerStream) {
-				console.log('🔊 Stopping speaker stream tracks...')
-				this.state.speakerStream.getTracks().forEach((track, index) => {
-					console.log(`🔊 Stopping speaker track ${index}: ${track.kind}, state: ${track.readyState}`)
-					try {
-						track.stop()
-						console.log(`✅ Speaker track ${index} stopped`)
-					} catch (e) {
-						console.warn(`⚠️ Failed to stop speaker track ${index}:`, e)
-					}
-				})
-				// Clear the stream reference
-				this.state.speakerStream = null
-			}
+			// Removed speaker stream cleanup - now using single-stream audio approach
 			
 			// Clear recorder references immediately
 			if (this.state.micRecorder) {
@@ -850,16 +618,7 @@ class GlobalRecordingManager {
 				this.state.micRecorder = null
 			}
 			
-			if (this.state.speakerRecorder) {
-				try {
-					this.state.speakerRecorder.ondataavailable = null
-					this.state.speakerRecorder.onstop = null
-					this.state.speakerRecorder.onerror = null
-				} catch (e) {
-					console.warn('⚠️ Error clearing speaker recorder events:', e)
-				}
-				this.state.speakerRecorder = null
-			}
+			// Removed speaker recorder cleanup - now using single-stream audio approach
 			
 			// Small delay to ensure cleanup is complete
 			await new Promise(resolve => setTimeout(resolve, 100))
@@ -893,9 +652,7 @@ class GlobalRecordingManager {
 				if ((window as any).currentMicStream) {
 					(window as any).currentMicStream = null
 				}
-				if ((window as any).currentSpeakerStream) {
-					(window as any).currentSpeakerStream = null
-				}
+				// Removed speaker stream reference - now using single-stream audio approach
 			} catch (e) {
 				console.warn('⚠️ Error clearing global stream references:', e)
 			}
@@ -909,7 +666,7 @@ class GlobalRecordingManager {
 				}
 			}, 1000) // Increased delay to ensure complete cleanup
 			
-			console.log('✅ Dual recording stopped successfully - microphone should be released')
+			console.log('✅ Simplified audio recording stopped successfully - microphone should be released')
 		} catch (error) {
 			console.error('❌ Error stopping audio recording:', error)
 			throw error
@@ -926,10 +683,7 @@ class GlobalRecordingManager {
 		return !!this.state.micStream
 	}
 	
-	// Check if speaker is available
-	hasSpeakerStream(): boolean {
-		return !!this.state.speakerStream
-	}
+	// Removed hasSpeakerStream - now using single-stream audio approach
 	
 	// Set error state
 	setError(error: string | null): void {
@@ -954,18 +708,7 @@ class GlobalRecordingManager {
 			})
 			this.state.micStream = null
 		}
-		if (this.state.speakerStream) {
-			console.log('🚨 Force stopping speaker stream...')
-			this.state.speakerStream.getTracks().forEach((track, index) => {
-				try {
-					console.log(`🚨 Force stopping speaker track ${index}`)
-					track.stop()
-				} catch (e) {
-					console.error(`Failed to stop speaker track ${index}:`, e)
-				}
-			})
-			this.state.speakerStream = null
-		}
+		// Removed speaker stream force stop - now using single-stream audio approach
 		
 		// Force stop recorders
 		if (this.state.micRecorder) {
@@ -980,18 +723,7 @@ class GlobalRecordingManager {
 				this.state.micRecorder = null
 			}
 		}
-		if (this.state.speakerRecorder) {
-			try {
-				if (this.state.speakerRecorder.state === 'recording') {
-					this.state.speakerRecorder.stop()
-				}
-				this.state.speakerRecorder.ondataavailable = null
-				this.state.speakerRecorder = null
-			} catch (e) {
-				console.error('Failed to stop speaker recorder:', e)
-				this.state.speakerRecorder = null
-			}
-		}
+		// Removed speaker recorder force stop - now using single-stream audio approach
 		
 		// Clear all intervals
 		if (this.state.recordingInterval) {
@@ -1021,11 +753,8 @@ class GlobalRecordingManager {
 		this.state.recordingInterval = null
 		this.state.startTime = null
 		this.state.micStream = null
-		this.state.speakerStream = null
 		this.state.micRecorder = null
-		this.state.speakerRecorder = null
 		this.state.micChunkIndex = 0
-		this.state.speakerChunkIndex = 0
 		this.state.forceDataInterval = null
 		this.state.error = null
 		

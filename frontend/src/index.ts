@@ -28,7 +28,7 @@ export * as Utils from './utils'
 // Use Features.Meetings.Dashboard, Features.Admin.AdminDashboard, etc.
 
 // Most commonly used exports for convenience
-export { useAudioRecorder, useDebounce, usePageVisibility } from './hooks'
+export { useDebounce, usePageVisibility } from './hooks'
 export { generateId, createMeeting, addChunk } from './services'
 export { globalRecordingManager } from './stores'
 

@@ -1,5 +1,5 @@
 // Audio hooks
-export { useAudioRecorder } from './useAudioRecorder'
+// Removed useAudioRecorder - now using simplified globalRecordingManager
 
 // Utility hooks  
 export { useDebounce, useDebounceCallback } from './useDebounce'
