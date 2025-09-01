@@ -1,3 +1,9 @@
 scripts\start-electron-dev.bat
 .\scripts\build-desktop-app.bat
 docker logs -f on-prem-ai-note-taker-backend-1
+
+# Quick backend restart for code updates (fast)
+./restart-services.sh r
+
+# Full restart with optimizations (complete)
+./restart-services.sh
