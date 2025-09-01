@@ -89,11 +89,15 @@ async def assign_user_workspace(
     _auth: None = Depends(require_admin_auth),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
-    """Admin: Assign or remove user from workspace"""
+    """Admin: Assign or remove user from workspace (using new multi-workspace architecture)"""
+    from ..services.workspace_service import WorkspaceService
+    
     # Check if user exists
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    
+    workspace_service = WorkspaceService(db)
     
     # If workspace_id is provided, validate it exists and is active
     if request.workspace_id is not None:
@@ -107,42 +111,68 @@ async def assign_user_workspace(
                 detail="Workspace not found or inactive"
             )
         
-        # Assign user to workspace
-        old_workspace_id = user.workspace_id
-        user.workspace_id = request.workspace_id
-        db.commit()
-        
-        logger.info(
-            f"Assigned user {user.username} to workspace {workspace.name} "
-            f"(was: {old_workspace_id}, now: {request.workspace_id})"
-        )
-        
-        return {
-            "message": f"User '{user.username}' assigned to workspace '{workspace.name}'",
-            "user_id": user.id,
-            "workspace_id": request.workspace_id,
-            "workspace_name": workspace.name
-        }
+        # 🚨 FIX: Use WorkspaceService instead of deprecated user.workspace_id
+        try:
+            # Get current workspaces for logging
+            current_workspaces = workspace_service.get_user_workspaces(user_id)
+            current_workspace_names = [w['name'] for w in current_workspaces]
+            
+            # Assign user to workspace using the new service
+            assignment = workspace_service.assign_user_to_workspace(
+                user_id=user_id,
+                workspace_id=request.workspace_id,
+                role=getattr(request, 'role', 'member'),  # Default to member if not specified
+                is_responsible=getattr(request, 'is_responsible', False),
+                assigned_by=None  # Could be set to admin user in future
+            )
+            
+            logger.info(
+                f"✅ Assigned user {user.username} to workspace {workspace.name} "
+                f"(previous workspaces: {current_workspace_names})"
+            )
+            
+            return {
+                "message": f"User '{user.username}' assigned to workspace '{workspace.name}'",
+                "user_id": user.id,
+                "workspace_id": request.workspace_id,
+                "workspace_name": workspace.name,
+                "role": assignment.role,
+                "is_responsible": assignment.is_responsible
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to assign workspace: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to assign workspace: {str(e)}")
     else:
-        # Remove user from workspace
-        old_workspace_id = user.workspace_id
-        old_workspace = None
-        if old_workspace_id:
-            old_workspace = db.query(Workspace).filter(Workspace.id == old_workspace_id).first()
-        
-        user.workspace_id = None
-        db.commit()
-        
-        logger.info(
-            f"Removed user {user.username} from workspace "
-            f"(was: {old_workspace.name if old_workspace else old_workspace_id})"
-        )
-        
-        return {
-            "message": f"User '{user.username}' removed from workspace",
-            "user_id": user.id,
-            "previous_workspace": old_workspace.name if old_workspace else "Unknown"
-        }
+        # 🚨 FIX: Handle workspace removal with new multi-workspace architecture
+        try:
+            # Get current workspaces
+            current_workspaces = workspace_service.get_user_workspaces(user_id)
+            
+            if not current_workspaces:
+                return {
+                    "message": f"User '{user.username}' is not assigned to any workspace",
+                    "user_id": user.id
+                }
+            
+            # For backward compatibility, remove user from primary workspace
+            # In a full multi-workspace UI, this would specify which workspace to remove
+            primary_workspace = current_workspaces[0]
+            workspace_service.remove_user_from_workspace(user_id, primary_workspace['id'])
+            
+            logger.info(
+                f"✅ Removed user {user.username} from workspace {primary_workspace['name']}"
+            )
+            
+            return {
+                "message": f"User '{user.username}' removed from workspace '{primary_workspace['name']}'",
+                "user_id": user.id,
+                "previous_workspace": primary_workspace['name']
+            }
+            
+        except Exception as e:
+            logger.error(f"❌ Failed to remove workspace: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Failed to remove workspace: {str(e)}")
 
 
 @router.get("/meetings")

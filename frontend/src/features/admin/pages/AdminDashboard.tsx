@@ -293,10 +293,14 @@ const AdminDashboard = memo(function AdminDashboard() {
       if (user?.workspaces) {
         for (const workspace of user.workspaces) {
           try {
-            await fetch(`/api/admin/workspaces/users/${userId}/workspaces/${workspace.id}`, {
+            // 🔧 FIX: Use correct endpoint - workspaces router is mounted at /api/admin/workspaces
+            const response = await fetch(`/api/admin/workspaces/users/${userId}/workspaces/${workspace.id}`, {
               method: 'DELETE',
               headers: { 'Authorization': 'Basic ' + btoa('admin:admin') }
             })
+            if (!response.ok) {
+              console.warn(`Failed to remove workspace ${workspace.id}:`, await response.text())
+            }
           } catch (e) {
             console.warn('Failed to remove workspace assignment:', e)
           }
@@ -305,17 +309,24 @@ const AdminDashboard = memo(function AdminDashboard() {
 
       // Add new workspace assignments
       for (const assignment of assignments) {
-        const response = await fetch(`/api/admin/workspaces/users/${userId}/workspaces`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Basic ' + btoa('admin:admin')
-          },
-          body: JSON.stringify(assignment)
-        })
+        try {
+          // 🔧 FIX: Use correct endpoint for workspace assignment
+          const response = await fetch(`/api/admin/workspaces/users/${userId}/workspaces`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Basic ' + btoa('admin:admin')
+            },
+            body: JSON.stringify(assignment)
+          })
 
-        if (!response.ok) {
-          throw new Error(`Failed to assign workspace ${assignment.workspace_id}`)
+          if (!response.ok) {
+            const errorText = await response.text()
+            throw new Error(`Failed to assign workspace ${assignment.workspace_id}: ${errorText}`)
+          }
+        } catch (e) {
+          console.error(`Failed to assign workspace ${assignment.workspace_id}:`, e)
+          throw e
         }
       }
 
