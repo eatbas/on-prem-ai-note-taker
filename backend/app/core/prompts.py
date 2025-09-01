@@ -173,10 +173,77 @@ Konuşmacı İstatistikleri:
 
 
 def get_speaker_enhanced_summary_prompt(language: str) -> str:
-    """Get the appropriate speaker-enhanced summary prompt based on language"""
+    """
+    🚨 DEPRECATED: Get the appropriate speaker-enhanced summary prompt based on language
+    
+    This function is deprecated in favor of JSON schema-based prompts.
+    Use get_speaker_enhanced_json_prompt() instead for structured output.
+    """
     if language == "en":
         return SPEAKER_ENHANCED_SUMMARY_PROMPT_EN
     elif language == "tr" or language == "auto":
         return SPEAKER_ENHANCED_SUMMARY_PROMPT_TR
     # Default to Turkish for better local support
     return SPEAKER_ENHANCED_SUMMARY_PROMPT_TR
+
+
+def get_speaker_enhanced_json_prompt(language: str = "tr") -> str:
+    """
+    🚨 NEW: Get JSON schema-enforced speaker-enhanced summary prompt.
+    
+    Uses the schema-first approach to prevent hallucination and ensure
+    structured, parseable output from language models.
+    
+    Args:
+        language: Output language ("tr" or "en")
+        
+    Returns:
+        Complete prompt with JSON schema enforcement
+    """
+    from ..services.json_schema_service import schema_service, OutputFormat
+    
+    # Get schema-enforced prompt
+    schema_prompt = schema_service.get_schema_prompt(
+        OutputFormat.SPEAKER_ENHANCED_SUMMARY, 
+        language
+    )
+    
+    # Add speaker-specific context instructions
+    if language == "tr":
+        context_instructions = """
+Bu içerik konuşmacı diyarizasyonu ile işlenmiş bir toplantı metnidir.
+
+ÖNEMLİ BAĞLAM:
+- Her konuşmacı "Speaker 1", "Speaker 2" vb. olarak etiketlenmiştir
+- Konuşma süreleri ve istatistikleri sağlanmıştır  
+- Konuşmacılar arasındaki etkileşimlere odaklanın
+- Kimin ne söylediğini net bir şekilde belirtin
+- Konuşma dinamiklerini ve liderlik modellerini analiz edin
+
+YAPMANIZ GEREKENLER:
+- Her konuşmacının katkılarını spesifik olarak atıfta bulunun
+- Konuşma akışını kronolojik olarak takip edin
+- Karar alma süreçlerinde kimin rol aldığını belirtin
+- Aksiyon maddelerini net sahiplerle eşleştirin
+- Konuşmacıların iletişim stillerini değerlendirin
+"""
+    else:
+        context_instructions = """
+This content is a meeting transcript processed with speaker diarization.
+
+IMPORTANT CONTEXT:
+- Each speaker is labeled as "Speaker 1", "Speaker 2", etc.
+- Speaking times and statistics are provided
+- Focus on interactions between speakers
+- Clearly attribute who said what
+- Analyze conversation dynamics and leadership patterns
+
+WHAT YOU MUST DO:
+- Specifically attribute each speaker's contributions
+- Follow conversation flow chronologically  
+- Identify who played roles in decision-making
+- Match action items with clear owners
+- Assess speakers' communication styles
+"""
+    
+    return schema_prompt + context_instructions

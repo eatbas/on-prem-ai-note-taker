@@ -495,36 +495,91 @@ def process_meeting_audio_celery(
                     
                     speaker_enhanced_transcript = "\n\n".join(speaker_transcript_lines)
                     
-                    # Use enhanced prompt for speaker-aware summary
-                    from ..core.prompts import get_speaker_enhanced_summary_prompt
+                    # 🚨 USE JSON SCHEMA for reliable, structured output
+                    from ..core.prompts import get_speaker_enhanced_json_prompt
+                    from ..services.json_schema_service import schema_service, OutputFormat
                     
-                    # Generate speaker statistics text
-                    speaker_stats_text = "\n".join([
-                        f"- {s['display_name']}: {s['talking_time_percentage']:.1f}% talking time, "
-                        f"{s['total_segments']} segments, {s['total_duration']:.1f}s total"
-                        for s in speakers_data
-                    ])
+                    logger.info(f"🎯 Using JSON schema for speaker-enhanced summary generation")
                     
-                    enhanced_prompt = get_speaker_enhanced_summary_prompt(lang_code).format(
-                        transcript_with_speakers=speaker_enhanced_transcript,
-                        speaker_stats=speaker_stats_text
-                    )
+                    # Get JSON schema-enforced prompt
+                    json_schema_prompt = get_speaker_enhanced_json_prompt(lang_code)
                     
-                    summary = ollama_client.generate(
-                        enhanced_prompt,
-                        options={
-                            "temperature": 0.3,  # Slightly higher for creative speaker insights
-                            "top_p": 0.9,
-                            "top_k": 15,
-                            "num_predict": 800,  # Longer for detailed speaker analysis
+                    # Add speaker data to prompt
+                    full_json_prompt = json_schema_prompt + f"\n\n{speaker_enhanced_transcript}"
+                    
+                    # Generate with JSON schema enforcement (retry logic)
+                    json_success = False
+                    max_retries = 2  # Reduced for processing pipeline
+                    
+                    for attempt in range(max_retries):
+                        try:
+                            summary = ollama_client.generate(
+                                full_json_prompt,
+                                options={
+                                    "temperature": 0.05,  # Very low for JSON consistency
+                                    "top_p": 0.8,
+                                    "top_k": 10,
+                                    "num_predict": 1000,  # Sufficient for structured JSON
+                                    "format": "json",  # 🚨 Force JSON output
+                                }
+                            )
+                            
+                            # Validate JSON output
+                            validated_json = schema_service.validate_json_output(
+                                summary, 
+                                OutputFormat.SPEAKER_ENHANCED_SUMMARY
+                            )
+                            
+                            summary_metadata = {
+                                "summary_type": "speaker_enhanced_json",
+                                "speaker_count": len(speakers_data),
+                                "has_speaker_insights": True,
+                                "schema_validated": True,
+                                "json_structure": "valid"
+                            }
+                            
+                            json_success = True
+                            logger.info(f"✅ JSON schema summary generated and validated successfully")
+                            break
+                            
+                        except ValueError as json_error:
+                            logger.warning(f"JSON validation failed on attempt {attempt + 1}: {json_error}")
+                            if attempt == max_retries - 1:
+                                logger.warning(f"⚠️ JSON schema failed, falling back to enhanced free-text")
+                    
+                    # Fallback to enhanced free-text if JSON fails
+                    if not json_success:
+                        from ..core.prompts import get_speaker_enhanced_summary_prompt
+                        
+                        # Generate speaker statistics text for fallback
+                        speaker_stats_text = "\n".join([
+                            f"- {s['display_name']}: {s['talking_time_percentage']:.1f}% talking time, "
+                            f"{s['total_segments']} segments, {s['total_duration']:.1f}s total"
+                            for s in speakers_data
+                        ])
+                        
+                        enhanced_prompt = get_speaker_enhanced_summary_prompt(lang_code).format(
+                            transcript_with_speakers=speaker_enhanced_transcript,
+                            speaker_stats=speaker_stats_text
+                        )
+                        
+                        summary = ollama_client.generate(
+                            enhanced_prompt,
+                            options={
+                                "temperature": 0.3,  # Slightly higher for creative speaker insights
+                                "top_p": 0.9,
+                                "top_k": 15,
+                                "num_predict": 800,  # Longer for detailed speaker analysis
+                            }
+                        )
+                        
+                        summary_metadata = {
+                            "summary_type": "speaker_enhanced_fallback",
+                            "speaker_count": len(speakers_data),
+                            "has_speaker_insights": True,
+                            "schema_validated": False,
+                            "fallback_reason": "JSON validation failed"
                         }
-                    )
-                    
-                    summary_metadata = {
-                        "summary_type": "speaker_enhanced",
-                        "speaker_count": len(speakers_data),
-                        "has_speaker_insights": True
-                    }
                     
                     logger.info(f"✅ Speaker-enhanced summary generated successfully")
                     

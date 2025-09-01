@@ -24,6 +24,7 @@ class OutputFormat(Enum):
     ACTION_ITEMS = "action_items"
     DECISIONS = "decisions"
     RISKS = "risks"
+    SPEAKER_ENHANCED_SUMMARY = "speaker_enhanced_summary"  # 🚨 NEW: Speaker-aware summaries
 
 
 @dataclass
@@ -56,6 +57,7 @@ class SchemaFirstService:
             OutputFormat.ACTION_ITEMS: self._get_action_items_schema(),
             OutputFormat.DECISIONS: self._get_decisions_schema(),
             OutputFormat.RISKS: self._get_risks_schema(),
+            OutputFormat.SPEAKER_ENHANCED_SUMMARY: self._get_speaker_enhanced_summary_schema(),  # 🚨 NEW
         }
     
     def _get_meeting_summary_schema(self) -> JSONSchema:
@@ -451,6 +453,325 @@ class SchemaFirstService:
         ]
         
         return JSONSchema(OutputFormat.RISKS, schema, example, validation_rules)
+    
+    def _get_speaker_enhanced_summary_schema(self) -> JSONSchema:
+        """
+        🚨 NEW: Schema for speaker-enhanced meeting summaries with detailed speaker insights
+        
+        Combines speaker diarization data with meeting content for rich, structured summaries
+        with "Speaker 1 said...", "Speaker 2 responded..." format and comprehensive analysis.
+        """
+        schema = {
+            "type": "object",
+            "properties": {
+                "meeting_overview": {
+                    "type": "string",
+                    "description": "2-3 sentence overview of meeting purpose and outcome"
+                },
+                "speaker_participation": {
+                    "type": "object",
+                    "properties": {
+                        "total_speakers": {"type": "integer", "minimum": 1},
+                        "dominant_speaker": {"type": "string"},
+                        "participation_balance": {
+                            "type": "string", 
+                            "enum": ["balanced", "dominated", "mixed"]
+                        },
+                        "engagement_level": {
+                            "type": "string",
+                            "enum": ["high", "medium", "low"]
+                        }
+                    },
+                    "required": ["total_speakers"]
+                },
+                "speakers": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "speaker_id": {"type": "string"},
+                            "display_name": {"type": "string"},
+                            "talking_time_percentage": {"type": "number", "minimum": 0, "maximum": 100},
+                            "key_contributions": {"type": "array", "items": {"type": "string"}},
+                            "communication_style": {
+                                "type": "string",
+                                "enum": ["assertive", "collaborative", "analytical", "supportive", "questioning"]
+                            },
+                            "engagement_level": {
+                                "type": "string", 
+                                "enum": ["high", "medium", "low"]
+                            }
+                        },
+                        "required": ["speaker_id", "display_name", "talking_time_percentage"]
+                    }
+                },
+                "key_discussion_points": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "topic": {"type": "string"},
+                            "conversation_flow": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "speaker": {"type": "string"},
+                                        "contribution": {"type": "string"},
+                                        "contribution_type": {
+                                            "type": "string",
+                                            "enum": ["introduced", "agreed", "disagreed", "questioned", "clarified", "proposed"]
+                                        }
+                                    },
+                                    "required": ["speaker", "contribution"]
+                                }
+                            },
+                            "consensus_reached": {"type": "boolean"}
+                        },
+                        "required": ["topic", "conversation_flow"]
+                    }
+                },
+                "decisions_made": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "decision": {"type": "string"},
+                            "proposed_by": {"type": "string"},
+                            "supported_by": {"type": "array", "items": {"type": "string"}},
+                            "opposed_by": {"type": "array", "items": {"type": "string"}},
+                            "final_agreement": {"type": "string"},
+                            "impact_level": {"type": "string", "enum": ["high", "medium", "low"]}
+                        },
+                        "required": ["decision", "proposed_by"]
+                    }
+                },
+                "action_items": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "task": {"type": "string"},
+                            "assigned_to": {"type": "string"},
+                            "mentioned_by": {"type": "string"},
+                            "due_date": {"type": "string"},
+                            "priority": {"type": "string", "enum": ["critical", "high", "medium", "low"]},
+                            "context": {"type": "string"}
+                        },
+                        "required": ["task", "assigned_to"]
+                    }
+                },
+                "speaker_insights": {
+                    "type": "object",
+                    "properties": {
+                        "conversation_dynamics": {
+                            "type": "object",
+                            "properties": {
+                                "total_speaker_transitions": {"type": "integer"},
+                                "average_speaking_duration": {"type": "number"},
+                                "interruptions_count": {"type": "integer"},
+                                "collaboration_score": {"type": "number", "minimum": 0, "maximum": 10}
+                            }
+                        },
+                        "leadership_patterns": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "speaker": {"type": "string"},
+                                    "leadership_style": {
+                                        "type": "string",
+                                        "enum": ["directive", "facilitative", "participative", "delegative"]
+                                    },
+                                    "influence_level": {"type": "string", "enum": ["high", "medium", "low"]}
+                                },
+                                "required": ["speaker"]
+                            }
+                        }
+                    }
+                },
+                "next_steps": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "step": {"type": "string"},
+                            "owner": {"type": "string"},
+                            "timeline": {"type": "string"}
+                        },
+                        "required": ["step"]
+                    }
+                },
+                "open_questions": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                            "raised_by": {"type": "string"},
+                            "requires_follow_up": {"type": "boolean"}
+                        },
+                        "required": ["question"]
+                    }
+                },
+                "meeting_effectiveness": {
+                    "type": "object",
+                    "properties": {
+                        "goal_achievement": {"type": "string", "enum": ["fully_achieved", "partially_achieved", "not_achieved"]},
+                        "time_management": {"type": "string", "enum": ["efficient", "adequate", "poor"]},
+                        "participation_quality": {"type": "string", "enum": ["excellent", "good", "fair", "poor"]},
+                        "decision_clarity": {"type": "string", "enum": ["very_clear", "clear", "somewhat_clear", "unclear"]}
+                    }
+                }
+            },
+            "required": [
+                "meeting_overview", 
+                "speaker_participation", 
+                "speakers", 
+                "key_discussion_points", 
+                "action_items"
+            ]
+        }
+        
+        example = {
+            "meeting_overview": "Team quarterly planning meeting focused on Q4 objectives and resource allocation. Key decisions made on budget increases and project timelines with clear action items assigned.",
+            "speaker_participation": {
+                "total_speakers": 3,
+                "dominant_speaker": "Speaker 1",
+                "participation_balance": "mixed",
+                "engagement_level": "high"
+            },
+            "speakers": [
+                {
+                    "speaker_id": "speaker_1",
+                    "display_name": "Speaker 1",
+                    "talking_time_percentage": 45.2,
+                    "key_contributions": [
+                        "Led discussion on budget allocation",
+                        "Proposed 15% budget increase",
+                        "Assigned action items to team members"
+                    ],
+                    "communication_style": "assertive",
+                    "engagement_level": "high"
+                },
+                {
+                    "speaker_id": "speaker_2", 
+                    "display_name": "Speaker 2",
+                    "talking_time_percentage": 32.1,
+                    "key_contributions": [
+                        "Provided technical feasibility analysis",
+                        "Raised concerns about timeline constraints",
+                        "Suggested alternative implementation approach"
+                    ],
+                    "communication_style": "analytical",
+                    "engagement_level": "high"
+                },
+                {
+                    "speaker_id": "speaker_3",
+                    "display_name": "Speaker 3", 
+                    "talking_time_percentage": 22.7,
+                    "key_contributions": [
+                        "Shared market research insights",
+                        "Supported budget increase proposal",
+                        "Offered to coordinate vendor discussions"
+                    ],
+                    "communication_style": "supportive",
+                    "engagement_level": "medium"
+                }
+            ],
+            "key_discussion_points": [
+                {
+                    "topic": "Q4 Budget Allocation",
+                    "conversation_flow": [
+                        {
+                            "speaker": "Speaker 1",
+                            "contribution": "We need to increase our Q4 budget by 15% to meet the new project requirements",
+                            "contribution_type": "proposed"
+                        },
+                        {
+                            "speaker": "Speaker 2", 
+                            "contribution": "I agree with the increase, but we should consider the technical implementation challenges",
+                            "contribution_type": "agreed"
+                        },
+                        {
+                            "speaker": "Speaker 3",
+                            "contribution": "Market research supports this investment - I'm in favor",
+                            "contribution_type": "agreed"
+                        }
+                    ],
+                    "consensus_reached": true
+                }
+            ],
+            "decisions_made": [
+                {
+                    "decision": "Approve 15% Q4 budget increase",
+                    "proposed_by": "Speaker 1",
+                    "supported_by": ["Speaker 2", "Speaker 3"],
+                    "opposed_by": [],
+                    "final_agreement": "Unanimously approved with implementation timeline",
+                    "impact_level": "high"
+                }
+            ],
+            "action_items": [
+                {
+                    "task": "Prepare detailed budget proposal with breakdown",
+                    "assigned_to": "Speaker 2",
+                    "mentioned_by": "Speaker 1",
+                    "due_date": "next Friday",
+                    "priority": "high",
+                    "context": "Required for finance approval meeting"
+                }
+            ],
+            "speaker_insights": {
+                "conversation_dynamics": {
+                    "total_speaker_transitions": 12,
+                    "average_speaking_duration": 45.5,
+                    "interruptions_count": 2,
+                    "collaboration_score": 8.5
+                },
+                "leadership_patterns": [
+                    {
+                        "speaker": "Speaker 1",
+                        "leadership_style": "directive",
+                        "influence_level": "high"
+                    }
+                ]
+            },
+            "next_steps": [
+                {
+                    "step": "Submit budget proposal to finance team",
+                    "owner": "Speaker 2",
+                    "timeline": "within 1 week"
+                }
+            ],
+            "open_questions": [
+                {
+                    "question": "What is the vendor approval timeline?",
+                    "raised_by": "Speaker 3",
+                    "requires_follow_up": true
+                }
+            ],
+            "meeting_effectiveness": {
+                "goal_achievement": "fully_achieved",
+                "time_management": "efficient", 
+                "participation_quality": "excellent",
+                "decision_clarity": "very_clear"
+            }
+        }
+        
+        validation_rules = [
+            "talking_time_percentage must sum to approximately 100% across all speakers",
+            "speaker_id must match pattern 'speaker_[1-6]'", 
+            "Each speaker must have at least one key contribution",
+            "conversation_flow must show logical speaker interaction patterns",
+            "action_items must have specific, identifiable owners (not 'TBD' or 'Unknown')",
+            "decisions must have clear proposal attribution",
+            "meeting_effectiveness scores must be realistic based on content",
+            "collaboration_score must be 0-10 range",
+            "All speaker references must be consistent throughout the document"
+        ]
+        
+        return JSONSchema(OutputFormat.SPEAKER_ENHANCED_SUMMARY, schema, example, validation_rules)
     
     def get_schema_prompt(self, format_type: OutputFormat, language: str = "en") -> str:
         """

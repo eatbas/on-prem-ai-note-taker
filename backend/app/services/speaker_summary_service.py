@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 
 from ..models import Meeting, Speaker, SpeakerSegment
 from ..database import get_db
-from ..core.prompts import get_speaker_enhanced_summary_prompt
+from ..core.prompts import get_speaker_enhanced_json_prompt, get_speaker_enhanced_summary_prompt
 from ..clients.ollama_client import OllamaClient
+from .json_schema_service import schema_service, OutputFormat
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +35,8 @@ class SpeakerSummaryService:
     def generate_speaker_enhanced_summary(
         self, 
         meeting_id: str, 
-        language: str = "tr"
+        language: str = "tr",
+        use_json_schema: bool = True
     ) -> Dict[str, Any]:
         """
         Generate a comprehensive speaker-enhanced summary for a meeting.
@@ -42,10 +44,121 @@ class SpeakerSummaryService:
         Args:
             meeting_id: Meeting ID
             language: Summary language ("tr", "en", or "auto")
+            use_json_schema: Whether to use JSON schema for structured output (recommended)
             
         Returns:
             Dictionary with enhanced summary and speaker insights
         """
+        
+        if use_json_schema:
+            return self._generate_json_schema_summary(meeting_id, language)
+        else:
+            return self._generate_legacy_summary(meeting_id, language)
+    
+    def _generate_json_schema_summary(
+        self, 
+        meeting_id: str, 
+        language: str = "tr"
+    ) -> Dict[str, Any]:
+        """
+        🚨 NEW: Generate speaker-enhanced summary using JSON schema for reliable output.
+        
+        Prevents hallucination and ensures structured, parseable results.
+        """
+        
+        db = next(get_db())
+        
+        try:
+            # Get meeting data
+            meeting = db.query(Meeting).filter(Meeting.id == meeting_id).first()
+            if not meeting:
+                raise ValueError(f"Meeting {meeting_id} not found")
+            
+            # Get speakers and their segments
+            speakers = db.query(Speaker).filter(Speaker.meeting_id == meeting_id).all()
+            
+            if not speakers:
+                logger.warning(f"No speakers found for meeting {meeting_id}, using standard summary")
+                return self._generate_fallback_summary(meeting, language)
+            
+            # Get speaker segments with transcription
+            speaker_segments = db.query(SpeakerSegment).filter(
+                SpeakerSegment.meeting_id == meeting_id,
+                SpeakerSegment.text.isnot(None),
+                SpeakerSegment.text != ""
+            ).order_by(SpeakerSegment.start_time).all()
+            
+            if not speaker_segments:
+                logger.warning(f"No speaker segments with text found for meeting {meeting_id}")
+                return self._generate_fallback_summary(meeting, language)
+            
+            # Build speaker-enhanced transcript
+            speaker_transcript = self._build_speaker_transcript(speakers, speaker_segments)
+            
+            # Get JSON schema-enforced prompt
+            schema_prompt = get_speaker_enhanced_json_prompt(language)
+            
+            # Add speaker data to prompt
+            full_prompt = schema_prompt + f"\n\n{speaker_transcript}"
+            
+            logger.info(f"🎤 Generating JSON schema-enforced summary for meeting {meeting_id} with {len(speakers)} speakers")
+            
+            # Generate with JSON schema enforcement (retry logic for reliability)
+            max_retries = 3
+            for attempt in range(max_retries):
+                try:
+                    # Generate summary using Ollama with JSON format enforced
+                    json_response = self.ollama_client.generate(
+                        full_prompt,
+                        options={
+                            "temperature": 0.05,  # Very low for JSON consistency
+                            "top_p": 0.8,
+                            "top_k": 10,
+                            "num_predict": 1200,  # More tokens for comprehensive JSON
+                            "format": "json",  # 🚨 Force JSON output
+                        }
+                    )
+                    
+                    # Validate and parse JSON output
+                    validated_summary = schema_service.validate_json_output(
+                        json_response, 
+                        OutputFormat.SPEAKER_ENHANCED_SUMMARY
+                    )
+                    
+                    # Enhance with additional insights
+                    validated_summary["meta_insights"] = self._extract_speaker_insights(speakers, speaker_segments)
+                    validated_summary["conversation_analysis"] = self._analyze_conversation_flow(speaker_segments)
+                    
+                    logger.info(f"✅ JSON schema summary generated successfully for meeting {meeting_id}")
+                    
+                    return {
+                        "summary": json_response,  # Raw JSON string
+                        "structured_summary": validated_summary,  # Parsed and validated
+                        "speaker_count": len(speakers),
+                        "total_segments": len(speaker_segments),
+                        "language": language,
+                        "summary_type": "speaker_enhanced_json",
+                        "schema_validated": True
+                    }
+                    
+                except ValueError as json_error:
+                    logger.warning(f"JSON validation failed on attempt {attempt + 1}: {json_error}")
+                    if attempt == max_retries - 1:
+                        # Final attempt failed, fall back to legacy method
+                        logger.error(f"All JSON attempts failed, falling back to legacy method")
+                        return self._generate_legacy_summary(meeting_id, language)
+                        
+        except Exception as e:
+            logger.error(f"❌ Failed to generate JSON schema summary for meeting {meeting_id}: {e}")
+            # Fallback to legacy method
+            return self._generate_legacy_summary(meeting_id, language)
+    
+    def _generate_legacy_summary(
+        self, 
+        meeting_id: str, 
+        language: str = "tr"
+    ) -> Dict[str, Any]:
+        """Legacy speaker-enhanced summary generation (free-text format)"""
         
         db = next(get_db())
         
@@ -79,7 +192,7 @@ class SpeakerSummaryService:
             # Generate speaker statistics
             speaker_stats = self._generate_speaker_statistics(speakers, speaker_segments)
             
-            # Get the enhanced prompt
+            # Get the enhanced prompt (legacy)
             prompt_template = get_speaker_enhanced_summary_prompt(language)
             
             # Format the prompt with speaker data
@@ -88,7 +201,7 @@ class SpeakerSummaryService:
                 speaker_stats=speaker_stats
             )
             
-            logger.info(f"🎤 Generating speaker-enhanced summary for meeting {meeting_id} with {len(speakers)} speakers")
+            logger.info(f"🎤 Generating legacy speaker-enhanced summary for meeting {meeting_id} with {len(speakers)} speakers")
             
             # Generate summary using Ollama
             enhanced_summary = self.ollama_client.generate(
@@ -108,7 +221,7 @@ class SpeakerSummaryService:
             summary_data["speaker_insights"] = self._extract_speaker_insights(speakers, speaker_segments)
             summary_data["conversation_flow"] = self._analyze_conversation_flow(speaker_segments)
             
-            logger.info(f"✅ Speaker-enhanced summary generated successfully for meeting {meeting_id}")
+            logger.info(f"✅ Legacy speaker-enhanced summary generated successfully for meeting {meeting_id}")
             
             return {
                 "summary": enhanced_summary,
@@ -116,11 +229,11 @@ class SpeakerSummaryService:
                 "speaker_count": len(speakers),
                 "total_segments": len(speaker_segments),
                 "language": language,
-                "summary_type": "speaker_enhanced"
+                "summary_type": "speaker_enhanced_legacy"
             }
             
         except Exception as e:
-            logger.error(f"❌ Failed to generate speaker-enhanced summary for meeting {meeting_id}: {e}")
+            logger.error(f"❌ Failed to generate legacy speaker-enhanced summary for meeting {meeting_id}: {e}")
             # Fallback to regular summary
             return self._generate_fallback_summary(meeting, language)
     
