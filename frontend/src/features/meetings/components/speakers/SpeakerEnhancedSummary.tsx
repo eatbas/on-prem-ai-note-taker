@@ -7,7 +7,7 @@ import type {
   ActionItem,
   ConversationFlow,
   SpeakerInsights
-} from '../../../lib/types'
+} from '../../../../lib/types'
 
 interface SpeakerEnhancedSummaryProps {
   summaryData: SpeakerEnhancedSummary

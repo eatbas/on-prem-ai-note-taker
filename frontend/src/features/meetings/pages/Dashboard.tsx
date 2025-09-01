@@ -8,8 +8,8 @@ const AskLlama = lazy(() => import('../../admin/pages/AskLlama'))
 
 import { useToast } from '../../../components/common'
 import { createRippleEffect } from '../../../utils'
-import EnhancedStatusDisplay from '../components/EnhancedStatusDisplay'
-import SpeakerPreview, { hasSpeakerData } from '../components/SpeakerPreview'
+import EnhancedStatusDisplay from '../components/status/EnhancedStatusDisplay'
+import SpeakerPreview, { hasSpeakerData } from '../components/speakers/SpeakerPreview'
 import { SpeakerSearchEngine } from '../utils/speakerSearch'
 
 // 🚀 STAGE 2 OPTIMIZATION: Memoize Dashboard component for better performance
@@ -896,9 +896,8 @@ const Dashboard = memo(function Dashboard({
 											)}
 											{/* Enhanced Status Display */}
 											<EnhancedStatusDisplay 
-												meetingId={m.id}
 												status={m.status}
-												isProcessing={m.status === 'queued'}
+												compact={true}
 											/>
 											
 											{/* 🚨 NEW: Search Context Display */}

@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { getVpsHealth } from '../../../services'
+import { getVpsHealth } from '../../../../services'
 
 interface AdminToolsProps {
     onShowToast: (type: 'success' | 'error', message: string) => void

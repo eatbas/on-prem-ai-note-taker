@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import type { SpeakerEnhancedSummary, Speaker } from '../../../lib/types'
+import type { SpeakerEnhancedSummary, Speaker } from '../../../../lib/types'
 
 interface MeetingSpeakersProps {
   note: any

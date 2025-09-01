@@ -1,7 +1,7 @@
 import React, { memo } from 'react'
-import ChatInput from '../ChatInput'
-import ChatHistory from '../ChatHistory'
-import ChatMessage from '../ChatMessage'
+import ChatInput from './ChatInput'
+import ChatHistory from './ChatHistory'
+import ChatMessage from './ChatMessage'
 
 interface ChatEntry {
   id: number

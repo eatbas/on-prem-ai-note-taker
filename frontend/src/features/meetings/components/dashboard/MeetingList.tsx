@@ -1,5 +1,5 @@
 import React from 'react'
-import MeetingCard from './MeetingCard'
+import MeetingCardEnhanced from './MeetingCardEnhanced'
 
 interface MeetingListProps {
   meetings: any[]
@@ -115,7 +115,7 @@ export default function MeetingList({
         marginBottom: '24px'
       }}>
         {paginatedMeetings.map((meeting) => (
-          <MeetingCard
+                          <MeetingCardEnhanced
             key={meeting.id}
             meeting={meeting}
             onOpen={onOpen}

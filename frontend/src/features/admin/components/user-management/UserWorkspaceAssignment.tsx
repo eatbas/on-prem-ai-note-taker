@@ -15,7 +15,8 @@ interface UserWorkspaceAssignmentProps {
   currentWorkspaces: Workspace[]
   isOpen: boolean
   onClose: () => void
-  onSave: (assignments: WorkspaceAssignment[]) => Promise<void>
+  onAssignMultiple?: (userId: string, assignments: WorkspaceAssignment[]) => Promise<void>
+  onSave?: (assignments: WorkspaceAssignment[]) => Promise<void>
 }
 
 interface WorkspaceAssignment {
@@ -31,6 +32,7 @@ export default function UserWorkspaceAssignment({
   currentWorkspaces,
   isOpen,
   onClose,
+  onAssignMultiple,
   onSave
 }: UserWorkspaceAssignmentProps) {
   const [selectedWorkspaces, setSelectedWorkspaces] = useState<Map<number, WorkspaceAssignment>>(new Map())
@@ -53,19 +55,17 @@ export default function UserWorkspaceAssignment({
     }
   }, [isOpen, currentWorkspaces])
 
-  const handleWorkspaceToggle = (workspace: Workspace) => {
+  const handleWorkspaceToggle = (workspaceId: number, isSelected: boolean) => {
     const newSelections = new Map(selectedWorkspaces)
     
-    if (newSelections.has(workspace.id)) {
-      // Remove workspace
-      newSelections.delete(workspace.id)
-    } else {
-      // Add workspace with default values
-      newSelections.set(workspace.id, {
-        workspace_id: workspace.id,
+    if (isSelected) {
+      newSelections.set(workspaceId, {
+        workspace_id: workspaceId,
         role: 'member',
         is_responsible: false
       })
+    } else {
+      newSelections.delete(workspaceId)
     }
     
     setSelectedWorkspaces(newSelections)
@@ -73,20 +73,26 @@ export default function UserWorkspaceAssignment({
 
   const handleRoleChange = (workspaceId: number, role: string) => {
     const newSelections = new Map(selectedWorkspaces)
-    const assignment = newSelections.get(workspaceId)
+    const current = newSelections.get(workspaceId)
     
-    if (assignment) {
-      newSelections.set(workspaceId, { ...assignment, role })
+    if (current) {
+      newSelections.set(workspaceId, {
+        ...current,
+        role
+      })
       setSelectedWorkspaces(newSelections)
     }
   }
 
-  const handleResponsibilityChange = (workspaceId: number, isResponsible: boolean) => {
+  const handleResponsibleToggle = (workspaceId: number, isResponsible: boolean) => {
     const newSelections = new Map(selectedWorkspaces)
-    const assignment = newSelections.get(workspaceId)
+    const current = newSelections.get(workspaceId)
     
-    if (assignment) {
-      newSelections.set(workspaceId, { ...assignment, is_responsible: isResponsible })
+    if (current) {
+      newSelections.set(workspaceId, {
+        ...current,
+        is_responsible: isResponsible
+      })
       setSelectedWorkspaces(newSelections)
     }
   }
@@ -95,10 +101,17 @@ export default function UserWorkspaceAssignment({
     setSaving(true)
     try {
       const assignments = Array.from(selectedWorkspaces.values())
-      await onSave(assignments)
+      
+      if (onAssignMultiple) {
+        await onAssignMultiple(userId, assignments)
+      } else if (onSave) {
+        await onSave(assignments)
+      }
+      
       onClose()
     } catch (error) {
       console.error('Failed to save workspace assignments:', error)
+      alert('Failed to save workspace assignments. Please try again.')
     } finally {
       setSaving(false)
     }
@@ -127,7 +140,7 @@ export default function UserWorkspaceAssignment({
         width: '90%',
         maxHeight: '80vh',
         overflow: 'auto',
-        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)'
+        boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
       }}>
         {/* Header */}
         <div style={{
@@ -138,141 +151,148 @@ export default function UserWorkspaceAssignment({
           paddingBottom: '16px',
           borderBottom: '1px solid #e5e7eb'
         }}>
-          <h2 style={{
-            fontSize: '20px',
-            fontWeight: '600',
-            margin: 0,
-            color: '#1f2937'
-          }}>
-            🏢 Manage Workspaces for {userName}
-          </h2>
+          <div>
+            <h2 style={{
+              fontSize: '20px',
+              fontWeight: '600',
+              color: '#1f2937',
+              margin: '0 0 4px 0'
+            }}>
+              🏢 Workspace Assignment
+            </h2>
+            <p style={{
+              fontSize: '14px',
+              color: '#6b7280',
+              margin: 0
+            }}>
+              Manage workspace assignments for <strong>{userName}</strong>
+            </p>
+          </div>
+          
           <button
             onClick={onClose}
             style={{
-              background: 'none',
-              border: 'none',
-              fontSize: '24px',
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              border: '1px solid #d1d5db',
+              backgroundColor: '#f9fafb',
               cursor: 'pointer',
-              color: '#6b7280',
-              padding: 0
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '16px',
+              color: '#6b7280'
             }}
           >
-            ×
+            ✕
           </button>
         </div>
 
-        {/* User Info */}
-        <div style={{
-          backgroundColor: '#f9fafb',
-          padding: '12px 16px',
-          borderRadius: '8px',
-          marginBottom: '20px',
-          border: '1px solid #e5e7eb'
-        }}>
-          <div style={{ fontSize: '14px', color: '#6b7280' }}>User ID: {userId}</div>
-          <div style={{ fontSize: '16px', fontWeight: '500', color: '#1f2937' }}>Username: {userName}</div>
-        </div>
-
-        {/* Workspace Selection */}
+        {/* Workspace List */}
         <div style={{ marginBottom: '24px' }}>
           <h3 style={{
             fontSize: '16px',
             fontWeight: '600',
-            marginBottom: '16px',
-            color: '#374151'
+            color: '#1f2937',
+            marginBottom: '16px'
           }}>
             Available Workspaces
           </h3>
-
+          
           {availableWorkspaces.length === 0 ? (
             <div style={{
               textAlign: 'center',
-              padding: '40px',
-              color: '#6b7280',
+              padding: '40px 20px',
               backgroundColor: '#f9fafb',
               borderRadius: '8px',
               border: '1px solid #e5e7eb'
             }}>
-              <div style={{ fontSize: '32px', marginBottom: '8px' }}>🏢</div>
-              <p>No workspaces available</p>
+              <div style={{ fontSize: '32px', marginBottom: '12px' }}>🏢</div>
+              <p style={{ color: '#6b7280', margin: 0 }}>
+                No active workspaces available
+              </p>
             </div>
           ) : (
-            <div style={{
-              display: 'grid',
-              gap: '12px',
-              maxHeight: '300px',
-              overflow: 'auto',
-              border: '1px solid #e5e7eb',
-              borderRadius: '8px',
-              padding: '12px'
-            }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {availableWorkspaces.map(workspace => {
                 const isSelected = selectedWorkspaces.has(workspace.id)
                 const assignment = selectedWorkspaces.get(workspace.id)
-
+                
                 return (
-                  <div
-                    key={workspace.id}
-                    style={{
-                      border: '1px solid #e5e7eb',
-                      borderRadius: '8px',
-                      padding: '16px',
-                      backgroundColor: isSelected ? '#f0f9ff' : 'white',
-                      borderColor: isSelected ? '#3b82f6' : '#e5e7eb'
-                    }}
-                  >
-                    {/* Workspace Checkbox */}
+                  <div key={workspace.id} style={{
+                    border: '1px solid #e5e7eb',
+                    borderRadius: '8px',
+                    padding: '16px',
+                    marginBottom: '12px',
+                    backgroundColor: isSelected ? '#f0f9ff' : 'white'
+                  }}>
+                    {/* Workspace Header */}
                     <div style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '12px',
-                      marginBottom: isSelected ? '12px' : 0
+                      justifyContent: 'space-between',
+                      marginBottom: isSelected ? '16px' : 0
                     }}>
-                      <input
-                        type="checkbox"
-                        checked={isSelected}
-                        onChange={() => handleWorkspaceToggle(workspace)}
-                        style={{
-                          width: '16px',
-                          height: '16px',
-                          cursor: 'pointer'
-                        }}
-                      />
-                      <div style={{ flex: 1 }}>
-                        <div style={{
-                          fontWeight: '500',
-                          fontSize: '14px',
-                          color: '#1f2937'
-                        }}>
-                          {workspace.name}
-                        </div>
-                        {workspace.description && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={(e) => handleWorkspaceToggle(workspace.id, e.target.checked)}
+                          style={{
+                            width: '16px',
+                            height: '16px',
+                            cursor: 'pointer'
+                          }}
+                        />
+                        <div>
                           <div style={{
-                            fontSize: '12px',
-                            color: '#6b7280',
-                            marginTop: '2px'
+                            fontSize: '14px',
+                            fontWeight: '600',
+                            color: '#1f2937'
                           }}>
-                            {workspace.description}
+                            {workspace.name}
                           </div>
-                        )}
+                          {workspace.description && (
+                            <div style={{
+                              fontSize: '12px',
+                              color: '#6b7280'
+                            }}>
+                              {workspace.description}
+                            </div>
+                          )}
+                        </div>
                       </div>
+                      
+                      {isSelected && (
+                        <span style={{
+                          padding: '2px 8px',
+                          backgroundColor: '#3b82f6',
+                          color: 'white',
+                          borderRadius: '12px',
+                          fontSize: '11px',
+                          fontWeight: '500'
+                        }}>
+                          Selected
+                        </span>
+                      )}
                     </div>
 
-                    {/* Role and Responsibility Options (only when selected) */}
+                    {/* Assignment Options (shown when selected) */}
                     {isSelected && assignment && (
                       <div style={{
+                        paddingTop: '16px',
+                        borderTop: '1px solid #e5e7eb',
                         display: 'grid',
                         gridTemplateColumns: '1fr 1fr',
-                        gap: '12px',
-                        paddingTop: '12px',
-                        borderTop: '1px solid #e5e7eb'
+                        gap: '16px'
                       }}>
                         {/* Role Selection */}
                         <div>
                           <label style={{
                             display: 'block',
                             fontSize: '12px',
-                            fontWeight: '500',
+                            fontWeight: '600',
                             color: '#374151',
                             marginBottom: '4px'
                           }}>
@@ -283,48 +303,51 @@ export default function UserWorkspaceAssignment({
                             onChange={(e) => handleRoleChange(workspace.id, e.target.value)}
                             style={{
                               width: '100%',
-                              padding: '4px 8px',
+                              padding: '6px 8px',
                               border: '1px solid #d1d5db',
                               borderRadius: '4px',
-                              fontSize: '12px',
-                              backgroundColor: 'white'
+                              fontSize: '12px'
                             }}
                           >
                             <option value="member">Member</option>
                             <option value="admin">Admin</option>
-                            <option value="director">Director</option>
+                            <option value="viewer">Viewer</option>
                           </select>
                         </div>
 
-                        {/* Responsibility Checkbox */}
+                        {/* Responsibility Toggle */}
                         <div>
                           <label style={{
                             display: 'block',
                             fontSize: '12px',
-                            fontWeight: '500',
+                            fontWeight: '600',
                             color: '#374151',
-                            marginBottom: '8px'
+                            marginBottom: '4px'
                           }}>
                             Responsibility
                           </label>
-                          <label style={{
+                          <div style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            fontSize: '12px',
-                            cursor: 'pointer'
+                            gap: '8px'
                           }}>
                             <input
                               type="checkbox"
                               checked={assignment.is_responsible}
-                              onChange={(e) => handleResponsibilityChange(workspace.id, e.target.checked)}
+                              onChange={(e) => handleResponsibleToggle(workspace.id, e.target.checked)}
                               style={{
                                 width: '14px',
-                                height: '14px'
+                                height: '14px',
+                                cursor: 'pointer'
                               }}
                             />
-                            <span>👑 Responsible</span>
-                          </label>
+                            <span style={{
+                              fontSize: '12px',
+                              color: '#374151'
+                            }}>
+                              Responsible for workspace
+                            </span>
+                          </div>
                         </div>
                       </div>
                     )}
@@ -338,67 +361,63 @@ export default function UserWorkspaceAssignment({
         {/* Summary */}
         {selectedWorkspaces.size > 0 && (
           <div style={{
-            backgroundColor: '#f0fdf4',
-            border: '1px solid #bbf7d0',
+            padding: '16px',
+            backgroundColor: '#f0f9ff',
             borderRadius: '8px',
-            padding: '12px',
-            marginBottom: '20px'
+            marginBottom: '24px',
+            border: '1px solid #bae6fd'
           }}>
-            <div style={{
+            <h4 style={{
               fontSize: '14px',
-              fontWeight: '500',
-              color: '#166534',
-              marginBottom: '4px'
+              fontWeight: '600',
+              color: '#1e40af',
+              margin: '0 0 8px 0'
             }}>
-              Selected: {selectedWorkspaces.size} workspace{selectedWorkspaces.size !== 1 ? 's' : ''}
-            </div>
-            <div style={{ fontSize: '12px', color: '#166534' }}>
-              {Array.from(selectedWorkspaces.values())
-                .filter(a => a.is_responsible)
-                .length > 0 && (
-                `👑 Responsible for: ${Array.from(selectedWorkspaces.entries())
-                  .filter(([_, assignment]) => assignment.is_responsible)
-                  .map(([workspaceId, _]) => availableWorkspaces.find(w => w.id === workspaceId)?.name)
-                  .join(', ')}`
+              📋 Assignment Summary
+            </h4>
+            <div style={{ fontSize: '12px', color: '#1e40af' }}>
+              <strong>{userName}</strong> will be assigned to <strong>{selectedWorkspaces.size}</strong> workspace{selectedWorkspaces.size !== 1 ? 's' : ''}
+              {Array.from(selectedWorkspaces.values()).some(a => a.is_responsible) && (
+                <span> and will be responsible for {Array.from(selectedWorkspaces.values()).filter(a => a.is_responsible).length} of them</span>
               )}
             </div>
           </div>
         )}
 
-        {/* Actions */}
+        {/* Action Buttons */}
         <div style={{
           display: 'flex',
-          justifyContent: 'flex-end',
           gap: '12px',
-          paddingTop: '16px',
-          borderTop: '1px solid #e5e7eb'
+          justifyContent: 'flex-end'
         }}>
           <button
             onClick={onClose}
             disabled={saving}
             style={{
               padding: '8px 16px',
+              backgroundColor: '#f3f4f6',
               border: '1px solid #d1d5db',
               borderRadius: '6px',
-              backgroundColor: 'white',
-              color: '#374151',
               fontSize: '14px',
+              fontWeight: '500',
               cursor: saving ? 'not-allowed' : 'pointer',
               opacity: saving ? 0.6 : 1
             }}
           >
             Cancel
           </button>
+          
           <button
             onClick={handleSave}
             disabled={saving}
             style={{
               padding: '8px 16px',
-              border: 'none',
-              borderRadius: '6px',
               backgroundColor: saving ? '#9ca3af' : '#3b82f6',
               color: 'white',
+              border: 'none',
+              borderRadius: '6px',
               fontSize: '14px',
+              fontWeight: '500',
               cursor: saving ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -407,18 +426,31 @@ export default function UserWorkspaceAssignment({
           >
             {saving ? (
               <>
-                <span>⏳</span>
-                <span>Saving...</span>
+                <div style={{
+                  width: '14px',
+                  height: '14px',
+                  border: '2px solid white',
+                  borderTop: '2px solid transparent',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite'
+                }} />
+                Saving...
               </>
             ) : (
               <>
-                <span>💾</span>
-                <span>Save Assignments</span>
+                💾 Save Changes
               </>
             )}
           </button>
         </div>
       </div>
+
+      <style>{`
+        @keyframes spin {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+      `}</style>
     </div>
   )
 }

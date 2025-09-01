@@ -8,13 +8,12 @@ export { default as AdminDashboard } from './pages/AdminDashboard'
 export { default as AskLlama } from './pages/AskLlama'
 
 // Components
-export { default as AdminStats } from './components/AdminStats'
-export { default as AdminUsers } from './components/AdminUsers'
-export { default as AdminMeetings } from './components/AdminMeetings'
-export { default as AdminTools } from './components/AdminTools'
-export { default as ChatMessage } from './components/ChatMessage'
-export { default as ChatInput } from './components/ChatInput'
-export { default as ChatHistory } from './components/ChatHistory'
+export { AdminStats } from './components/monitoring'
+export { AdminUsers } from './components/user-management'
+export { AdminMeetings } from './components/meeting-management'
+export { AdminTools } from './components/tools'
+export { AdminWorkspaces } from './components/workspace-management'
+export { ChatMessage, ChatInput, ChatHistory } from './components/chat'
 
 // Hooks
 export { useChatTimer } from './hooks/useChatTimer'

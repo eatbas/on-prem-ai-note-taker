@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { useToast } from '../../../components/common'
+import { useToast } from '../../../../components/common'
 
 interface SystemHealth {
   vps: {

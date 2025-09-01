@@ -8,9 +8,9 @@ import {
   MeetingViewHeader,
   MeetingSummary,
   MeetingTranscript,
-  MeetingSpeakers,
   MeetingAudio
 } from '../components/meeting-view'
+import { MeetingSpeakers } from '../components/speakers'
 import DeleteConfirmationModal from '../components/meeting-view/DeleteConfirmationModal'
 
 interface MeetingViewProps {

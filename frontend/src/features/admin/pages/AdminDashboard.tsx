@@ -4,12 +4,11 @@ import { useToast } from '../../../components/common'
 import { ProgressDashboard, JobQueue } from '../../../components/queue'
 
 // Import new admin components
-import AdminStats from '../components/AdminStats'
-import AdminUsers from '../components/AdminUsers'
-import AdminMeetings from '../components/AdminMeetings'
-import AdminWorkspaces from '../components/AdminWorkspaces'
-import AdminTools from '../components/AdminTools'
-import ProductionHealthDashboard from '../components/ProductionHealthDashboard'
+import { AdminUsers } from '../components/user-management'
+import { AdminMeetings } from '../components/meeting-management'
+import { AdminWorkspaces } from '../components/workspace-management'
+import { AdminStats, ProductionHealthDashboard } from '../components/monitoring'
+import { AdminTools } from '../components/tools'
 
 // Import admin API utilities
 import {

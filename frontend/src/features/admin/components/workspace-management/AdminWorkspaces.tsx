@@ -4,7 +4,7 @@ import type {
   WorkspaceCreate, 
   WorkspaceUpdate,
   WorkspaceStats
-} from '../../../types/workspace'
+} from '../../../../types/workspace'
 
 interface AdminWorkspacesProps {
   workspaces: Workspace[]
@@ -386,7 +386,7 @@ export default function AdminWorkspaces({
               <input
                 type="text"
                 value={newWorkspace.name}
-                onChange={(e) => setNewWorkspace(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => setNewWorkspace((prev: any) => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter workspace name"
                 style={{
                   width: '100%',
@@ -404,7 +404,7 @@ export default function AdminWorkspaces({
               </label>
               <textarea
                 value={newWorkspace.description}
-                onChange={(e) => setNewWorkspace(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) => setNewWorkspace((prev: any) => ({ ...prev, description: e.target.value }))}
                 placeholder="Enter workspace description (optional)"
                 rows={3}
                 style={{
@@ -489,7 +489,7 @@ export default function AdminWorkspaces({
               <input
                 type="text"
                 value={editWorkspace.name || ''}
-                onChange={(e) => setEditWorkspace(prev => ({ ...prev, name: e.target.value }))}
+                onChange={(e) => setEditWorkspace((prev: any) => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter workspace name"
                 style={{
                   width: '100%',
@@ -507,7 +507,7 @@ export default function AdminWorkspaces({
               </label>
               <textarea
                 value={editWorkspace.description || ''}
-                onChange={(e) => setEditWorkspace(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) => setEditWorkspace((prev: any) => ({ ...prev, description: e.target.value }))}
                 placeholder="Enter workspace description (optional)"
                 rows={3}
                 style={{
@@ -526,7 +526,7 @@ export default function AdminWorkspaces({
                 <input
                   type="checkbox"
                   checked={editWorkspace.is_active ?? true}
-                  onChange={(e) => setEditWorkspace(prev => ({ ...prev, is_active: e.target.checked }))}
+                  onChange={(e) => setEditWorkspace((prev: any) => ({ ...prev, is_active: e.target.checked }))}
                   style={{ width: '16px', height: '16px' }}
                 />
                 Active

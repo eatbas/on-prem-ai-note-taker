@@ -1,6 +1,6 @@
 import React, { useState, memo } from 'react'
-import SpeakerPreview, { hasSpeakerData } from '../SpeakerPreview'
-import EnhancedStatusDisplay from '../EnhancedStatusDisplay'
+import SpeakerPreview, { hasSpeakerData } from '../speakers/SpeakerPreview'
+import EnhancedStatusDisplay from '../status/EnhancedStatusDisplay'
 import { MeetingLoadingCard } from './LoadingStates'
 
 interface MeetingCardEnhancedProps {
@@ -184,9 +184,8 @@ const MeetingCardEnhanced = memo(function MeetingCardEnhanced({
             color: '#6b7280'
           }}>
             <EnhancedStatusDisplay 
-              meetingId={meeting.id}
               status={meeting.status}
-              isProcessing={meeting.status === 'queued'}
+              compact={true}
             />
             <span>•</span>
             <span>📅 {formatDate(meeting.createdAt)}</span>

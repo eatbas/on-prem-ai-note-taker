@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react'
 import { chat } from '../../../services'
 
 // Import chat components
-import ChatInput from '../components/ChatInput'
-import ChatHistory from '../components/ChatHistory'
-import ChatMessage from '../components/ChatMessage'
+import ChatInput from '../components/chat/ChatInput'
+import ChatHistory from '../components/chat/ChatHistory'
+import ChatMessage from '../components/chat/ChatMessage'
 
 // Import custom hook
 import { useChatTimer } from '../hooks/useChatTimer'

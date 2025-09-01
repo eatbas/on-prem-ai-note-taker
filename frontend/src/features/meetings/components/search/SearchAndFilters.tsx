@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getEnhancedSearchPlaceholder, hasAnySpeakerData, SpeakerSearchEngine } from '../utils/speakerSearch'
+import { getEnhancedSearchPlaceholder, hasAnySpeakerData, SpeakerSearchEngine } from '../../utils/speakerSearch'
 
 interface SearchAndFiltersProps {
   text: string

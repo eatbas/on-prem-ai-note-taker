@@ -5,11 +5,8 @@ import { formatDuration } from '../../../utils'
 import config from '../../../utils/envLoader'
 
 // Import our new components
-import MeetingHeader from '../components/MeetingHeader'
-import MeetingSummary from '../components/MeetingSummary'
-import MeetingTranscript from '../components/MeetingTranscript'
-import MeetingSpeakers from '../components/MeetingSpeakers'
-import MeetingAudio from '../components/MeetingAudio'
+import { MeetingHeader, MeetingSummary, MeetingTranscript, MeetingAudio } from '../components/meeting-view'
+import { MeetingSpeakers } from '../components/speakers'
 
 export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
   // Core state

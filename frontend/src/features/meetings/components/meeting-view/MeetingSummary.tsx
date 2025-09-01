@@ -1,6 +1,6 @@
 import React from 'react'
-import type { SpeakerEnhancedSummary } from '../../../lib/types'
-import SpeakerEnhancedSummaryComponent from './SpeakerEnhancedSummary'
+import type { SpeakerEnhancedSummary } from '../../../../lib/types'
+import SpeakerEnhancedSummaryComponent from '../speakers/SpeakerEnhancedSummary'
 
 interface MeetingSummaryProps {
   note: any
