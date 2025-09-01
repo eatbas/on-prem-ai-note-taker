@@ -1,6 +1,6 @@
 """Meeting-related Pydantic models"""
 
-from typing import List, Optional
+from typing import List, Optional, Union
 from pydantic import BaseModel
 
 
@@ -37,7 +37,7 @@ class StartMeetingRequest(BaseModel):
     title: str
     language: str = "auto"  # "tr", "en", or "auto"
     tags: Optional[List[str]] = []
-    scope: str = "personal"  # "personal" or "workspace"
+    scope: Union[str, int] = "personal"  # "personal" or workspace ID
 
 
 class StartMeetingResponse(BaseModel):

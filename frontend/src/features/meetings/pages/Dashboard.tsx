@@ -660,6 +660,21 @@ const Dashboard = memo(function Dashboard({
 					⚠️ {error}
 				</div>
 			)}
+
+			{/* Personalized Greeting - moved above tabs */}
+			<div style={{
+				padding: '16px 24px',
+				backgroundColor: '#f8fafc',
+				border: '1px solid #e2e8f0',
+				borderRadius: '8px',
+				marginBottom: '16px',
+				textAlign: 'center',
+				fontSize: '14px',
+				color: '#475569',
+				fontWeight: '500'
+			}}>
+				👋 Hello <strong style={{ color: '#3b82f6' }}>{getComputerUsername()}</strong>, we are ready to prepare the meeting notes for you in a secure and private way
+			</div>
 			
 			{/* Tabs */}
 			<div style={{
@@ -671,12 +686,12 @@ const Dashboard = memo(function Dashboard({
 				overflow: 'hidden'
 			}}>
 				{[
-					{ id: 'local', label: '📁 All Meetings', icon: '🏠' },
+					{ id: 'local', label: 'Home · ☁️ Personal', icon: '🏠' },
 					...(hasWorkspace ? [{ 
 						id: 'workspace', 
 						label: hasMultipleWorkspaces 
-							? `🏢 Workspaces (${totalWorkspaces})` 
-							: `🏢 ${userWorkspace?.name || 'Workspace'}`, 
+							? `Workspaces (${totalWorkspaces}) ☁️` 
+							: `${userWorkspace?.name || 'Workspace'} ☁️`, 
 						icon: '🏢' 
 					}] : []),
 					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
@@ -729,21 +744,6 @@ const Dashboard = memo(function Dashboard({
 			{/* Quick Test Results moved to Admin Dashboard */}
 
 			{/* Diagnostic Results moved to Admin Dashboard */}
-
-			{/* Personalized Greeting */}
-			<div style={{
-				padding: '16px 24px',
-				backgroundColor: '#f8fafc',
-				border: '1px solid #e2e8f0',
-				borderRadius: '8px',
-				marginBottom: '24px',
-				textAlign: 'center',
-				fontSize: '14px',
-				color: '#475569',
-				fontWeight: '500'
-			}}>
-				👋 Hello <strong style={{ color: '#3b82f6' }}>{getComputerUsername()}</strong>, we are ready to prepare the meeting notes for you in a secure and private way
-			</div>
 
 			{/* Tab Content */}
 			{activeTab === 'llama' && (
@@ -1175,76 +1175,7 @@ const Dashboard = memo(function Dashboard({
 			{/* Workspace Meetings Tab */}
 			{activeTab === 'workspace' && (
 				<div style={{ padding: '24px 0' }}>
-					<div style={{ 
-						textAlign: 'center', 
-						marginBottom: '32px',
-						padding: '24px',
-						backgroundColor: '#f8fafc',
-						borderRadius: '12px',
-						border: '2px solid #e2e8f0'
-					}}>
-						<h2 style={{
-							margin: '0 0 16px 0',
-							fontSize: '1.8rem',
-							fontWeight: '600',
-							color: '#1e293b'
-						}}>
-							🏢 {hasMultipleWorkspaces ? 'Your Workspaces' : (userWorkspace?.name || 'Workspace')} Meetings
-						</h2>
-						<p style={{
-							margin: '0',
-							fontSize: '1.1rem',
-							color: '#64748b',
-							lineHeight: '1.6'
-						}}>
-							{hasMultipleWorkspaces 
-								? `You're part of ${totalWorkspaces} workspaces. Switch between them to view specific meetings.`
-								: 'Meetings shared with your workspace team. All workspace members can view these recordings.'
-							}
-						</p>
-						
-						{/* Workspace Info */}
-						{hasMultipleWorkspaces && responsibleWorkspaces.length > 0 && (
-							<div style={{
-								marginTop: '16px',
-								padding: '12px',
-								backgroundColor: 'white',
-								borderRadius: '8px',
-								border: '1px solid #e2e8f0'
-							}}>
-								<span style={{
-									fontSize: '14px',
-									color: '#64748b',
-									fontWeight: '500'
-								}}>
-									👑 You're responsible for: {responsibleWorkspaces.map(w => w.name).join(', ')}
-								</span>
-							</div>
-						)}
-						{!hasMultipleWorkspaces && userWorkspace && (
-							<div style={{
-								display: 'flex',
-								justifyContent: 'center',
-								gap: '16px',
-								marginTop: '16px'
-							}}>
-								<span style={{ 
-									fontSize: '14px', 
-									fontWeight: '500',
-									display: 'flex',
-									alignItems: 'center',
-									gap: '8px',
-									padding: '8px 16px',
-									backgroundColor: '#dcfce7',
-									color: '#166534',
-									borderRadius: '8px',
-									border: '1px solid #bbf7d0'
-								}}>
-									🏢 {userWorkspace.name}
-								</span>
-							</div>
-						)}
-					</div>
+					{/* Workspace header removed per UX request */}
 
 					{/* Workspace Sub-tabs */}
 					{hasWorkspace && (

@@ -673,7 +673,21 @@ async def start_meeting(
     workspace_id = None
     is_personal = True
     
-    if request.scope == "workspace":
+    if request.scope == "personal":
+        # Personal meeting - workspace_id stays None, is_personal stays True
+        pass
+    elif isinstance(request.scope, int):
+        # Workspace ID provided - validate user has access to this workspace
+        user_workspace_ids = [uw.workspace_id for uw in current_user.user_workspaces]
+        if request.scope not in user_workspace_ids:
+            raise HTTPException(
+                status_code=403, 
+                detail=f"Access denied: You are not a member of workspace {request.scope}"
+            )
+        workspace_id = request.scope
+        is_personal = False
+    elif request.scope == "workspace":
+        # Legacy support - use primary workspace
         if not current_user.workspace_id:
             raise HTTPException(
                 status_code=400, 
@@ -681,13 +695,10 @@ async def start_meeting(
             )
         workspace_id = current_user.workspace_id
         is_personal = False
-    elif request.scope == "personal":
-        # Personal meeting - workspace_id stays None, is_personal stays True
-        pass
     else:
         raise HTTPException(
             status_code=400, 
-            detail="Invalid scope. Must be 'personal' or 'workspace'"
+            detail="Invalid scope. Must be 'personal', 'workspace', or a workspace ID"
         )
     
     # Create meeting record

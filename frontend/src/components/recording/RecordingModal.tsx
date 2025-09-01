@@ -14,7 +14,7 @@ export interface RecordingConfig {
   speakerDeviceId?: string // Optional - system audio is captured automatically
   language: 'tr' | 'en' | 'auto'
   showFloatingWidget: boolean
-  scope: 'personal' | 'workspace'
+  scope: 'personal' | number  // 'personal' or workspace ID
 }
 
 export default function RecordingModal({
@@ -26,7 +26,7 @@ export default function RecordingModal({
   const [selectedMicId, setSelectedMicId] = useState('')
   const [language, setLanguage] = useState<'tr' | 'en' | 'auto'>('tr')
   const [showFloatingWidget, setShowFloatingWidget] = useState(true)
-  const [scope, setScope] = useState<'personal' | 'workspace'>('personal')
+  const [scope, setScope] = useState<'personal' | number>('personal')
 
   const handleStartRecording = () => {
     if (!selectedMicId) return

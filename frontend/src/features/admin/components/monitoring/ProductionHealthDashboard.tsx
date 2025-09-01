@@ -3,65 +3,20 @@ import { db } from '../../../../services/db'
 import { getVpsHealth } from '../../../../services'
 import { useToast } from '../../../../components/common'
 import { apiBase, getApiHeaders } from '../../../../services/api/core'
+import SystemOverview from './health/SystemOverview'
+import PerformancePanel from './health/PerformancePanel'
+import QuickActions from './health/QuickActions'
+import { useQuickActions } from './health/useQuickActions'
+import type { SystemHealth, PerformanceMetrics } from './health/types'
 
-interface SystemHealth {
-  vps: {
-    status: 'healthy' | 'warning' | 'critical'
-    cpu_usage: number
-    memory_usage: number
-    disk_usage: number
-    response_time: number
-  }
-  redis: {
-    status: 'connected' | 'disconnected'
-    memory_usage: number
-    connected_clients: number
-    queue_length: number
-  }
-  celery: {
-    status: 'healthy' | 'warning' | 'critical'
-    active_workers: number
-    pending_tasks: number
-    failed_tasks_24h: number
-    avg_task_duration: number
-  }
-  whisper: {
-    model_loaded: boolean
-    memory_usage_mb: number
-    processing_queue: number
-    avg_processing_time: number
-  }
-  speaker_intelligence: {
-    total_meetings_processed: number
-    enhanced_summaries_count: number
-    avg_speaker_count: number
-    accuracy_score: number
-  }
-}
-
-interface PerformanceMetrics {
-  meeting_processing: {
-    avg_duration_minutes: number
-    success_rate: number
-    throughput_per_hour: number
-  }
-  frontend: {
-    dashboard_load_time: number
-    search_response_time: number
-    ui_responsiveness_score: number
-  }
-  audio_streaming: {
-    avg_startup_time: number
-    buffer_health: number
-    stream_quality: 'excellent' | 'good' | 'fair' | 'poor'
-  }
-}
+// Types moved to ./health/types
 
 export default function ProductionHealthDashboard() {
   const [health, setHealth] = useState<SystemHealth | null>(null)
   const [metrics, setMetrics] = useState<PerformanceMetrics | null>(null)
   const [loading, setLoading] = useState(true)
   const [autoRefresh, setAutoRefresh] = useState(true)
+  const [subTab, setSubTab] = useState<'health' | 'tools'>('health')
   const { showToast } = useToast()
 
   const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 4000) => {
@@ -80,11 +35,11 @@ export default function ProductionHealthDashboard() {
       // Use centralized API base and headers so it works in dev/prod
       const [healthResponse, metricsResponse] = await Promise.all([
         fetchWithTimeout(`${apiBase}/admin/health/comprehensive`, {
-          headers: { ...getApiHeaders() }
+        headers: { ...getApiHeaders() }
         }),
         fetchWithTimeout(`${apiBase}/admin/health/performance`, {
-          headers: { ...getApiHeaders() }
-        })
+        headers: { ...getApiHeaders() }
+      })
       ])
       
       if (healthResponse.ok && metricsResponse.ok) {
@@ -160,29 +115,9 @@ export default function ProductionHealthDashboard() {
     }
   }, [autoRefresh])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'healthy':
-      case 'connected':
-      case 'excellent':
-        return '#10b981'
-      case 'warning':
-      case 'good':
-        return '#f59e0b'
-      case 'critical':
-      case 'disconnected':
-      case 'poor':
-        return '#ef4444'
-      default:
-        return '#6b7280'
-    }
-  }
+  // Color helpers moved to SystemOverview
 
-  const getUsageColor = (usage: number, warning = 70, critical = 85) => {
-    if (usage >= critical) return '#ef4444'
-    if (usage >= warning) return '#f59e0b'
-    return '#10b981'
-  }
+  const { actions } = useQuickActions()
 
   if (loading) {
     return (
@@ -201,160 +136,7 @@ export default function ProductionHealthDashboard() {
     )
   }
 
-  // Quick Actions (tool-style)
-  const [clearingMeetings, setClearingMeetings] = useState(false)
-  const [clearingCache, setClearingCache] = useState(false)
-  const [testingHealth, setTestingHealth] = useState(false)
-
-  const handleClearLocalMeetings = async () => {
-    // eslint-disable-next-line no-alert
-    if (!confirm('Clear ALL local meetings, audio chunks and notes from this device?')) return
-    setClearingMeetings(true)
-    try {
-      await Promise.all([
-        db.meetings.clear(),
-        db.chunks.clear(),
-        db.notes.clear()
-      ])
-      showToast('All local meetings cleared', 'success')
-    } catch (e) {
-      console.error('Failed to clear local meetings:', e)
-      showToast('Failed to clear local meetings', 'error')
-    } finally {
-      setClearingMeetings(false)
-    }
-  }
-
-  const handleClearCache = async () => {
-    // eslint-disable-next-line no-alert
-    if (!confirm('Clear application cache (local/session storage and browser caches)?')) return
-    setClearingCache(true)
-    try {
-      // Local/session storage
-      localStorage.clear()
-      sessionStorage.clear()
-      // Browser caches (PWA/Vite dev cache)
-      if ('caches' in window) {
-        try {
-          const keys = await caches.keys()
-          await Promise.all(keys.map(k => caches.delete(k)))
-        } catch (e) {
-          // ignore cache API failures
-        }
-      }
-      showToast('Cache cleared', 'success')
-    } catch (e) {
-      console.error('Failed to clear cache:', e)
-      showToast('Failed to clear cache', 'error')
-    } finally {
-      setClearingCache(false)
-    }
-  }
-
-  const handleHealthCheck = async () => {
-    setTestingHealth(true)
-    try {
-      const health = await getVpsHealth()
-      // eslint-disable-next-line no-alert
-      alert(`Backend OK\nWhisper: ${health.whisper_model}\nOllama: ${health.ollama_model}`)
-      showToast('Health check completed successfully', 'success')
-    } catch (error) {
-      console.error('Health check failed:', error)
-      showToast('Health check failed', 'error')
-    } finally {
-      setTestingHealth(false)
-    }
-  }
-
-  const handleReloadApp = () => {
-    // eslint-disable-next-line no-alert
-    if (confirm('Are you sure you want to reload the application?')) {
-      window.location.reload()
-    }
-  }
-
-  const handleExportLogs = () => {
-    try {
-      const logs = [
-        `Admin Dashboard Logs - ${new Date().toISOString()}`,
-        '='.repeat(50),
-        'Browser Information:',
-        `User Agent: ${navigator.userAgent}`,
-        `Platform: ${navigator.platform}`,
-        `Language: ${navigator.language}`,
-        `Cookies Enabled: ${navigator.cookieEnabled}`,
-        `Online: ${navigator.onLine}`,
-        '',
-        'Storage Information:',
-        `Local Storage Items: ${localStorage.length}`,
-        `Session Storage Items: ${sessionStorage.length}`,
-        '',
-        'Performance Information:',
-        `Memory Used: ${(performance as any).memory ? `${((performance as any).memory.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB` : 'N/A'}`,
-        `Connection: ${(navigator as any).connection ? `${(navigator as any).connection.effectiveType} (${(navigator as any).connection.downlink} Mbps)` : 'N/A'}`,
-        '',
-        'Application State:',
-        `Current URL: ${window.location.href}`,
-        `Timestamp: ${new Date().toISOString()}`,
-        ''
-      ].join('\n')
-
-      const blob = new Blob([logs], { type: 'text/plain' })
-      const url = URL.createObjectURL(blob)
-      const a = document.createElement('a')
-      a.href = url
-      a.download = `admin-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`
-      a.click()
-      URL.revokeObjectURL(url)
-      showToast('Logs exported successfully', 'success')
-    } catch (error) {
-      console.error('Failed to export logs:', error)
-      showToast('Failed to export logs', 'error')
-    }
-  }
-
-  const actionTools = [
-    {
-      title: 'Backend Health Check',
-      description: 'Test connection to the backend API and check service status',
-      icon: '🏥',
-      action: handleHealthCheck,
-      loading: testingHealth,
-      color: '#22c55e'
-    },
-    {
-      title: 'Clear Local Meetings',
-      description: 'Remove all local meetings, chunks and notes from this device',
-      icon: '🧹',
-      action: handleClearLocalMeetings,
-      loading: clearingMeetings,
-      color: '#f59e0b'
-    },
-    {
-      title: 'Clear App Cache',
-      description: 'Clear local/session storage and browser caches',
-      icon: '🗑️',
-      action: handleClearCache,
-      loading: clearingCache,
-      color: '#ef4444'
-    },
-    {
-      title: 'Reload Application',
-      description: 'Force refresh the entire application',
-      icon: '🔄',
-      action: handleReloadApp,
-      loading: false,
-      color: '#3b82f6'
-    },
-    {
-      title: 'Export Debug Logs',
-      description: 'Download application logs and system information',
-      icon: '📥',
-      action: handleExportLogs,
-      loading: false,
-      color: '#8b5cf6'
-    }
-  ]
+  const actionTools = actions as any
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -400,386 +182,45 @@ export default function ProductionHealthDashboard() {
         </div>
       </div>
 
-      {/* System Status Overview */}
+      {/* Sub Tabs: Health | Tools */}
       <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-        gap: '20px',
-        marginBottom: '30px'
+        display: 'flex',
+        gap: '8px',
+        flexWrap: 'wrap',
+        marginBottom: '16px'
       }}>
-        {/* VPS Health */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: getStatusColor(health?.vps.status || 'unknown')
-              }}
-            />
-            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>🖥️ VPS Health</h3>
-          </div>
-          
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>CPU Usage</span>
-              <span style={{ 
-                fontSize: '14px', 
-                fontWeight: '600',
-                color: getUsageColor(health?.vps.cpu_usage || 0)
-              }}>
-                {health?.vps.cpu_usage.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Memory</span>
-              <span style={{ 
-                fontSize: '14px', 
-                fontWeight: '600',
-                color: getUsageColor(health?.vps.memory_usage || 0)
-              }}>
-                {health?.vps.memory_usage.toFixed(1)}%
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Response Time</span>
-              <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                {health?.vps.response_time}ms
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Redis Status */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: getStatusColor(health?.redis.status || 'unknown')
-              }}
-            />
-            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>🔄 Redis Queue</h3>
-          </div>
-          
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Queue Length</span>
-              <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                {health?.redis.queue_length} tasks
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Memory Usage</span>
-              <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                {health?.redis.memory_usage.toFixed(1)} MB
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Clients</span>
-              <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                {health?.redis.connected_clients}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Celery Workers */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: getStatusColor(health?.celery.status || 'unknown')
-              }}
-            />
-            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>⚙️ Workers</h3>
-          </div>
-          
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Active Workers</span>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#10b981' }}>
-                {health?.celery.active_workers}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Pending Tasks</span>
-              <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                {health?.celery.pending_tasks}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Failed (24h)</span>
-              <span style={{ 
-                fontSize: '14px', 
-                fontWeight: '600',
-                color: health?.celery.failed_tasks_24h === 0 ? '#10b981' : '#ef4444'
-              }}>
-                {health?.celery.failed_tasks_24h}
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* Speaker Intelligence */}
-        <div style={{
-          backgroundColor: 'white',
-          padding: '20px',
-          borderRadius: '12px',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-            <div
-              style={{
-                width: '12px',
-                height: '12px',
-                borderRadius: '50%',
-                backgroundColor: '#8b5cf6'
-              }}
-            />
-            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>🎤 Speaker AI</h3>
-          </div>
-          
-          <div style={{ display: 'grid', gap: '8px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Enhanced Summaries</span>
-              <span style={{ fontSize: '14px', fontWeight: '600', color: '#8b5cf6' }}>
-                {health?.speaker_intelligence.enhanced_summaries_count}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Avg Speakers</span>
-              <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                {health?.speaker_intelligence.avg_speaker_count.toFixed(1)}
-              </span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: '14px', color: '#6b7280' }}>Accuracy Score</span>
-              <span style={{ 
-                fontSize: '14px', 
-                fontWeight: '600',
-                color: getUsageColor(health?.speaker_intelligence.accuracy_score || 0, 80, 90)
-              }}>
-                {health?.speaker_intelligence.accuracy_score.toFixed(1)}%
-              </span>
-            </div>
-          </div>
-        </div>
+        {[
+          { key: 'health', label: '📊 Health' },
+          { key: 'tools', label: '🔧 Tools' }
+        ].map(t => (
+          <button
+            key={t.key}
+            onClick={() => setSubTab(t.key as 'health' | 'tools')}
+            style={{
+              padding: '8px 12px',
+              borderRadius: '8px',
+              border: subTab === t.key ? '2px solid #3b82f6' : '1px solid #e5e7eb',
+              backgroundColor: subTab === t.key ? '#eff6ff' : '#ffffff',
+              color: '#111827',
+              cursor: 'pointer',
+              fontSize: '14px',
+              minWidth: '110px'
+            }}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Performance Metrics */}
-      <div style={{
-        backgroundColor: 'white',
-        padding: '24px',
-        borderRadius: '12px',
-        border: '1px solid #e5e7eb',
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        marginBottom: '30px'
-      }}>
-        <h3 style={{ fontSize: '20px', fontWeight: '600', marginBottom: '20px', color: '#1f2937' }}>
-          📊 Performance Metrics
-        </h3>
-        
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '20px'
-        }}>
-          {/* Meeting Processing */}
-          <div>
-            <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#374151' }}>
-              🎙️ Meeting Processing
-            </h4>
-            <div style={{ display: 'grid', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Avg Duration</span>
-                <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                  {metrics?.meeting_processing.avg_duration_minutes.toFixed(1)} min
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Success Rate</span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#10b981' }}>
-                  {metrics?.meeting_processing.success_rate.toFixed(1)}%
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Throughput/Hour</span>
-                <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                  {metrics?.meeting_processing.throughput_per_hour} meetings
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Frontend Performance */}
-          <div>
-            <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#374151' }}>
-              💻 Frontend Performance
-            </h4>
-            <div style={{ display: 'grid', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Dashboard Load</span>
-                <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                  {metrics?.frontend.dashboard_load_time}ms
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Search Response</span>
-                <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                  {metrics?.frontend.search_response_time}ms
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>UI Responsiveness</span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#10b981' }}>
-                  {metrics?.frontend.ui_responsiveness_score}/100
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Audio Streaming */}
-          <div>
-            <h4 style={{ fontSize: '16px', fontWeight: '600', marginBottom: '12px', color: '#374151' }}>
-              🎵 Audio Streaming
-            </h4>
-            <div style={{ display: 'grid', gap: '8px' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Startup Time</span>
-                <span style={{ fontSize: '14px', fontWeight: '600' }}>
-                  {metrics?.audio_streaming.avg_startup_time.toFixed(1)}s
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Buffer Health</span>
-                <span style={{ fontSize: '14px', fontWeight: '600', color: '#10b981' }}>
-                  {metrics?.audio_streaming.buffer_health}%
-                </span>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '14px', color: '#6b7280' }}>Stream Quality</span>
-                <span style={{ 
-                  fontSize: '14px', 
-                  fontWeight: '600',
-                  color: getStatusColor(metrics?.audio_streaming.stream_quality || 'unknown')
-                }}>
-                  {metrics?.audio_streaming.stream_quality}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Quick Actions (Tools-style) */}
-      <div style={{
-        backgroundColor: '#f8fafc',
-        padding: '20px',
-        borderRadius: '12px',
-        border: '1px solid #e2e8f0'
-      }}>
-        <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#1f2937' }}>
-          🔧 Quick Actions
-        </h3>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-          gap: '20px'
-        }}>
-          {actionTools.map((tool, index) => (
-            <div
-              key={index}
-              style={{
-                backgroundColor: '#ffffff',
-                border: '1px solid #e5e7eb',
-                borderRadius: '12px',
-                padding: '24px',
-                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-                transition: 'all 0.2s ease'
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)'
-                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)'
-                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-                <div style={{
-                  fontSize: '32px',
-                  width: '48px',
-                  height: '48px',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  backgroundColor: `${(tool as any).color}15`,
-                  borderRadius: '12px'
-                }}>
-                  {tool.icon}
-                </div>
-                <div>
-                  <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0, color: '#1f2937' }}>
-                    {tool.title}
-                  </h3>
-                </div>
-              </div>
-
-              <p style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.5', margin: '0 0 20px 0' }}>
-                {tool.description}
-              </p>
-
-              <button
-                onClick={tool.action}
-                disabled={tool.loading}
-                style={{
-                  width: '100%',
-                  padding: '12px 20px',
-                  backgroundColor: tool.loading ? '#9ca3af' : (tool as any).color,
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '8px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: tool.loading ? 'not-allowed' : 'pointer',
-                  opacity: tool.loading ? 0.6 : 1,
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {tool.loading ? 'Processing...' : `Execute ${tool.title}`}
-              </button>
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* Content by Sub Tab */}
+      {subTab === 'health' ? (
+        <>
+          <SystemOverview health={health} />
+          <PerformancePanel metrics={metrics} />
+        </>
+      ) : (
+        <QuickActions actions={actionTools as any} />
+      )}
     </div>
   )
 }

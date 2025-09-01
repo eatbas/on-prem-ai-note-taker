@@ -11,7 +11,6 @@ import {
   AdminUsers,
   AdminMeetings,
   AdminWorkspaces,
-  AdminTools,
   ProductionHealthDashboard
 } from '../components/dashboard'
 
@@ -112,7 +111,7 @@ const AdminDashboard = memo(function AdminDashboard() {
     { key: 'users', label: '👥 Users', description: 'User management' },
     { key: 'meetings', label: '📋 Meetings', description: 'Meeting management' },
     { key: 'workspaces', label: '🏢 Workspaces', description: 'Workspace management' },
-    { key: 'tools', label: '🔧 Tools', description: 'Administrative tools' },
+    
     { key: 'jobs', label: '⚙️ Jobs', description: 'Background jobs' },
     { key: 'health', label: '🔍 Health', description: 'Production monitoring' }
   ]
@@ -418,12 +417,7 @@ const AdminDashboard = memo(function AdminDashboard() {
             onDeactivateWorkspace={handleDeactivateWorkspace}
           />
         )
-      case 'tools':
-        return (
-          <AdminTools
-            onShowToast={(type: 'success' | 'error', message: string) => showToast(message, type)}
-          />
-        )
+      
       case 'jobs':
         return <JobQueue online={true} vpsUp={true} />
       case 'health':

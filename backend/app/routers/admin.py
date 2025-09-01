@@ -237,11 +237,16 @@ async def admin_list_meetings(
             except (json.JSONDecodeError, TypeError):
                 tags = []
         
-        # Get workspace info if meeting has one
+        # Get workspace info using multi-workspace relationship (primary workspace if exists)
+        workspace_id = None
         workspace_name = None
-        if meeting.workspace_id:
-            workspace = db.query(Workspace).filter(Workspace.id == meeting.workspace_id).first()
-            workspace_name = workspace.name if workspace else None
+        primary_workspace = meeting.get_primary_workspace()
+        if not primary_workspace and getattr(meeting, "workspaces", None):
+            # Fallback to first associated workspace if no primary is set
+            primary_workspace = meeting.workspaces[0] if meeting.workspaces else None
+        if primary_workspace:
+            workspace_id = primary_workspace.id
+            workspace_name = primary_workspace.name
         
         response_meetings.append(AdminMeetingResponse(
             id=meeting.id,
@@ -254,7 +259,7 @@ async def admin_list_meetings(
             has_transcription=has_transcription,
             has_summary=has_summary,
             tags=tags,
-            workspace_id=meeting.workspace_id,
+            workspace_id=workspace_id,
             workspace_name=workspace_name,
             is_personal=meeting.is_personal,
         ))

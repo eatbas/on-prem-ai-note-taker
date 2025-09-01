@@ -300,37 +300,20 @@ async def transcribe_and_summarize(
             lang_code = "tr"
 
         # 🚀 STAGE 2-3 OPTIMIZATION: Use hierarchical JSON summarization for direct endpoint
-        from ..services.hierarchical_summary import HierarchicalSummarizationService
+        from ..services.hierarchical_summary import HierarchicalSummarizationService, format_meeting_summary_to_text
         
         try:
             # Use the revolutionary hierarchical summarization
             hierarchical_service = HierarchicalSummarizationService()
             
-            # Create chunk from transcript (single chunk for direct processing)
-            chunks = [{
-                'text': transcript.text,
-                'start_time': 0,
-                'end_time': transcript.duration or 0,
-                'chunk_index': 0
-            }]
-            
-            # Generate hierarchical summary with JSON schema
-            summary_result = hierarchical_service.generate_meeting_summary(
-                chunks=chunks,
-                meeting_metadata={
-                    'meeting_id': meeting_id,
-                    'language': lang_code,
-                    'duration': transcript.duration or 0
-                }
+            # Generate hierarchical summary from full transcript
+            meeting_summary = await hierarchical_service.generate_hierarchical_summary(
+                transcript_text=transcript.text,
+                language=lang_code
             )
             
-            # Extract summary text (backward compatibility)
-            if hasattr(summary_result, 'summary') and summary_result.summary:
-                summary = summary_result.summary
-            elif hasattr(summary_result, 'executive_summary'):
-                summary = summary_result.executive_summary
-            else:
-                summary = str(summary_result)
+            # Convert structured summary to formatted text
+            summary = format_meeting_summary_to_text(meeting_summary, language=lang_code)
                 
             logger.info(f"✅ Hierarchical JSON summarization completed for direct endpoint: {meeting_id}")
             

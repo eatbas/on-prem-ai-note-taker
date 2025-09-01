@@ -31,7 +31,7 @@ export async function startMeeting(
 	title: string,
 	language: string = 'auto',
 	tags: string[] = [],
-	scope: 'personal' | 'workspace' = 'personal'
+	scope: 'personal' | number = 'personal'
 ): Promise<{ meetingId: string; message: string }> {
 	const userId = getUserId()
 	if (!userId) {

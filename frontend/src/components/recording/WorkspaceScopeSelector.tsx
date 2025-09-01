@@ -2,7 +2,7 @@ import React, { type FC } from 'react'
 import { useUserWorkspace } from '../../hooks/useUserWorkspace'
 
 interface WorkspaceScopeOption {
-  value: 'personal' | 'workspace'
+  value: 'personal' | number  // 'personal' or workspace ID
   label: string
   description: string
   icon: string
@@ -10,8 +10,8 @@ interface WorkspaceScopeOption {
 }
 
 interface WorkspaceScopeSelectorProps {
-  selectedScope: 'personal' | 'workspace'
-  onScopeChange: (scope: 'personal' | 'workspace') => void
+  selectedScope: 'personal' | number  // 'personal' or workspace ID
+  onScopeChange: (scope: 'personal' | number) => void
   className?: string
 }
 
@@ -20,7 +20,7 @@ const WorkspaceScopeSelector: FC<WorkspaceScopeSelectorProps> = ({
   onScopeChange,
   className = ''
 }) => {
-  const { workspace: userWorkspace, loading } = useUserWorkspace()
+  const { workspaces, loading, hasMultipleWorkspaces } = useUserWorkspace()
 
   if (loading) {
     return (
@@ -48,138 +48,113 @@ const WorkspaceScopeSelector: FC<WorkspaceScopeSelectorProps> = ({
       icon: '👤',
       disabled: false
     },
-    {
-      value: 'workspace',
-      label: userWorkspace ? `Workspace: ${userWorkspace.name}` : 'Workspace Meeting',
-      description: userWorkspace 
-        ? `This meeting will be shared with your workspace "${userWorkspace.name}"`
-        : 'You need to be assigned to a workspace by an admin',
-      icon: '🏢',
-      disabled: !userWorkspace
-    }
+    ...workspaces.map(workspace => ({
+      value: workspace.id,
+      label: `Workspace: ${workspace.name}`,
+      description: `This meeting will be shared with your workspace "${workspace.name}"`,
+      icon: workspace.is_responsible ? '👑' : '🏢',
+      disabled: false
+    }))
   ]
 
   return (
     <div className={className}>
-      <label style={{
-        display: 'block',
-        marginBottom: '12px',
-        fontSize: '16px',
-        fontWeight: '600',
-        color: '#374151'
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center',
+        marginBottom: '12px'
       }}>
-        📋 Meeting Scope
-      </label>
-      
-      {!userWorkspace && (
-        <div style={{
-          marginBottom: '12px',
-          padding: '12px',
-          backgroundColor: '#fffbeb',
-          border: '1px solid #fbbf24',
-          borderRadius: '8px',
-          fontSize: '14px',
-          color: '#92400e'
-        }}>
-          <div style={{ fontWeight: '500', marginBottom: '4px' }}>
-            💡 No workspace assigned
-          </div>
-          <div>
-            You can only create personal meetings. Contact an admin to be assigned to a workspace.
-          </div>
-        </div>
-      )}
-
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: '1fr',
-        gap: '8px'
-      }}>
-        {scopeOptions.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => !option.disabled && onScopeChange(option.value)}
-            disabled={option.disabled}
-            style={{
-              padding: '16px',
-              backgroundColor: selectedScope === option.value 
-                ? '#3b82f6' 
-                : option.disabled 
-                  ? '#f9fafb' 
-                  : '#f8fafc',
-              color: selectedScope === option.value 
-                ? 'white' 
-                : option.disabled 
-                  ? '#9ca3af' 
-                  : '#374151',
-              border: selectedScope === option.value 
-                ? '2px solid #3b82f6' 
-                : option.disabled 
-                  ? '1px solid #e5e7eb' 
-                  : '1px solid #d1d5db',
-              borderRadius: '8px',
-              fontSize: '14px',
-              cursor: option.disabled ? 'not-allowed' : 'pointer',
-              transition: 'all 0.2s ease',
-              textAlign: 'left',
-              opacity: option.disabled ? 0.5 : 1
-            }}
-            onMouseEnter={(e: React.MouseEvent<HTMLButtonElement>) => {
-              if (!option.disabled && selectedScope !== option.value) {
-                e.currentTarget.style.backgroundColor = '#e5e7eb'
-                e.currentTarget.style.borderColor = '#9ca3af'
-              }
-            }}
-            onMouseLeave={(e: React.MouseEvent<HTMLButtonElement>) => {
-              if (!option.disabled && selectedScope !== option.value) {
-                e.currentTarget.style.backgroundColor = '#f8fafc'
-                e.currentTarget.style.borderColor = '#d1d5db'
-              }
-            }}
-          >
-            <div style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: '12px',
-              marginBottom: '8px'
-            }}>
-              <span style={{ fontSize: '18px' }}>{option.icon}</span>
-              <span style={{ fontWeight: '600' }}>{option.label}</span>
-              {selectedScope === option.value && (
-                <span style={{ marginLeft: 'auto', fontSize: '16px' }}>✓</span>
-              )}
-            </div>
-            <div style={{ 
-              fontSize: '12px', 
-              opacity: 0.9,
-              fontWeight: '400',
-              lineHeight: '1.4',
-              marginLeft: '30px'
-            }}>
-              {option.description}
-            </div>
-          </button>
-        ))}
+        <label style={{ fontWeight: '500', color: '#374151' }}>
+          📋 Meeting Scope:
+        </label>
       </div>
 
-      {userWorkspace && selectedScope === 'workspace' && (
-        <div style={{
-          marginTop: '12px',
+      <select
+        value={selectedScope}
+        onChange={(e) => {
+          const value = e.target.value
+          onScopeChange(value === 'personal' ? 'personal' : parseInt(value))
+        }}
+        disabled={workspaces.length === 0}
+        style={{
+          width: '100%',
           padding: '12px',
-          backgroundColor: '#f0f9ff',
-          border: '1px solid #0ea5e9',
+          border: '1px solid #d1d5db',
           borderRadius: '8px',
           fontSize: '14px',
-          color: '#374151'
+          backgroundColor: workspaces.length === 0 ? '#f9fafb' : '#ffffff',
+          color: '#374151',
+          cursor: workspaces.length === 0 ? 'not-allowed' : 'pointer',
+          outline: 'none',
+          transition: 'border-color 0.2s ease',
+          opacity: workspaces.length === 0 ? 0.6 : 1
+        }}
+        onFocus={(e) => {
+          if (workspaces.length > 0) {
+            e.target.style.borderColor = '#3b82f6'
+            e.target.style.boxShadow = '0 0 0 3px rgba(59, 130, 246, 0.1)'
+          }
+        }}
+        onBlur={(e) => {
+          e.target.style.borderColor = '#d1d5db'
+          e.target.style.boxShadow = 'none'
+        }}
+      >
+        {scopeOptions.map((option) => (
+          <option key={option.value} value={option.value} disabled={option.disabled}>
+            {option.icon} {option.label}
+          </option>
+        ))}
+      </select>
+
+      {/* Scope Status Indicator */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '8px',
+        padding: '8px 12px',
+        backgroundColor: workspaces.length === 0 ? '#fffbeb' : '#ecfdf5',
+        border: `1px solid ${workspaces.length === 0 ? '#f59e0b' : '#10b981'}`,
+        borderRadius: '6px',
+        fontSize: '12px',
+        marginTop: '8px'
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          color: workspaces.length === 0 ? '#92400e' : '#047857'
         }}>
-          <div style={{ fontWeight: '500', marginBottom: '4px' }}>
-            🏢 Workspace Meeting
-          </div>
-          <div style={{ fontSize: '12px', color: '#6b7280' }}>
-            All members of "{userWorkspace.name}" workspace will be able to view this meeting.
-          </div>
+          <div style={{
+            width: '8px',
+            height: '8px',
+            borderRadius: '50%',
+            backgroundColor: workspaces.length === 0 ? '#f59e0b' : '#10b981'
+          }} />
+          {workspaces.length === 0 
+            ? 'No workspace assigned - personal meetings only'
+            : selectedScope === 'personal' 
+              ? 'Personal meeting - private to you'
+              : (() => {
+                  const selectedWorkspace = workspaces.find(w => w.id === selectedScope)
+                  return selectedWorkspace 
+                    ? `Workspace meeting - shared with "${selectedWorkspace.name}"`
+                    : 'Workspace meeting selected'
+                })()
+          }
         </div>
-      )}
+        {workspaces.length > 0 && (
+          <div style={{
+            fontSize: '10px',
+            color: '#047857',
+            fontWeight: '500'
+          }}>
+            {selectedScope === 'personal' ? 'Private' : 'Shared'}
+          </div>
+        )}
+      </div>
     </div>
   )
 }

@@ -53,7 +53,7 @@ const MeetingViewHeader = memo(function MeetingViewHeader({
       case 'recording':
         return { icon: '🎙️', text: 'Recording in Progress', color: '#dc2626' }
       case 'local':
-        return { icon: '📱', text: 'Local Only', color: '#6b7280' }
+        return { icon: '🏠', text: 'Local Only', color: '#6b7280' }
       case 'queued':
         return { icon: '⏳', text: 'Queued for Processing', color: '#f59e0b' }
       case 'uploading':
@@ -62,7 +62,7 @@ const MeetingViewHeader = memo(function MeetingViewHeader({
         return { icon: '🤖', text: 'AI Processing', color: '#7c3aed' }
       case 'synced':
       case 'sent':
-        return { icon: '✅', text: 'Synced to Cloud', color: '#10b981' }
+        return { icon: '☁️', text: 'Synced to VPS', color: '#10b981' }
       default:
         return { icon: '❓', text: 'Unknown Status', color: '#6b7280' }
     }
@@ -216,7 +216,7 @@ const MeetingViewHeader = memo(function MeetingViewHeader({
                 transition: 'all 0.2s ease'
               }}
             >
-              {sending ? '⏳ Processing...' : '📤 Sync to Cloud'}
+              {sending ? '⏳ Processing...' : '☁️ Sync to VPS'}
             </button>
           )}
 

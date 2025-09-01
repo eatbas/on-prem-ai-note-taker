@@ -22,7 +22,7 @@ export interface RecordingOptions {
 	micDeviceId?: string
 	language: 'tr' | 'en' | 'auto'
 	showFloatingWidget?: boolean
-	scope?: 'personal' | 'workspace'
+	scope?: 'personal' | number  // 'personal' or workspace ID
 }
 
 class GlobalRecordingManager {
@@ -166,7 +166,7 @@ class GlobalRecordingManager {
 					meetingTitle, 
 					options.language, 
 					[], 
-					options.scope || 'personal'
+					options.scope ?? 'personal'
 				)
 			} catch (apiError) {
 				console.error('❌ Backend API call failed:', apiError)
@@ -200,7 +200,7 @@ class GlobalRecordingManager {
 				status: 'local' as const,
 				language: options.language,
 				duration: 0,
-				workspace_id: options.scope === 'workspace' ? undefined : undefined, // Will be set by backend
+				workspace_id: typeof options.scope === 'number' ? options.scope : undefined,
 				is_personal: options.scope === 'personal'
 			}
 			
@@ -268,6 +268,12 @@ class GlobalRecordingManager {
 		console.log('🛑 Global Recording Manager: Stopping recording...')
 		
 		try {
+			// Optimistically update UI to reflect stopping immediately
+			const meetingId = this.state.meetingId
+			if (this.state.isRecording) {
+				this.state.isRecording = false
+				this.notifyListeners()
+			}
 			// Stop audio recording
 			await this.stopAudioRecording()
 			
@@ -281,7 +287,6 @@ class GlobalRecordingManager {
 				console.log('🧹 Global Recording Manager: Cleared force data interval')
 			}
 			
-			const meetingId = this.state.meetingId
 			
 			// Clear saved state
 			this.clearSavedState()
@@ -304,7 +309,9 @@ class GlobalRecordingManager {
 			return meetingId
 		} catch (error) {
 			console.error('❌ Error stopping recording:', error)
+			// Ensure state is consistent even on errors
 			this.state.error = 'Failed to stop recording properly'
+			this.state.isRecording = false
 			this.notifyListeners()
 			return this.state.meetingId
 		}
@@ -578,8 +585,18 @@ class GlobalRecordingManager {
 						setTimeout(() => {
 							console.warn('⚠️ Microphone recorder stop timeout')
 							this.state.micRecorder?.removeEventListener('stop', handleStop)
+							try {
+								// Force-stop tracks to unblock recorder if needed
+								this.state.micStream?.getTracks().forEach((track) => {
+									if (track.readyState !== 'ended') {
+										track.stop()
+									}
+								})
+							} catch (e) {
+								console.warn('⚠️ Failed forcing mic track stop after timeout:', e)
+							}
 							resolve()
-						}, 5000)
+						}, 2000)
 					})
 					
 					stopPromises.push(micStopPromise)

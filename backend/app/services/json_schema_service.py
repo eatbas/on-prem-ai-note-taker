@@ -699,7 +699,7 @@ class SchemaFirstService:
                             "contribution_type": "agreed"
                         }
                     ],
-                    "consensus_reached": true
+                    "consensus_reached": True
                 }
             ],
             "decisions_made": [
@@ -748,7 +748,7 @@ class SchemaFirstService:
                 {
                     "question": "What is the vendor approval timeline?",
                     "raised_by": "Speaker 3",
-                    "requires_follow_up": true
+                    "requires_follow_up": True
                 }
             ],
             "meeting_effectiveness": {
