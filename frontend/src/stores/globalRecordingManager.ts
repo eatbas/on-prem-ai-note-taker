@@ -209,7 +209,7 @@ class GlobalRecordingManager {
 				status: 'local' as const,
 				language: options.language,
 				duration: 0,
-				workspace_id: options.scope === 'workspace' ? null : null, // Will be set by backend
+				workspace_id: options.scope === 'workspace' ? undefined : undefined, // Will be set by backend
 				is_personal: options.scope === 'personal'
 			}
 			
