@@ -145,6 +145,8 @@ export interface TranscriptionSegment {
   end: number
   text: string
   speaker?: string
+  confidence?: number
+  speaker_confidence?: number
 }
 
 export interface SummaryResult {
@@ -274,4 +276,104 @@ export class APIError extends Error {
     this.status = status
     this.code = code
   }
+}
+
+// 🚨 NEW: Speaker Intelligence Types for JSON Schema Support
+export interface Speaker {
+  speaker_id: string
+  display_name: string
+  custom_name?: string
+  talking_time_percentage: number
+  key_contributions: string[]
+  communication_style: 'assertive' | 'collaborative' | 'analytical' | 'supportive' | 'questioning'
+  engagement_level: 'high' | 'medium' | 'low'
+  speaker_color?: string
+}
+
+export interface ConversationFlow {
+  speaker: string
+  contribution: string
+  contribution_type: 'introduced' | 'agreed' | 'disagreed' | 'questioned' | 'clarified' | 'proposed'
+}
+
+export interface DiscussionPoint {
+  topic: string
+  conversation_flow: ConversationFlow[]
+  consensus_reached: boolean
+}
+
+export interface Decision {
+  decision: string
+  proposed_by: string
+  supported_by: string[]
+  opposed_by: string[]
+  final_agreement: string
+  impact_level: 'high' | 'medium' | 'low'
+}
+
+export interface ActionItem {
+  task: string
+  assigned_to: string
+  mentioned_by?: string
+  due_date?: string
+  priority: 'critical' | 'high' | 'medium' | 'low'
+  context?: string
+}
+
+export interface SpeakerInsights {
+  conversation_dynamics: {
+    total_speaker_transitions: number
+    average_speaking_duration: number
+    interruptions_count: number
+    collaboration_score: number
+  }
+  leadership_patterns: {
+    speaker: string
+    leadership_style: 'directive' | 'facilitative' | 'participative' | 'delegative'
+    influence_level: 'high' | 'medium' | 'low'
+  }[]
+}
+
+export interface MeetingEffectiveness {
+  goal_achievement: 'fully_achieved' | 'partially_achieved' | 'not_achieved'
+  time_management: 'efficient' | 'adequate' | 'poor'
+  participation_quality: 'excellent' | 'good' | 'fair' | 'poor'
+  decision_clarity: 'very_clear' | 'clear' | 'somewhat_clear' | 'unclear'
+}
+
+export interface OpenQuestion {
+  question: string
+  raised_by: string
+  requires_follow_up: boolean
+}
+
+export interface NextStep {
+  step: string
+  owner?: string
+  timeline?: string
+}
+
+export interface SpeakerParticipation {
+  total_speakers: number
+  dominant_speaker?: string
+  participation_balance: 'balanced' | 'dominated' | 'mixed'
+  engagement_level: 'high' | 'medium' | 'low'
+}
+
+// 🚨 NEW: JSON Schema Speaker-Enhanced Summary Structure
+export interface SpeakerEnhancedSummary {
+  meeting_overview: string
+  speaker_participation: SpeakerParticipation
+  speakers: Speaker[]
+  key_discussion_points: DiscussionPoint[]
+  decisions_made: Decision[]
+  action_items: ActionItem[]
+  speaker_insights?: SpeakerInsights
+  next_steps: NextStep[]
+  open_questions: OpenQuestion[]
+  meeting_effectiveness?: MeetingEffectiveness
+  
+  // Meta information
+  summary_type: 'speaker_enhanced_json' | 'speaker_enhanced_legacy' | 'standard'
+  schema_validated?: boolean
 }

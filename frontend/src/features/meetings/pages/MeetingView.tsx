@@ -8,6 +8,7 @@ import config from '../../../utils/envLoader'
 import MeetingHeader from '../components/MeetingHeader'
 import MeetingSummary from '../components/MeetingSummary'
 import MeetingTranscript from '../components/MeetingTranscript'
+import MeetingSpeakers from '../components/MeetingSpeakers'
 import MeetingAudio from '../components/MeetingAudio'
 
 export default function MeetingView({ meetingId, onBack }: { meetingId: string; onBack?: () => void }) {
@@ -270,10 +271,7 @@ export default function MeetingView({ meetingId, onBack }: { meetingId: string; 
         )
       case 'speakers':
         return (
-          <div style={{ padding: '20px', textAlign: 'center', color: '#6b7280' }}>
-            <div style={{ fontSize: '48px', marginBottom: '16px' }}>👥</div>
-            <p>Speaker management coming soon...</p>
-          </div>
+          <MeetingSpeakers note={note} meeting={meeting} search={search} />
         )
       default:
         return null
