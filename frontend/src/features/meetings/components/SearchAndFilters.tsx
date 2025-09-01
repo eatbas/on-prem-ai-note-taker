@@ -1,4 +1,5 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
+import { getEnhancedSearchPlaceholder, hasAnySpeakerData, SpeakerSearchEngine } from '../utils/speakerSearch'
 
 interface SearchAndFiltersProps {
   text: string
@@ -10,6 +11,7 @@ interface SearchAndFiltersProps {
   setWorkspaceFilter: (filter: 'all' | 'personal' | 'workspace') => void
   userHasWorkspace: boolean
   onClearFilters: () => void
+  meetings?: any[]  // 🚨 NEW: For speaker-aware search
 }
 
 export default function SearchAndFilters({
@@ -21,9 +23,29 @@ export default function SearchAndFilters({
   workspaceFilter,
   setWorkspaceFilter,
   userHasWorkspace,
-  onClearFilters
+  onClearFilters,
+  meetings = []
 }: SearchAndFiltersProps) {
   const hasFilters = text || tag || workspaceFilter !== 'all'
+  
+  // 🚨 NEW: Speaker-aware search state
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [searchSuggestions, setSearchSuggestions] = useState<string[]>([])
+  const hasSpeakerMeetings = hasAnySpeakerData(meetings)
+  const enhancedPlaceholder = getEnhancedSearchPlaceholder(hasSpeakerMeetings)
+
+  // Generate search suggestions when meetings change
+  useEffect(() => {
+    if (meetings.length > 0) {
+      const suggestions = SpeakerSearchEngine.getSearchSuggestions(meetings)
+      setSearchSuggestions(suggestions)
+    }
+  }, [meetings])
+
+  const handleSuggestionClick = (suggestion: string) => {
+    setText(suggestion)
+    setShowSuggestions(false)
+  }
 
   return (
     <div style={{ 
@@ -74,7 +96,7 @@ export default function SearchAndFilters({
         gap: '16px'
       }}>
         {/* Text Search */}
-        <div>
+        <div style={{ position: 'relative' }}>
           <label style={{ 
             display: 'block', 
             fontSize: '12px', 
@@ -82,37 +104,126 @@ export default function SearchAndFilters({
             color: '#374151',
             marginBottom: '6px'
           }}>
-            Search in content
+            {hasSpeakerMeetings ? '🎤 Enhanced Search (with Speaker Intelligence)' : 'Search in content'}
           </label>
-          <input
-            type="text"
-            placeholder="Search titles, transcripts, summaries..."
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            style={{
-              width: '100%',
-              padding: '10px 12px',
+          <div style={{ position: 'relative' }}>
+            <input
+              type="text"
+              placeholder={enhancedPlaceholder}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              onFocus={(e) => {
+                e.target.style.borderColor = '#3b82f6'
+                e.target.style.outline = 'none'
+                setShowSuggestions(true)
+              }}
+              onBlur={(e) => {
+                e.target.style.borderColor = '#d1d5db'
+                // Delay hiding suggestions to allow clicks
+                setTimeout(() => setShowSuggestions(false), 150)
+              }}
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                paddingRight: hasSpeakerMeetings ? '40px' : '12px',
+                border: '1px solid #d1d5db',
+                borderRadius: '6px',
+                fontSize: '14px',
+                backgroundColor: '#ffffff',
+                transition: 'border-color 0.2s ease'
+              }}
+            />
+            {hasSpeakerMeetings && (
+              <div style={{
+                position: 'absolute',
+                right: '12px',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontSize: '16px',
+                color: '#10b981',
+                pointerEvents: 'none'
+              }}>
+                🎤
+              </div>
+            )}
+          </div>
+
+          {/* Search Suggestions Dropdown */}
+          {showSuggestions && searchSuggestions.length > 0 && (
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: 0,
+              right: 0,
+              backgroundColor: 'white',
               border: '1px solid #d1d5db',
               borderRadius: '6px',
-              fontSize: '14px',
-              backgroundColor: '#ffffff',
-              transition: 'border-color 0.2s ease'
-            }}
-            onFocus={(e) => {
-              e.target.style.borderColor = '#3b82f6'
-              e.target.style.outline = 'none'
-            }}
-            onBlur={(e) => {
-              e.target.style.borderColor = '#d1d5db'
-            }}
-          />
+              boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+              zIndex: 10,
+              maxHeight: '200px',
+              overflowY: 'auto',
+              marginTop: '2px'
+            }}>
+              <div style={{
+                padding: '8px 12px',
+                fontSize: '11px',
+                fontWeight: '600',
+                color: '#6b7280',
+                borderBottom: '1px solid #f3f4f6',
+                backgroundColor: '#f9fafb'
+              }}>
+                💡 Search suggestions
+              </div>
+              {searchSuggestions.slice(0, 8).map((suggestion, index) => (
+                <button
+                  key={index}
+                  onClick={() => handleSuggestionClick(suggestion)}
+                  style={{
+                    width: '100%',
+                    padding: '8px 12px',
+                    textAlign: 'left',
+                    border: 'none',
+                    backgroundColor: 'transparent',
+                    fontSize: '13px',
+                    color: '#374151',
+                    cursor: 'pointer',
+                    transition: 'background-color 0.1s ease'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.backgroundColor = '#f3f4f6'
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.backgroundColor = 'transparent'
+                  }}
+                >
+                  🔍 {suggestion}
+                </button>
+              ))}
+            </div>
+          )}
+
           {text && (
             <div style={{ 
               fontSize: '11px', 
               color: '#6b7280', 
-              marginTop: '4px' 
+              marginTop: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
             }}>
-              Searching: "{text}"
+              <span>Searching: "{text}"</span>
+              {hasSpeakerMeetings && (
+                <span style={{ 
+                  backgroundColor: '#10b981', 
+                  color: 'white', 
+                  padding: '1px 6px', 
+                  borderRadius: '4px',
+                  fontSize: '10px',
+                  fontWeight: '600'
+                }}>
+                  🎤 Enhanced
+                </span>
+              )}
             </div>
           )}
         </div>

@@ -9,6 +9,8 @@ const AskLlama = lazy(() => import('../../admin/pages/AskLlama'))
 import { useToast } from '../../../components/common'
 import { createRippleEffect } from '../../../utils'
 import EnhancedStatusDisplay from '../components/EnhancedStatusDisplay'
+import SpeakerPreview, { hasSpeakerData } from '../components/SpeakerPreview'
+import { SpeakerSearchEngine } from '../utils/speakerSearch'
 
 // 🚀 STAGE 2 OPTIMIZATION: Memoize Dashboard component for better performance
 const Dashboard = memo(function Dashboard({ 
@@ -500,22 +502,37 @@ const Dashboard = memo(function Dashboard({
 		}
 	}, [tags, onTagsChange])
 
-	// Process meetings to mark recording status and sort
+	// Process meetings to mark recording status, apply enhanced search, and sort
 	const processedMeetings = useMemo(() => {
-		return meetings.map(m => {
+		// First, mark recording status
+		let processed = meetings.map(m => {
 			// Mark the currently recording meeting
 			if (isRecording && recordingMeetingId === m.id) {
 				return { ...m, status: 'recording', title: m.title || 'Meeting in Progress...' }
 			}
 			return m
-		}).sort((a, b) => {
+		})
+
+		// 🚨 NEW: Apply speaker-aware enhanced search if search term exists
+		if (text && text.trim()) {
+			processed = SpeakerSearchEngine.filterAndSortMeetings(processed, text.trim())
+		}
+
+		// Sort by priority: recording first, then by search relevance or date
+		return processed.sort((a, b) => {
 			// Recording meeting always goes first
 			if (a.status === 'recording') return -1
 			if (b.status === 'recording') return 1
-			// Then sort by creation date (newest first)
+			
+			// If we have search scores, sort by relevance
+			if (a._searchScore && b._searchScore) {
+				return b._searchScore - a._searchScore
+			}
+			
+			// Otherwise sort by creation date (newest first)
 			return (b.createdAt || b.created_at || 0) - (a.createdAt || a.created_at || 0)
 		})
-	}, [meetings, isRecording, recordingMeetingId])
+	}, [meetings, isRecording, recordingMeetingId, text])
 	
 	// 🚀 STAGE 2 OPTIMIZATION: Memoize pagination calculations
 	const paginationData = useMemo(() => {
@@ -868,18 +885,41 @@ const Dashboard = memo(function Dashboard({
 												status={m.status}
 												isProcessing={m.status === 'queued'}
 											/>
+											
+											{/* 🚨 NEW: Search Context Display */}
+											{m._searchContext && text && (
+												<div style={{
+													fontSize: '12px',
+													color: '#059669',
+													backgroundColor: '#d1fae5',
+													padding: '4px 8px',
+													borderRadius: '12px',
+													marginLeft: '8px',
+													display: 'inline-block',
+													fontWeight: '500'
+												}}>
+													🔍 {m._searchContext}
+												</div>
+											)}
 										</div>
 										{m.summary && (
-											<div style={{ 
-												fontSize: 14, 
-												opacity: 0.9, 
-												backgroundColor: '#f0f9ff',
-												padding: 8,
-												borderRadius: 4,
-												marginTop: 8,
-												border: '1px solid #0ea5e9'
-											}}>
-												<strong>Summary:</strong> {m.summary.slice(0, 200)}...
+											<div>
+												<div style={{ 
+													fontSize: 14, 
+													opacity: 0.9, 
+													backgroundColor: '#f0f9ff',
+													padding: 8,
+													borderRadius: 4,
+													marginTop: 8,
+													border: '1px solid #0ea5e9'
+												}}>
+													<strong>Summary:</strong> {hasSpeakerData(m.summary) ? 'Enhanced with Speaker Intelligence' : m.summary.slice(0, 200) + '...'}
+												</div>
+												{/* 🚨 NEW: Speaker Preview for Enhanced Summaries */}
+												<SpeakerPreview 
+													summary={m.summary} 
+													compact={true}
+												/>
 											</div>
 										)}
 									</div>
@@ -1277,17 +1317,24 @@ const Dashboard = memo(function Dashboard({
 											)}
 										</div>
 										{m.summary && (
-											<div style={{ 
-												fontSize: 14, 
-												opacity: 0.9, 
-												backgroundColor: 'white',
-												padding: 8,
-												borderRadius: 4,
-												marginTop: 8,
-												border: '1px solid #0ea5e9',
-												color: '#0c4a6e'
-											}}>
-												<strong>Summary:</strong> {m.summary.slice(0, 200)}...
+											<div>
+												<div style={{ 
+													fontSize: 14, 
+													opacity: 0.9, 
+													backgroundColor: 'white',
+													padding: 8,
+													borderRadius: 4,
+													marginTop: 8,
+													border: '1px solid #0ea5e9',
+													color: '#0c4a6e'
+												}}>
+													<strong>Summary:</strong> {hasSpeakerData(m.summary) ? 'Enhanced with Speaker Intelligence' : m.summary.slice(0, 200) + '...'}
+												</div>
+												{/* 🚨 NEW: Speaker Preview for VPS Enhanced Summaries */}
+												<SpeakerPreview 
+													summary={m.summary} 
+													compact={true}
+												/>
 											</div>
 										)}
 									</div>

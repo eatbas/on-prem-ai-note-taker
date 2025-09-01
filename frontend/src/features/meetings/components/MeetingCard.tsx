@@ -1,4 +1,5 @@
 import React from 'react'
+import SpeakerPreview, { hasSpeakerData } from './SpeakerPreview'
 import EnhancedStatusDisplay from './EnhancedStatusDisplay'
 
 interface MeetingCardProps {
@@ -250,20 +251,27 @@ export default function MeetingCard({
                 fontWeight: '600',
                 marginBottom: '4px'
               }}>
-                📋 Summary
+                📋 {hasSpeakerData(meeting.summary) ? 'Enhanced Summary with Speaker Intelligence' : 'Summary'}
               </div>
-              <p style={{ 
-                fontSize: '13px', 
-                color: '#374151', 
-                margin: 0,
-                lineHeight: '1.4',
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden'
-              }}>
-                {meeting.summary}
-              </p>
+              {hasSpeakerData(meeting.summary) ? (
+                <SpeakerPreview 
+                  summary={meeting.summary} 
+                  compact={true}
+                />
+              ) : (
+                <p style={{ 
+                  fontSize: '13px', 
+                  color: '#374151', 
+                  margin: 0,
+                  lineHeight: '1.4',
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden'
+                }}>
+                  {meeting.summary}
+                </p>
+              )}
             </div>
           ) : meeting.transcript && (
             <div>
