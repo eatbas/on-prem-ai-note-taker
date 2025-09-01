@@ -378,7 +378,7 @@ export default function AdminUsers({
                 availableWorkspaces={workspaces.filter(w => w.is_active).map(w => ({
                     id: w.id,
                     name: w.name,
-                    description: w.description || ''
+                    description: '' // WorkspaceListItem doesn't have description
                 }))}
                 currentWorkspaces={
                     users.find(u => u.id === workspaceAssignmentModal.userId)?.workspaces || []

@@ -139,7 +139,6 @@ export default function Recorder({
       // Start recording - this will create the meeting automatically with timestamp name
       const result = await globalRecordingManager.startRecording({
         micDeviceId: config.micDeviceId,
-        speakerDeviceId: config.speakerDeviceId,
         language: config.language,
         scope: config.scope
       })
@@ -269,7 +268,6 @@ export default function Recorder({
         showStopButton={showStopButton}
         error={globalRecordingState.error}
         micStream={globalRecordingState.micStream}
-        speakerStream={globalRecordingState.speakerStream}
       />
 
 

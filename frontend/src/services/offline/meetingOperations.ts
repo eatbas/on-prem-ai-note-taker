@@ -12,6 +12,7 @@ export async function createMeeting(title: string, tags: string[] = [], language
 		tags,
 		language,
 		status: 'local',
+		is_personal: true, // Default to personal meeting
 	}
 	await db.meetings.add(meeting)
 	return meeting

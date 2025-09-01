@@ -1,7 +1,7 @@
 import Dexie, { Table } from 'dexie'
 
 // Enhanced meeting status flow for better tracking and VPS optimization
-export type MeetingStatus = 'local' | 'queued' | 'uploading' | 'processing' | 'synced'
+export type MeetingStatus = 'local' | 'queued' | 'uploading' | 'processing' | 'synced' | 'sent'
 
 export type Meeting = {
 	id: string
