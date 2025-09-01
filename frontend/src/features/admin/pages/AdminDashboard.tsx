@@ -9,6 +9,7 @@ import AdminUsers from '../components/AdminUsers'
 import AdminMeetings from '../components/AdminMeetings'
 import AdminWorkspaces from '../components/AdminWorkspaces'
 import AdminTools from '../components/AdminTools'
+import ProductionHealthDashboard from '../components/ProductionHealthDashboard'
 
 // Import admin API utilities
 import {
@@ -68,7 +69,7 @@ interface Stats {
 
 export default function AdminDashboard() {
     const navigate = useNavigate()
-    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'workspaces' | 'tools' | 'jobs' | 'progress'>('stats')
+    const [activeTab, setActiveTab] = useState<'stats' | 'users' | 'meetings' | 'workspaces' | 'tools' | 'jobs' | 'progress' | 'health'>('stats')
     
     // Data state
     const [stats, setStats] = useState<Stats | null>(null)
@@ -274,7 +275,8 @@ export default function AdminDashboard() {
         { key: 'workspaces', label: '🏢 Workspaces', description: 'Workspace management' },
         { key: 'tools', label: '🔧 Tools', description: 'Administrative tools' },
         { key: 'jobs', label: '⚙️ Jobs', description: 'Background jobs' },
-        { key: 'progress', label: '📈 Progress', description: 'System progress' }
+        { key: 'progress', label: '📈 Progress', description: 'System progress' },
+        { key: 'health', label: '🔍 Health', description: 'Production monitoring' }
     ]
 
     const renderTabContent = () => {
@@ -337,6 +339,8 @@ export default function AdminDashboard() {
                 return <JobQueue online={true} vpsUp={true} />
             case 'progress':
                 return <ProgressDashboard online={true} vpsUp={true} />
+            case 'health':
+                return <ProductionHealthDashboard />
             default:
                 return null
         }

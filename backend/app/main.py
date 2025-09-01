@@ -30,6 +30,7 @@ from .routers import (
     progress_router,
     tags_router,
 )
+from .routers.admin_health import router as admin_health_router
 from .api import router as jobs_router  # Keep the existing jobs router
 from .workers.job_handlers import (
     handle_transcription_job,
@@ -81,6 +82,7 @@ app.include_router(transcription_router)
 app.include_router(chat_router)
 app.include_router(meetings_router)
 app.include_router(admin_router)
+app.include_router(admin_health_router)  # 🔍 Phase 5: Production health monitoring
 app.include_router(workspaces_router)
 app.include_router(tags_router)
 app.include_router(queue_router)
