@@ -3,6 +3,8 @@ uvicorn[standard]==0.30.6
 pydantic==2.9.2
 python-multipart==0.0.9
 requests==2.32.3
+# Fix NumPy compatibility with faster-whisper and torch
+numpy<2.0.0
 # PyAV is required by faster-whisper - using version with pre-built wheels
 av>=11.0,<13
 faster-whisper==1.0.3

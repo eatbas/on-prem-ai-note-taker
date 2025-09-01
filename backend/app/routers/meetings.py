@@ -798,12 +798,12 @@ async def auto_process_meeting(
 @router.post("/{meeting_id}/process-async")
 async def process_meeting_async(
     meeting_id: str,
+    request: Request,  # 🚨 PHASE 3.3: Add request for rate limiting
     audio_file: UploadFile = File(...),
     language: Optional[str] = Form(default="auto"),
     use_celery: Optional[bool] = Form(default=True),  # 🚨 PHASE 3.4: Choose processing method
     x_user_id: Optional[str] = Header(default=None, alias="X-User-Id"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    request: Request,  # 🚨 PHASE 3.3: Add request for rate limiting
     _auth: None = Depends(require_basic_auth),
     db: Session = Depends(get_db),
 ) -> Dict[str, Any]:
