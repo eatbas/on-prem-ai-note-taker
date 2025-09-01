@@ -90,3 +90,93 @@ def get_single_summary_prompt(language: str) -> str:
         return SINGLE_SUMMARY_PROMPT_EN
     # Default to Turkish for better local support
     return SINGLE_SUMMARY_PROMPT_TR
+
+
+# 🚨 PHASE 4.4: Speaker-Enhanced Summary Prompts
+SPEAKER_ENHANCED_SUMMARY_PROMPT_EN = """You are an expert meeting analyst who creates comprehensive meeting summaries with speaker insights.
+
+Given a meeting transcript with speaker information, create a detailed summary following this structure:
+
+## Meeting Overview
+[2-3 sentences describing the meeting's main purpose and outcome]
+
+## Speaker Participation
+[Brief overview of who participated and their engagement levels]
+
+## Key Discussion Points
+[Organize by main topics, showing who said what]
+- **Topic 1**: Speaker 1 mentioned that... Speaker 2 responded by... Speaker 3 added...
+- **Topic 2**: Speaker 1 proposed... Speaker 2 raised concerns about... 
+
+## Decisions Made
+[List decisions with who proposed/supported them]
+- **Decision 1**: Proposed by Speaker 1, supported by Speaker 2...
+- **Decision 2**: Speaker 3 suggested... Speaker 1 agreed...
+
+## Action Items
+[Clear action items with speaker ownership]
+- **Speaker 1**: [Action item with details]
+- **Speaker 2**: [Action item with details]
+
+## Speaker Insights
+[Analysis of each speaker's contributions]
+- **Speaker 1** (X% talking time): [Key contributions, communication style]
+- **Speaker 2** (X% talking time): [Key contributions, communication style]
+
+## Next Steps & Open Questions
+[Future actions and unresolved items]
+
+Transcript with speakers:
+{transcript_with_speakers}
+
+Speaker Statistics:
+{speaker_stats}"""
+
+SPEAKER_ENHANCED_SUMMARY_PROMPT_TR = """Konuşmacı analizi yapan uzman bir toplantı analistisin. Konuşmacı bilgileri olan toplantı metninden detaylı özet çıkar.
+
+Aşağıdaki yapıyı takip et:
+
+## Toplantı Genel Bakış
+[Toplantının ana amacını ve sonucunu anlatan 2-3 cümle]
+
+## Konuşmacı Katılımı
+[Kimler katıldı ve katılım seviyeleri hakkında kısa bilgi]
+
+## Ana Tartışma Konuları
+[Ana konulara göre organize et, kim ne söyledi göster]
+- **Konu 1**: Konuşmacı 1 şunu belirtti... Konuşmacı 2 şu şekilde yanıtladı... Konuşmacı 3 ekledi...
+- **Konu 2**: Konuşmacı 1 önerdi... Konuşmacı 2 endişelerini dile getirdi...
+
+## Alınan Kararlar
+[Kararları kimin önerdiği/desteklediği ile birlikte listele]
+- **Karar 1**: Konuşmacı 1 tarafından önerildi, Konuşmacı 2 destekledi...
+- **Karar 2**: Konuşmacı 3 önerdi... Konuşmacı 1 kabul etti...
+
+## Aksiyon Maddeleri
+[Konuşmacı sahipliği ile net aksiyon maddeleri]
+- **Konuşmacı 1**: [Detaylı aksiyon maddesi]
+- **Konuşmacı 2**: [Detaylı aksiyon maddesi]
+
+## Konuşmacı Analizi
+[Her konuşmacının katkılarının analizi]
+- **Konuşmacı 1** (%X konuşma süresi): [Ana katkılar, iletişim stili]
+- **Konuşmacı 2** (%X konuşma süresi): [Ana katkılar, iletişim stili]
+
+## Sonraki Adımlar & Açık Sorular
+[Gelecek aksiyonlar ve çözülmemiş konular]
+
+Konuşmacılı metin:
+{transcript_with_speakers}
+
+Konuşmacı İstatistikleri:
+{speaker_stats}"""
+
+
+def get_speaker_enhanced_summary_prompt(language: str) -> str:
+    """Get the appropriate speaker-enhanced summary prompt based on language"""
+    if language == "en":
+        return SPEAKER_ENHANCED_SUMMARY_PROMPT_EN
+    elif language == "tr" or language == "auto":
+        return SPEAKER_ENHANCED_SUMMARY_PROMPT_TR
+    # Default to Turkish for better local support
+    return SPEAKER_ENHANCED_SUMMARY_PROMPT_TR
