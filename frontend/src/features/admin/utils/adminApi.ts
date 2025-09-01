@@ -3,15 +3,10 @@
  * Centralized API functions for admin operations
  */
 import { config } from '../../../utils/envLoader'
+import { apiRequest } from '../../../services/api/core'
 
-const API_BASE = (() => {
-    try {
-        // @ts-ignore
-        const fromPreload = (window as any).API_BASE_URL as string | undefined
-        if (fromPreload) return fromPreload
-    } catch {}
-    return config.apiBaseUrl
-})()
+// We rely on the shared apiRequest which already prefixes config.apiBaseUrl
+// (usually ends with '/api') and injects auth headers from Electron preload or env
 
 const getAuthCredentials = () => {
     // Check if we're in Electron context first
@@ -37,30 +32,8 @@ const getAuthCredentials = () => {
 }
 
 export async function makeAdminRequest(path: string, options?: RequestInit) {
-    try {
-        const credentials = getAuthCredentials()
-        const token = btoa(`${credentials.username}:${credentials.password}`)
-        
-        const response = await fetch(`${API_BASE}${path}`, {
-            ...options,
-            headers: {
-                'Authorization': `Basic ${token}`,
-                'Content-Type': 'application/json',
-                ...options?.headers
-            }
-        })
-
-        if (!response.ok) {
-            const errorText = await response.text()
-            throw new Error(`HTTP ${response.status}: ${errorText}`)
-        }
-
-        const text = await response.text()
-        return text ? JSON.parse(text) : {}
-    } catch (error) {
-        console.error('Admin API request failed:', error)
-        throw error
-    }
+    // Delegate to shared API wrapper which appends base and auth headers
+    return apiRequest<any>(path, options)
 }
 
 export async function loadStats() {

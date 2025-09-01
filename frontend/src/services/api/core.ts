@@ -131,7 +131,9 @@ export async function apiRequest<T>(
 		...options.headers
 	}
 
-	const response = await fetch(`${apiBase}${endpoint}`, {
+	const fullUrl = `${apiBase}${endpoint}`
+
+	const response = await fetch(fullUrl, {
 		...options,
 		headers
 	})

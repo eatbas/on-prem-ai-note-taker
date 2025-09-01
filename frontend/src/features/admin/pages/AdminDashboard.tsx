@@ -281,9 +281,32 @@ const AdminDashboard = memo(function AdminDashboard() {
   }
 
   const handleAssignWorkspace = async (userId: string, workspaceId: number | null) => {
-    await assignUserToWorkspace(userId, { workspace_id: workspaceId })
-    await loadUsersData()
-    showToast('User workspace assignment updated', 'success')
+    try {
+      const user = users.find(u => u.id === userId)
+      const workspace = workspaceDropdown.find(w => w.id === workspaceId)
+      
+      await assignUserToWorkspace(userId, { workspace_id: workspaceId })
+      await loadUsersData()
+      
+      if (workspaceId) {
+        showToast(`User '${user?.username}' assigned to workspace '${workspace?.name}'`, 'success')
+      } else {
+        showToast(`User '${user?.username}' removed from workspace`, 'success')
+      }
+    } catch (error) {
+      console.error('Failed to assign workspace:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      
+      if (errorMessage.includes('404')) {
+        showToast('User or workspace not found. Please refresh and try again.', 'error')
+      } else if (errorMessage.includes('403') || errorMessage.includes('401')) {
+        showToast('Permission denied. Please check your admin credentials.', 'error')
+      } else if (errorMessage.includes('500')) {
+        showToast('Server error. The workspace assignment service may be having issues.', 'error')
+      } else {
+        showToast(`Failed to assign workspace: ${errorMessage}`, 'error')
+      }
+    }
   }
 
   const handleAssignMultipleWorkspaces = async (userId: string, assignments: any[]) => {
@@ -299,10 +322,13 @@ const AdminDashboard = memo(function AdminDashboard() {
               headers: { 'Authorization': 'Basic ' + btoa('admin:admin') }
             })
             if (!response.ok) {
-              console.warn(`Failed to remove workspace ${workspace.id}:`, await response.text())
+              const errorText = await response.text()
+              console.warn(`Failed to remove workspace ${workspace.id}:`, errorText)
+              showToast(`Warning: Could not remove workspace '${workspace.name}' (${response.status})`, 'error')
             }
           } catch (e) {
             console.warn('Failed to remove workspace assignment:', e)
+            showToast(`Warning: Error removing workspace '${workspace.name}'`, 'error')
           }
         }
       }
@@ -326,6 +352,8 @@ const AdminDashboard = memo(function AdminDashboard() {
           }
         } catch (e) {
           console.error(`Failed to assign workspace ${assignment.workspace_id}:`, e)
+          const workspace = workspaceDropdown.find(w => w.id === assignment.workspace_id)
+          showToast(`Failed to assign workspace '${workspace?.name || assignment.workspace_id}': ${e instanceof Error ? e.message : 'Unknown error'}`, 'error')
           throw e
         }
       }

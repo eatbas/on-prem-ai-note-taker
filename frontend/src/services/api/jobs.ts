@@ -28,10 +28,20 @@ export function createJobProgressStream(jobId: string): EventSource {
 		throw new Error('User ID not found')
 	}
 
-	const url = new URL(`${apiBase}/jobs/${jobId}/stream`)
-	url.searchParams.set('user_id', userId)
+	// Handle both relative and absolute URLs properly
+	let fullUrl: string
+	if (apiBase.startsWith('http')) {
+		// Absolute URL
+		const url = new URL(`${apiBase}/jobs/${jobId}/stream`)
+		url.searchParams.set('user_id', userId)
+		fullUrl = url.toString()
+	} else {
+		// Relative URL - construct path directly
+		const params = new URLSearchParams({ user_id: userId })
+		fullUrl = `${apiBase}/jobs/${jobId}/stream?${params.toString()}`
+	}
 
-	const eventSource = new EventSource(url.toString())
+	const eventSource = new EventSource(fullUrl)
 	
 	eventSource.onerror = (error) => {
 		console.error('Job progress stream error:', error)

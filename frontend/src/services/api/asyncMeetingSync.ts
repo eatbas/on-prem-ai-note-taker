@@ -187,6 +187,7 @@ export function createJobProgressStream(
 ): EventSource | null {
   try {
     // Note: This would require the backend to support Server-Sent Events
+    // Use relative URL to avoid URL construction issues
     const eventSource = new EventSource(`/api/jobs/${jobId}/events`)
     
     eventSource.onmessage = (event) => {
