@@ -6,6 +6,7 @@ for production deployment and testing validation.
 """
 
 import os
+import asyncio
 import psutil
 import time
 import logging
@@ -51,14 +52,31 @@ async def get_comprehensive_health(db: Session = Depends(get_db)) -> Dict[str, A
     - Speaker intelligence metrics
     """
     try:
+        vps_task = _get_vps_health()
+        redis_task = _get_redis_health()
+        celery_task = _get_celery_health()
+        whisper_task = _get_whisper_health()
+        speaker_task = _get_speaker_intelligence_metrics(db)
+        db_task = _get_database_health(db)
+
+        results = await asyncio.gather(
+            vps_task, redis_task, celery_task, whisper_task, speaker_task, db_task,
+            return_exceptions=True
+        )
+
+        vps_res, redis_res, celery_res, whisper_res, speaker_res, db_res = results
+
+        def safe(value, fallback):
+            return fallback if isinstance(value, Exception) else value
+
         health_data = {
             "timestamp": datetime.utcnow().isoformat(),
-            "vps": await _get_vps_health(),
-            "redis": await _get_redis_health(),
-            "celery": await _get_celery_health(),
-            "whisper": await _get_whisper_health(),
-            "speaker_intelligence": await _get_speaker_intelligence_metrics(db),
-            "database": await _get_database_health(db)
+            "vps": safe(vps_res, {"status": "critical", "error": "vps check failed"}),
+            "redis": safe(redis_res, {"status": "disconnected", "error": "redis check failed"}),
+            "celery": safe(celery_res, {"status": "critical", "error": "celery check failed"}),
+            "whisper": safe(whisper_res, {"model_loaded": False, "error": "whisper check failed"}),
+            "speaker_intelligence": safe(speaker_res, {"total_meetings_processed": 0, "error": "speaker metrics failed"}),
+            "database": safe(db_res, {"status": "disconnected", "error": "db check failed"})
         }
         
         logger.info("📊 Comprehensive health check completed successfully")
@@ -80,12 +98,25 @@ async def get_performance_metrics(db: Session = Depends(get_db)) -> Dict[str, An
     - System throughput metrics
     """
     try:
+        mp_task = _get_meeting_processing_metrics(db)
+        fe_task = _get_frontend_performance_metrics()
+        audio_task = _get_audio_streaming_metrics()
+        throughput_task = _get_system_throughput_metrics(db)
+
+        mp_res, fe_res, audio_res, thr_res = await asyncio.gather(
+            mp_task, fe_task, audio_task, throughput_task,
+            return_exceptions=True
+        )
+
+        def safe(value, fallback):
+            return fallback if isinstance(value, Exception) else value
+
         metrics = {
             "timestamp": datetime.utcnow().isoformat(),
-            "meeting_processing": await _get_meeting_processing_metrics(db),
-            "frontend": await _get_frontend_performance_metrics(),
-            "audio_streaming": await _get_audio_streaming_metrics(),
-            "system_throughput": await _get_system_throughput_metrics(db)
+            "meeting_processing": safe(mp_res, {"avg_duration_minutes": 0, "success_rate": 0, "throughput_per_hour": 0}),
+            "frontend": safe(fe_res, {"dashboard_load_time": 0, "search_response_time": 0, "ui_responsiveness_score": 0}),
+            "audio_streaming": safe(audio_res, {"avg_startup_time": 0, "buffer_health": 0, "stream_quality": "poor"}),
+            "system_throughput": safe(thr_res, {"requests_per_minute": 0, "concurrent_users": 0})
         }
         
         logger.info("📈 Performance metrics collected successfully")
@@ -127,8 +158,8 @@ async def get_system_alerts(db: Session = Depends(get_db)) -> Dict[str, Any]:
 async def _get_vps_health() -> Dict[str, Any]:
     """Get VPS resource health metrics"""
     try:
-        # CPU usage
-        cpu_percent = psutil.cpu_percent(interval=1)
+        # CPU usage (short sample to avoid 1s blocking)
+        cpu_percent = psutil.cpu_percent(interval=0.1)
         
         # Memory usage
         memory = psutil.virtual_memory()
@@ -138,10 +169,8 @@ async def _get_vps_health() -> Dict[str, Any]:
         disk = psutil.disk_usage('/')
         disk_percent = (disk.used / disk.total) * 100
         
-        # Network and response time (simplified)
+        # Network and response time (simplified, no artificial delay)
         start_time = time.time()
-        # Simulate a quick internal check
-        time.sleep(0.01)  # 10ms simulated response time
         response_time = (time.time() - start_time) * 1000
         
         # Determine overall VPS status
@@ -224,8 +253,8 @@ async def _get_celery_health() -> Dict[str, Any]:
         if not CELERY_AVAILABLE:
             return {"status": "critical", "error": "Celery not available"}
             
-        # Get worker stats
-        inspect = celery_app.control.inspect()
+        # Get worker stats with short timeout
+        inspect = celery_app.control.inspect(timeout=0.5)
         
         # Get active workers
         active_workers = inspect.active()

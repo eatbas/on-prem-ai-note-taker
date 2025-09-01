@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react'
+import { db } from '../../../../services/db'
+import { getVpsHealth } from '../../../../services'
 import { useToast } from '../../../../components/common'
 import { apiBase, getApiHeaders } from '../../../../services/api/core'
 
@@ -62,15 +64,28 @@ export default function ProductionHealthDashboard() {
   const [autoRefresh, setAutoRefresh] = useState(true)
   const { showToast } = useToast()
 
+  const fetchWithTimeout = async (url: string, options: RequestInit = {}, timeoutMs = 4000) => {
+    const controller = new AbortController()
+    const id = setTimeout(() => controller.abort(), timeoutMs)
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal })
+      return response
+    } finally {
+      clearTimeout(id)
+    }
+  }
+
   const fetchHealthData = async () => {
     try {
       // Use centralized API base and headers so it works in dev/prod
-      const healthResponse = await fetch(`${apiBase}/admin/health/comprehensive`, {
-        headers: { ...getApiHeaders() }
-      })
-      const metricsResponse = await fetch(`${apiBase}/admin/health/performance`, {
-        headers: { ...getApiHeaders() }
-      })
+      const [healthResponse, metricsResponse] = await Promise.all([
+        fetchWithTimeout(`${apiBase}/admin/health/comprehensive`, {
+          headers: { ...getApiHeaders() }
+        }),
+        fetchWithTimeout(`${apiBase}/admin/health/performance`, {
+          headers: { ...getApiHeaders() }
+        })
+      ])
       
       if (healthResponse.ok && metricsResponse.ok) {
         setHealth(await healthResponse.json())
@@ -185,6 +200,161 @@ export default function ProductionHealthDashboard() {
       </div>
     )
   }
+
+  // Quick Actions (tool-style)
+  const [clearingMeetings, setClearingMeetings] = useState(false)
+  const [clearingCache, setClearingCache] = useState(false)
+  const [testingHealth, setTestingHealth] = useState(false)
+
+  const handleClearLocalMeetings = async () => {
+    // eslint-disable-next-line no-alert
+    if (!confirm('Clear ALL local meetings, audio chunks and notes from this device?')) return
+    setClearingMeetings(true)
+    try {
+      await Promise.all([
+        db.meetings.clear(),
+        db.chunks.clear(),
+        db.notes.clear()
+      ])
+      showToast('All local meetings cleared', 'success')
+    } catch (e) {
+      console.error('Failed to clear local meetings:', e)
+      showToast('Failed to clear local meetings', 'error')
+    } finally {
+      setClearingMeetings(false)
+    }
+  }
+
+  const handleClearCache = async () => {
+    // eslint-disable-next-line no-alert
+    if (!confirm('Clear application cache (local/session storage and browser caches)?')) return
+    setClearingCache(true)
+    try {
+      // Local/session storage
+      localStorage.clear()
+      sessionStorage.clear()
+      // Browser caches (PWA/Vite dev cache)
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys()
+          await Promise.all(keys.map(k => caches.delete(k)))
+        } catch (e) {
+          // ignore cache API failures
+        }
+      }
+      showToast('Cache cleared', 'success')
+    } catch (e) {
+      console.error('Failed to clear cache:', e)
+      showToast('Failed to clear cache', 'error')
+    } finally {
+      setClearingCache(false)
+    }
+  }
+
+  const handleHealthCheck = async () => {
+    setTestingHealth(true)
+    try {
+      const health = await getVpsHealth()
+      // eslint-disable-next-line no-alert
+      alert(`Backend OK\nWhisper: ${health.whisper_model}\nOllama: ${health.ollama_model}`)
+      showToast('Health check completed successfully', 'success')
+    } catch (error) {
+      console.error('Health check failed:', error)
+      showToast('Health check failed', 'error')
+    } finally {
+      setTestingHealth(false)
+    }
+  }
+
+  const handleReloadApp = () => {
+    // eslint-disable-next-line no-alert
+    if (confirm('Are you sure you want to reload the application?')) {
+      window.location.reload()
+    }
+  }
+
+  const handleExportLogs = () => {
+    try {
+      const logs = [
+        `Admin Dashboard Logs - ${new Date().toISOString()}`,
+        '='.repeat(50),
+        'Browser Information:',
+        `User Agent: ${navigator.userAgent}`,
+        `Platform: ${navigator.platform}`,
+        `Language: ${navigator.language}`,
+        `Cookies Enabled: ${navigator.cookieEnabled}`,
+        `Online: ${navigator.onLine}`,
+        '',
+        'Storage Information:',
+        `Local Storage Items: ${localStorage.length}`,
+        `Session Storage Items: ${sessionStorage.length}`,
+        '',
+        'Performance Information:',
+        `Memory Used: ${(performance as any).memory ? `${((performance as any).memory.usedJSHeapSize / 1024 / 1024).toFixed(2)} MB` : 'N/A'}`,
+        `Connection: ${(navigator as any).connection ? `${(navigator as any).connection.effectiveType} (${(navigator as any).connection.downlink} Mbps)` : 'N/A'}`,
+        '',
+        'Application State:',
+        `Current URL: ${window.location.href}`,
+        `Timestamp: ${new Date().toISOString()}`,
+        ''
+      ].join('\n')
+
+      const blob = new Blob([logs], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `admin-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+      showToast('Logs exported successfully', 'success')
+    } catch (error) {
+      console.error('Failed to export logs:', error)
+      showToast('Failed to export logs', 'error')
+    }
+  }
+
+  const actionTools = [
+    {
+      title: 'Backend Health Check',
+      description: 'Test connection to the backend API and check service status',
+      icon: '🏥',
+      action: handleHealthCheck,
+      loading: testingHealth,
+      color: '#22c55e'
+    },
+    {
+      title: 'Clear Local Meetings',
+      description: 'Remove all local meetings, chunks and notes from this device',
+      icon: '🧹',
+      action: handleClearLocalMeetings,
+      loading: clearingMeetings,
+      color: '#f59e0b'
+    },
+    {
+      title: 'Clear App Cache',
+      description: 'Clear local/session storage and browser caches',
+      icon: '🗑️',
+      action: handleClearCache,
+      loading: clearingCache,
+      color: '#ef4444'
+    },
+    {
+      title: 'Reload Application',
+      description: 'Force refresh the entire application',
+      icon: '🔄',
+      action: handleReloadApp,
+      loading: false,
+      color: '#3b82f6'
+    },
+    {
+      title: 'Export Debug Logs',
+      description: 'Download application logs and system information',
+      icon: '📥',
+      action: handleExportLogs,
+      loading: false,
+      color: '#8b5cf6'
+    }
+  ]
 
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
@@ -527,7 +697,7 @@ export default function ProductionHealthDashboard() {
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions (Tools-style) */}
       <div style={{
         backgroundColor: '#f8fafc',
         padding: '20px',
@@ -537,67 +707,77 @@ export default function ProductionHealthDashboard() {
         <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px', color: '#1f2937' }}>
           🔧 Quick Actions
         </h3>
-        
-        <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
-          <button
-            onClick={() => showToast('VPS diagnostics started', 'info')}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#3b82f6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            🔍 Run VPS Diagnostics
-          </button>
-          
-          <button
-            onClick={() => showToast('Memory cleanup initiated', 'info')}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#f59e0b',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            🧹 Cleanup Memory
-          </button>
-          
-          <button
-            onClick={() => showToast('Queue processing restarted', 'success')}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#10b981',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            🔄 Restart Queue
-          </button>
-          
-          <button
-            onClick={() => showToast('Performance test initiated', 'info')}
-            style={{
-              padding: '8px 16px',
-              backgroundColor: '#8b5cf6',
-              color: 'white',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
-          >
-            ⚡ Performance Test
-          </button>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+          gap: '20px'
+        }}>
+          {actionTools.map((tool, index) => (
+            <div
+              key={index}
+              style={{
+                backgroundColor: '#ffffff',
+                border: '1px solid #e5e7eb',
+                borderRadius: '12px',
+                padding: '24px',
+                boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)'
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(0, 0, 0, 0.15)'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 1px 3px rgba(0, 0, 0, 0.1)'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
+                <div style={{
+                  fontSize: '32px',
+                  width: '48px',
+                  height: '48px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: `${(tool as any).color}15`,
+                  borderRadius: '12px'
+                }}>
+                  {tool.icon}
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0, color: '#1f2937' }}>
+                    {tool.title}
+                  </h3>
+                </div>
+              </div>
+
+              <p style={{ fontSize: '14px', color: '#6b7280', lineHeight: '1.5', margin: '0 0 20px 0' }}>
+                {tool.description}
+              </p>
+
+              <button
+                onClick={tool.action}
+                disabled={tool.loading}
+                style={{
+                  width: '100%',
+                  padding: '12px 20px',
+                  backgroundColor: tool.loading ? '#9ca3af' : (tool as any).color,
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '8px',
+                  fontSize: '14px',
+                  fontWeight: '600',
+                  cursor: tool.loading ? 'not-allowed' : 'pointer',
+                  opacity: tool.loading ? 0.6 : 1,
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                {tool.loading ? 'Processing...' : `Execute ${tool.title}`}
+              </button>
+            </div>
+          ))}
         </div>
       </div>
     </div>
