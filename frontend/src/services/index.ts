@@ -28,6 +28,12 @@ export {
   updateMeetingTags as updateMeetingTagsOffline
 } from './offline'
 
+// Offline-First Sync Services
+export { upsertVpsMeetings, retryFetchAndCacheMeetings, isCacheStale } from './sync/vpsCache'
+export { fillMissingMeetingDetails, getMeetingsNeedingDetails } from './sync/meetingDetails'
+export { enqueueOutbox, processOutbox, getPendingOutboxCount, clearCompletedOutboxItems, retryFailedOutboxItems } from './sync/outbox'
+export { processQueuedMeetings, getQueuedMeetingsCount, getFailedSyncMeetings, retryFailedSyncMeetings } from './sync/queuedMeetings'
+
 // Background Processing Services
 export * from './backgroundProcessor'
 

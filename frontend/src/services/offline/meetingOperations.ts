@@ -35,13 +35,14 @@ export async function listMeetings(query?: { tag?: string; text?: string; exclud
 		}
 	}
 	
+	// Preload notes to allow transcript/summary search and attachment
+	const notesArr = await db.notes.toArray()
+	const noteById: Record<string, { transcript: string; summary?: string }> = {}
+	for (const n of notesArr) noteById[n.meetingId] = { transcript: n.transcript || '', summary: n.summary }
+	
 	if (query?.tag) meetings = meetings.filter(m => m.tags.includes(query.tag!))
 	if (query?.text) {
 		const t = query.text.toLowerCase()
-		// Preload notes to allow transcript/summary search
-		const notesArr = await db.notes.toArray()
-		const noteById: Record<string, { transcript: string; summary?: string }> = {}
-		for (const n of notesArr) noteById[n.meetingId] = { transcript: n.transcript || '', summary: n.summary }
 		meetings = meetings.filter(m => {
 			const inTitle = m.title.toLowerCase().includes(t)
 			const note = noteById[m.id]
@@ -53,6 +54,13 @@ export async function listMeetings(query?: { tag?: string; text?: string; exclud
 			return inTitle || inSummary || inTranscript
 		})
 	}
+	
+	// Attach ephemeral summary/transcript for offline UI rendering
+	meetings = meetings.map(m => {
+		const note = noteById[m.id]
+		return note ? { ...m, transcript: note.transcript, summary: note.summary } : m
+	})
+	
 	return meetings
 }
 

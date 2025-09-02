@@ -48,11 +48,33 @@ export type Workspace = {
 	updatedAt?: number
 }
 
+// Outbox for offline-first mutations
+export type OutboxStatus = 'pending' | 'processing' | 'done' | 'error'
+export type OutboxItem = {
+	id?: number
+	type: 'rename_meeting' | 'update_tags' | 'delete_meeting'
+	payload: any
+	createdAt: number
+	attempts: number
+	lastError?: string
+	status: OutboxStatus
+}
+
+// Cache metadata for intelligent sync
+export type CacheMetadata = {
+	key: string
+	lastSync: number
+	expires?: number
+	version: number
+}
+
 export class AppDB extends Dexie {
 	meetings!: Table<Meeting, string>
 	chunks!: Table<Chunk, string>
 	notes!: Table<Note, string>
 	workspaces!: Table<Workspace, number>
+	outbox!: Table<OutboxItem, number>
+	cache_metadata!: Table<CacheMetadata, string>
 
 	constructor() {
 		super('onprem_notes_db')
@@ -115,6 +137,16 @@ export class AppDB extends Dexie {
 					meeting.last_sync_attempt = null
 				}
 			})
+		})
+		
+		// Version 5: Offline-first outbox and cache metadata
+		this.version(5).stores({
+			meetings: 'id, createdAt, updatedAt, status, *tags, title, workspace_id, is_personal, vps_id, last_sync_attempt',
+			chunks: 'id, meetingId, index, createdAt, audioType',
+			notes: 'meetingId, createdAt',
+			workspaces: 'id, name, is_active, createdAt',
+			outbox: '++id, type, createdAt, attempts, status',
+			cache_metadata: 'key, lastSync'
 		})
 	}
 }

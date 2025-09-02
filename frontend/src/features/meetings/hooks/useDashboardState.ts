@@ -1,6 +1,19 @@
 import type React from 'react'
 import { useState, useCallback, useEffect } from 'react'
-import { listMeetings, getMeetings, syncMeeting as syncMeetingService, updateMeeting, deleteMeetingLocally, deleteAudioChunksLocally, deleteMeeting, db } from '../../../services'
+import { 
+  listMeetings, 
+  getMeetings, 
+  syncMeeting as syncMeetingService, 
+  updateMeeting, 
+  deleteMeetingLocally, 
+  deleteAudioChunksLocally, 
+  deleteMeeting, 
+  db,
+  upsertVpsMeetings,
+  retryFetchAndCacheMeetings,
+  fillMissingMeetingDetails,
+  enqueueOutbox
+} from '../../../services'
 
 export interface DashboardState {
   // Meetings data
@@ -70,72 +83,46 @@ export function useDashboardState(
     meetingTitle: string
   } | null>(null)
 
-  // Refresh meetings
+  // Offline-first refresh meetings
   const refresh = useCallback(async () => {
-    console.log('🔄 Dashboard refresh started')
+    console.log('🔄 Dashboard refresh started (offline-first)')
     setLoading(true)
     setError(null)
     
     try {
+      // ALWAYS load local meetings first for instant UI
+      const localMeetings = await listMeetings({ text, tag, excludeRecordingInProgress: false })
+      console.log('📁 Loaded local meetings:', localMeetings.length)
+      setMeetings(localMeetings)
+
       if (online) {
-        // Always load local meetings first
-        const localMeetings = await listMeetings({ text, tag, excludeRecordingInProgress: false })
-        console.log('📁 Loaded local meetings:', localMeetings.length)
-        setMeetings(localMeetings)
-        
-        // Try to fetch from backend and only enrich local meetings
         try {
-          console.log('🌐 Attempting to fetch from VPS backend...')
+          console.log('🌐 Attempting to fetch and cache VPS meetings...')
           const backendMeetings = await getMeetings()
-          console.log('☁️ Loaded VPS meetings:', Array.isArray(backendMeetings) ? backendMeetings.length : 'Invalid response')
-          
-          const byId = new Map<string, any>()
-          // Start with local meetings to preserve any unsent ones
-          for (const m of localMeetings) byId.set(m.id, m)
-          
-          // Only merge if we have a valid array
-          if (Array.isArray(backendMeetings)) {
-            // Overlay with backend data but only for meetings existing locally
-            for (const m of backendMeetings as any[]) {
-              const existing = byId.get(m.id)
-              if (!existing) continue // skip server-only meetings to avoid duplicates
-              // Merge backend data with local data, preferring backend for processed content
-              byId.set(m.id, { 
-                ...existing, 
-                ...m, 
-                status: existing?.status === 'local' ? existing.status : m.status || 'sent',
-                tags: existing?.tags || [],
-                title: existing?.title || m.title
-              })
-            }
-          }
-          
-          const mergedMeetings = Array.from(byId.values()).sort((a: any, b: any) => (b.updatedAt || 0) - (a.updatedAt || 0))
-          console.log('🔄 Enriched local meetings with server data:', mergedMeetings.length)
-          setMeetings(mergedMeetings)
-          
-          // Clear any previous errors on success
+
+          // Upsert everything into local DB for full offline cache
+          await upsertVpsMeetings(backendMeetings)
+
+          // Re-read from local DB (now includes server-only meetings)
+          const allLocalMeetings = await listMeetings({ text, tag, excludeRecordingInProgress: false })
+          console.log('🔄 Local meetings after VPS upsert:', allLocalMeetings.length)
+          setMeetings(allLocalMeetings)
+
           setError(null)
-          console.log('✅ Successfully loaded VPS meetings without errors')
-          
+          console.log('✅ Successfully cached VPS meetings')
         } catch (backendErr) {
-          // Backend failed, but we still have local data
-          console.error('❌ Backend fetch failed with error:', backendErr)
-          setError(`Backend connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Showing local meetings only.`)
+          console.error('❌ VPS fetch failed:', backendErr)
+          setError(`VPS connection failed: ${backendErr instanceof Error ? backendErr.message : 'Unknown error'}. Working offline with cached data.`)
         }
       } else {
-        // Use local data when offline
-        console.log('📱 Offline mode - using local data only')
-        setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: false }))
+        console.log('📱 Offline mode - showing cached data')
       }
     } catch (err) {
       console.error('❌ Failed to load meetings:', err)
       setError(`Failed to load meetings: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      // Try to load any local data as last resort
       try {
         setMeetings(await listMeetings({ text, tag, excludeRecordingInProgress: false }))
-      } catch (localErr) {
-        console.error('❌ Even local data failed:', localErr)
+      } catch {
         setMeetings([])
       }
     } finally {
@@ -222,7 +209,7 @@ export function useDashboardState(
     setContextMenu(null)
   }, [])
 
-  // Context menu actions
+  // Offline-first context menu actions
   const handleRenameMeeting = useCallback(async (meetingId: string): Promise<{ success: boolean; message: string }> => {
     const meeting = meetings.find(m => m.id === meetingId)
     if (!meeting) {
@@ -233,12 +220,27 @@ export function useDashboardState(
     const newTitle = window.prompt('Enter new meeting title:', meeting.title)
     if (newTitle && newTitle.trim() && newTitle.trim() !== meeting.title) {
       try {
-        await updateMeeting(meetingId, newTitle.trim())
-        // Update local database as well
+        // Always update local DB first (optimistic update)
         await db.meetings.update(meetingId, { title: newTitle.trim(), updatedAt: Date.now() })
-        refresh() // Refresh the list
+        
+        if (online && vpsUp) {
+          // Try to update VPS immediately
+          try {
+            await updateMeeting(meetingId, newTitle.trim())
+            console.log('✅ Successfully updated meeting title on VPS')
+          } catch (vpsErr) {
+            console.warn('VPS update failed, queuing for later:', vpsErr)
+            await enqueueOutbox('rename_meeting', { meetingId, title: newTitle.trim() })
+          }
+        } else {
+          // Queue for sync when online
+          await enqueueOutbox('rename_meeting', { meetingId, title: newTitle.trim() })
+          console.log('📤 Queued meeting rename for sync when online')
+        }
+        
+        refresh()
         closeContextMenu()
-        return { success: true, message: 'Meeting renamed successfully! ✏️' }
+        return { success: true, message: online && vpsUp ? 'Meeting renamed! ✏️' : 'Meeting renamed! Will sync when online. ✏️📤' }
       } catch (err) {
         console.error('Failed to rename meeting:', err)
         closeContextMenu()
@@ -247,7 +249,7 @@ export function useDashboardState(
     }
     closeContextMenu()
     return { success: false, message: '' }
-  }, [meetings, refresh, closeContextMenu])
+  }, [meetings, refresh, closeContextMenu, online, vpsUp])
 
   const handleDeleteAudio = useCallback(async (meetingId: string): Promise<{ success: boolean; message: string }> => {
     if (!window.confirm('Are you sure you want to delete the audio for this meeting? The meeting notes, summary, and transcript will be preserved.')) {
@@ -280,26 +282,38 @@ export function useDashboardState(
     }
 
     try {
-      // Delete from VPS if the meeting was sent
-      if (meeting.status === 'sent') {
-        try {
-          await deleteMeeting(meetingId)
-        } catch (vpsError) {
-          console.warn('Failed to delete from VPS, proceeding with local deletion:', vpsError)
+      // Always delete locally first
+      await deleteMeetingLocally(meetingId)
+      
+      // Handle VPS deletion based on meeting status and connectivity
+      if (meeting.status === 'synced' || meeting.status === 'sent') {
+        if (online && vpsUp) {
+          try {
+            await deleteMeeting(meetingId)
+            console.log('✅ Successfully deleted meeting from VPS')
+          } catch (vpsErr) {
+            console.warn('VPS deletion failed, queuing for later:', vpsErr)
+            await enqueueOutbox('delete_meeting', { meetingId })
+          }
+        } else {
+          // Queue for sync when online
+          await enqueueOutbox('delete_meeting', { meetingId })
+          console.log('📤 Queued meeting deletion for VPS sync when online')
         }
       }
       
-      // Delete locally
-      await deleteMeetingLocally(meetingId)
-      refresh() // Refresh the list
+      refresh()
       closeContextMenu()
-      return { success: true, message: 'Meeting deleted completely! 🗑️' }
+      return { 
+        success: true, 
+        message: (online && vpsUp) ? 'Meeting deleted completely! 🗑️' : 'Meeting deleted locally! VPS deletion queued. 🗑️📤' 
+      }
     } catch (err) {
       console.error('Failed to delete meeting:', err)
       closeContextMenu()
       return { success: false, message: 'Failed to delete meeting. Please try again.' }
     }
-  }, [meetings, refresh, closeContextMenu])
+  }, [meetings, refresh, closeContextMenu, online, vpsUp])
 
   // Reset to first page when search/filter changes
   useEffect(() => {
@@ -310,6 +324,72 @@ export function useDashboardState(
   useEffect(() => {
     refresh()
   }, [text, tag, online])
+
+  // Background detail filling when VPS is available
+  useEffect(() => {
+    if (!online || !vpsUp) return
+    
+    const controller = new AbortController()
+    
+    ;(async () => {
+      try {
+        console.log('🔍 Starting background detail filling...')
+        // First ensure we have the latest meetings list
+        await retryFetchAndCacheMeetings({ attempts: 1, signal: controller.signal })
+        
+        // Then fill missing details
+        await fillMissingMeetingDetails({ 
+          limit: 3, 
+          signal: controller.signal,
+          onProgress: (done, total) => {
+            console.log(`📊 Detail filling progress: ${done}/${total}`)
+          }
+        })
+        
+        // Refresh UI with new details
+        await refresh()
+        console.log('✅ Background detail filling completed')
+      } catch (error) {
+        if (error instanceof DOMException && error.name === 'AbortError') {
+          console.log('🛑 Background detail filling aborted')
+        } else {
+          console.warn('⚠️ Background detail filling failed:', error)
+        }
+      }
+    })()
+    
+    return () => controller.abort()
+  }, [online, vpsUp, refresh])
+
+  // Background retry when VPS comes back online
+  useEffect(() => {
+    if (!online) return
+    if (vpsUp === false) {
+      console.log('📡 VPS is down, starting background retry...')
+      const controller = new AbortController()
+      
+      ;(async () => {
+        try {
+          await retryFetchAndCacheMeetings({ 
+            attempts: 6, 
+            baseDelayMs: 3000, 
+            signal: controller.signal,
+            onAttempt: (attempt, error) => {
+              console.log(`🔄 Retry attempt ${attempt}/6 failed:`, error)
+            }
+          })
+          await refresh()
+          console.log('✅ VPS reconnection successful')
+        } catch (error) {
+          if (!(error instanceof DOMException && error.name === 'AbortError')) {
+            console.warn('⚠️ Background retry exhausted:', error)
+          }
+        }
+      })()
+      
+      return () => controller.abort()
+    }
+  }, [online, vpsUp, refresh])
 
   // Refresh VPS meetings when VPS tab is selected
   useEffect(() => {
