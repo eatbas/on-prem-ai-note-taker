@@ -60,6 +60,37 @@ export default function LiveTranscript() {
     URL.revokeObjectURL(url)
   }
 
+  const exportJsonl = () => {
+    const lines = rows.map(r => JSON.stringify({ start: r.start, end: r.end, text: r.text, speaker: r.speaker || null }))
+    const blob = new Blob([lines.join('\n') + '\n'], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `transcript_${sessionId || 'session'}.jsonl`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  const exportSrt = () => {
+    const toSrtTime = (s: number) => {
+      const ms = Math.floor((s % 1) * 1000)
+      const t = Math.max(0, Math.floor(s))
+      const h = Math.floor(t / 3600)
+      const m = Math.floor((t % 3600) / 60)
+      const sec = t % 60
+      const pad = (n: number, w = 2) => String(n).padStart(w, '0')
+      return `${pad(h)}:${pad(m)}:${pad(sec)},${pad(ms, 3)}`
+    }
+    const srt = rows.map((r, i) => `${i + 1}\n${toSrtTime(r.start)} --> ${toSrtTime(r.end)}\n${(r.speaker || 'Speaker') + ': '}${r.text}\n`).join('\n')
+    const blob = new Blob([srt], { type: 'text/plain' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `transcript_${sessionId || 'session'}.srt`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   const format = (s: number) => {
     const t = Math.max(0, Math.floor(s))
     const h = Math.floor(t / 3600)
@@ -77,6 +108,8 @@ export default function LiveTranscript() {
         <button onClick={stop} disabled={busy}>Stop</button>
         <div style={{ flex: 1 }} />
         <button onClick={exportTxt} disabled={!rows.length}>Export .txt</button>
+        <button onClick={exportJsonl} disabled={!rows.length}>Export .jsonl</button>
+        <button onClick={exportSrt} disabled={!rows.length}>Export .srt</button>
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
