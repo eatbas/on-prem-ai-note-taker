@@ -1,13 +1,16 @@
-use tauri::{AppHandle, Manager};
-use std::process::Command;
+use tauri::AppHandle;
 
 pub struct NotificationManager {
-    app_handle: AppHandle,
+    app_handle: Option<AppHandle>,
 }
 
 impl NotificationManager {
-    pub fn new(app_handle: AppHandle) -> Self {
-        Self { app_handle }
+    pub fn new() -> Self {
+        Self { app_handle: None }
+    }
+
+    pub fn new_with_handle(app_handle: AppHandle) -> Self {
+        Self { app_handle: Some(app_handle) }
     }
 
     pub async fn show_notification(&self, title: &str, body: &str) -> Result<(), Box<dyn std::error::Error>> {

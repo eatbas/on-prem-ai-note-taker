@@ -1,4 +1,4 @@
-use tauri::{Manager, WebviewWindowBuilder, Window, Emitter};
+use tauri::{WebviewWindowBuilder, Emitter};
 
 pub struct WindowManager {
     main_window: Option<tauri::WebviewWindow>,
@@ -27,7 +27,6 @@ impl WindowManager {
         .inner_size(300.0, 200.0)
         .always_on_top(true)
         .decorations(false)
-        .transparent(true)
         .skip_taskbar(true)
         .build()?;
 

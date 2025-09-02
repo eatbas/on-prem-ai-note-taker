@@ -16,15 +16,14 @@ mod error;
 use audio::{AudioCapture, AudioDevice};
 use windows::WindowManager;
 use tray::TrayManager;
-use ipc::{IPCBridge, IPCMessage};
+use ipc::IPCBridge;
 use notifications::NotificationManager;
 use fs::FileSystemManager;
 use performance::PerformanceMonitor;
-use error::{AppError, ErrorHandler};
 use env::load_environment;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use tauri::{Manager, Emitter};
+use tauri::Manager;
 
 #[tauri::command]
 async fn get_audio_devices(
@@ -155,11 +154,17 @@ fn main() {
     let audio_capture = Arc::new(Mutex::new(AudioCapture::new().unwrap()));
     let window_manager = Arc::new(Mutex::new(WindowManager::new()));
     let perf_monitor = Arc::new(Mutex::new(PerformanceMonitor::new()));
+    let ipc_bridge = Arc::new(Mutex::new(IPCBridge::new()));
+    let notification_manager = Arc::new(Mutex::new(NotificationManager::new()));
+    let fs_manager = Arc::new(Mutex::new(FileSystemManager::new()));
 
     tauri::Builder::default()
         .manage(audio_capture)
         .manage(window_manager.clone())
         .manage(perf_monitor)
+        .manage(ipc_bridge.clone())
+        .manage(notification_manager.clone())
+        .manage(fs_manager)
         .invoke_handler(tauri::generate_handler![
             get_audio_devices,
             start_audio_capture,
@@ -177,33 +182,25 @@ fn main() {
             get_performance_metrics
         ])
         .setup(move |app| {
-            let tray_manager = Arc::new(Mutex::new(TrayManager::new(app.handle().clone())));
+            let tray_manager = Arc::new(Mutex::new(TrayManager::new_with_handle(app.handle().clone())));
 
-            // Initialize IPC bridge
-            {
-                let mut ipc = ipc_bridge.lock().unwrap();
-                *ipc = IPCBridge::new(app.handle().clone());
-            }
-
-            // Initialize notification manager
-            {
-                let mut notification = notification_manager.lock().unwrap();
-                *notification = NotificationManager::new(app.handle().clone());
-            }
+            // Initialize IPC bridge with app handle
+            let app_handle = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                let mut ipc = ipc_bridge.lock().await;
+                *ipc = IPCBridge::new_with_handle(app_handle.clone());
+                
+                let mut notification = notification_manager.lock().await;
+                *notification = NotificationManager::new_with_handle(app_handle);
+            });
 
             // Load environment variables
             load_environment().map_err(|e| {
                 eprintln!("Failed to load environment: {}", e);
             }).ok();
 
-            // Create floating recorder window
-            let window_manager_clone = window_manager.clone();
-            tokio::spawn(async move {
-                let mut manager = window_manager_clone.lock().await;
-                if let Err(e) = manager.create_floating_recorder(app).await {
-                    eprintln!("Failed to create floating recorder: {}", e);
-                }
-            });
+            // Store tray manager for future use (note: system tray needs to be set up separately)
+            app.manage(tray_manager);
 
             Ok(())
         })

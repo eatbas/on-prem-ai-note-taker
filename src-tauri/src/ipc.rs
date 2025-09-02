@@ -8,30 +8,46 @@ pub struct IPCMessage {
 }
 
 pub struct IPCBridge {
-    app_handle: AppHandle,
+    app_handle: Option<AppHandle>,
 }
 
 impl IPCBridge {
-    pub fn new(app_handle: AppHandle) -> Self {
-        Self { app_handle }
+    pub fn new() -> Self {
+        Self { app_handle: None }
+    }
+
+    pub fn new_with_handle(app_handle: AppHandle) -> Self {
+        Self { app_handle: Some(app_handle) }
     }
 
     // Send message to frontend
     pub async fn send_to_frontend(&self, event: &str, data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
-        self.app_handle.emit(event, data).map_err(|e| e.into())
+        if let Some(ref handle) = self.app_handle {
+            handle.emit(event, data)?;
+            Ok(())
+        } else {
+            Err("App handle not available".into())
+        }
     }
 
     // Send message to specific window
     pub async fn send_to_window(&self, window_label: &str, event: &str, data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(window) = self.app_handle.get_webview_window(window_label) {
-            window.emit(event, data).map_err(|e| e.into())?;
+        if let Some(ref handle) = self.app_handle {
+            if let Some(window) = handle.get_webview_window(window_label) {
+                window.emit(event, data)?;
+            }
         }
         Ok(())
     }
 
     // Broadcast to all windows
     pub async fn broadcast(&self, event: &str, data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
-        self.app_handle.emit(event, data).map_err(|e| e.into())
+        if let Some(ref handle) = self.app_handle {
+            handle.emit(event, data)?;
+            Ok(())
+        } else {
+            Err("App handle not available".into())
+        }
     }
 }
 

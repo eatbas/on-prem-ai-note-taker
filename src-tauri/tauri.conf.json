@@ -1,12 +1,12 @@
 {
-  "productName": "On-Prem AI Note Taker",
+  "productName": "dgMeets",
   "version": "1.0.0",
-  "identifier": "com.dgmeets.app",
+  "identifier": "com.dgmeets.note-taker",
   "build": {
     "beforeDevCommand": "cd frontend && npm run dev",
     "beforeBuildCommand": "cd frontend && npm run build",
     "devUrl": "http://localhost:5173",
-    "frontendDist": "frontend/dist"
+    "frontendDist": "../frontend/dist"
   },
   "bundle": {
     "active": true,
@@ -23,7 +23,15 @@
       "icons/icon.ico"
     ]
   },
-  "productName": "dgMeets",
-  "version": "1.0.0",
-  "identifier": "com.dgmeets.app"
+  "app": {
+    "windows": [
+      {
+        "title": "dgMeets",
+        "width": 1200,
+        "height": 800,
+        "resizable": true,
+        "fullscreen": false
+      }
+    ]
+  }
 }
