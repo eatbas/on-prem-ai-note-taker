@@ -8,21 +8,25 @@ import type { RecordingOptions, GlobalRecordingState } from './types'
 import { AudioCaptureManager } from './audioCapture'
 import { AudioCleanupManager } from './audioCleanup'
 
+import { TauriAudioCaptureManager } from '../../services/tauriAudio'
+import { isTauri } from '../../lib/tauri'
+
 export class AudioRecordingManager {
 	private captureManager = new AudioCaptureManager()
+	private tauriCaptureManager = new TauriAudioCaptureManager()
 	private cleanupManager = new AudioCleanupManager()
 	private audioContext: AudioContext | null = null
 
 	// Start simplified single-stream audio recording
 	async startAudioRecording(
-		options: RecordingOptions, 
+		options: RecordingOptions,
 		state: GlobalRecordingState,
 		onDataAvailable: (event: BlobEvent) => Promise<void>,
 		setState: (updates: Partial<GlobalRecordingState>) => void
 	): Promise<boolean> {
 		try {
-			console.log('🎙️ Starting simplified audio recording with options:', options)
-			
+			console.log('🎙️ Starting audio recording with options:', options)
+
 			// Safety check: If system audio is disabled, log it clearly
 			if (localStorage.getItem('systemAudioDisabled') === 'true') {
 				console.log('ℹ️ System audio is disabled - will use microphone only')
@@ -30,28 +34,37 @@ export class AudioRecordingManager {
 
 			// Proactively release monitoring streams from MicrophoneSelector to avoid device busy errors
 			await this.preStartCleanup()
-			
-			// Try to capture system (desktop) audio
-			const systemStream = await this.captureManager.captureSystemAudio()
-			
-			// Always capture microphone
-			console.log('🎤 Ensuring microphone capture...')
-			const micStream = await this.captureManager.captureMicrophone(options)
-			
+
+			let systemStream: MediaStream | null = null
+			let micStream: MediaStream
+
+			// Check if running in Tauri
+			if (isTauri()) {
+				// Use Tauri native audio capture
+				console.log('🔧 Using Tauri native audio capture')
+				systemStream = await this.tauriCaptureManager.startSystemAudioCapture()
+				micStream = await this.tauriCaptureManager.startMicrophoneCapture(options)
+			} else {
+				// Fallback to browser APIs (Electron)
+				console.log('🌐 Using browser audio APIs (fallback)')
+				systemStream = await this.captureManager.captureSystemAudio()
+				micStream = await this.captureManager.captureMicrophone(options)
+			}
+
 			// Create final mixed stream
 			const { stream: finalStream, audioContext } = this.captureManager.createMixedStream(systemStream, micStream)
 			this.audioContext = audioContext
-			
+
 			// Create and setup MediaRecorder
 			const recorder = this.captureManager.createMediaRecorder(finalStream, onDataAvailable)
-			
+
 			// Persist media references in global state (getState() returns a copy)
 			setState({ micStream: finalStream, micRecorder: recorder })
-			
+
 			// Start recording without timeslice; we will pull data on our own cadence
 			console.log('🎙️ Starting single-stream recording without timeslice')
 			recorder.start()
-			
+
 			// Prime the recorder to avoid initial zero-byte chunk on some platforms
 			setTimeout(() => {
 				try {
@@ -62,7 +75,7 @@ export class AudioRecordingManager {
 					console.warn('⚠️ Initial recorder.requestData() failed:', e)
 				}
 			}, 400)
-			
+
 			// Pull data at 1s intervals
 			const forceDataInterval = window.setInterval(() => {
 				if (recorder.state === 'recording') {
@@ -70,10 +83,10 @@ export class AudioRecordingManager {
 				}
 			}, 1000)
 			setState({ forceDataInterval })
-			
-			console.log('✅ Simplified audio recording started successfully')
+
+			console.log('✅ Audio recording started successfully')
 			return true
-			
+
 		} catch (error) {
 			console.error('❌ Failed to start simplified audio recording:', error)
 			

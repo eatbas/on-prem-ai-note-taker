@@ -1,0 +1,25 @@
+{
+  "name": "on-prem-ai-note-taker",
+  "version": "1.0.0",
+  "description": "AI-powered meeting note taker",
+  "main": "src-tauri/src/main.rs",
+  "scripts": {
+    "dev": "cd frontend && npm run dev",
+    "build": "cd frontend && npm run build",
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:build:debug": "tauri build --debug",
+    "tauri:build:release": "tauri build --release",
+    "tauri:build:all": "tauri build --bundles all",
+    "tauri:build:windows": "tauri build --bundles nsis",
+    "tauri:build:macos": "tauri build --bundles dmg",
+    "tauri:build:linux": "tauri build --bundles appimage,deb"
+  },
+  "devDependencies": {
+    "@tauri-apps/api": "^2.8.0",
+    "@tauri-apps/cli": "^2.8.4",
+    "@tauri-apps/plugin-shell": "^2.0.0"
+  },
+  "dependencies": {}
+}
