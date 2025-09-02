@@ -183,6 +183,21 @@ impl AudioChunker {
     }
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SessionInfo {
+    pub session_id: Option<String>,
+    pub session_dir: Option<String>,
+}
+
+#[tauri::command]
+pub async fn ac_get_active_session_info(state: tauri::State<'_, Arc<Mutex<AudioChunker>>>) -> Result<SessionInfo, String> {
+    let chunker = state.lock().await;
+    Ok(SessionInfo {
+        session_id: chunker.session_id.clone(),
+        session_dir: chunker.session_dir.as_ref().map(|p| p.to_string_lossy().to_string()),
+    })
+}
+
 fn write_wav_chunk(path: &PathBuf, sample_rate: u32, data: &[f32]) -> Result<()> {
     if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
     let spec = hound::WavSpec {

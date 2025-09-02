@@ -464,7 +464,7 @@ fn main() {
             audio_chunker.set_app_handle(app.handle().clone());
             app.manage(StdArc::new(TokioMutex::new(audio_chunker)));
 
-            // Replace coordinator with real handle
+            // Replace coordinator with real handle and subscribe to events
             let coord = coordinator::Coordinator::new(app.handle().clone());
             let coord_state = StdArc::new(TokioMutex::new(coord));
             app.manage(coord_state.clone());
@@ -522,6 +522,7 @@ fn main() {
             audio_capture_plugin::ac_start_system,
             audio_capture_plugin::ac_start_mix,
             audio_capture_plugin::ac_stop_all,
+            audio_capture_plugin::ac_get_active_session_info,
             // Phase 4: Multi-audio and Whisper commands
             discover_audio_sources,
             start_multi_recording,

@@ -78,6 +78,20 @@ impl Coordinator {
             let _ = append_file(&txt, pretty.as_bytes());
         }
     }
+
+    pub async fn post_process(&self, session_dir: &str) {
+        let dir = PathBuf::from(session_dir);
+        let final_wav = dir.join("final.wav");
+        if let Err(e) = concat_wavs_in_dir(&dir, &final_wav) {
+            eprintln!("Concat error: {}", e);
+            return;
+        }
+
+        // Global diarization
+        let _ = crate::whisper::diarize_wav_file(final_wav.to_string_lossy().to_string()).await;
+        // TODO: relabel all segments in transcript.jsonl using global turns
+        // TODO: generate final.jsonl, final.txt, final.srt
+    }
 }
 
 fn append_file(path: &PathBuf, data: &[u8]) -> std::io::Result<()> {
@@ -91,6 +105,32 @@ fn hhmmss(seconds: f64) -> String {
     let m = (s % 3600) / 60;
     let sec = s % 60;
     format!("{:02}:{:02}:{:02}", h, m, sec)
+}
+
+fn concat_wavs_in_dir(session_dir: &PathBuf, out: &PathBuf) -> anyhow::Result<()> {
+    use anyhow::anyhow;
+    let mut entries: Vec<_> = std::fs::read_dir(session_dir)?
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| p.extension().map(|e| e == "wav").unwrap_or(false) && p.file_name().unwrap_or_default().to_string_lossy().starts_with("chunk_"))
+        .collect();
+    entries.sort();
+    if entries.is_empty() { return Err(anyhow!("no chunks")); }
+
+    // Read all, assume same spec as chunks (mono 16-bit, sample rate either 48k or 16k depending on capture)
+    let mut spec: Option<hound::WavSpec> = None;
+    let mut all_samples: Vec<i16> = Vec::new();
+    for p in entries {
+        let mut reader = hound::WavReader::open(&p)?;
+        let rspec = reader.spec();
+        if spec.is_none() { spec = Some(rspec); }
+        for s in reader.samples::<i16>() { all_samples.push(s?); }
+    }
+    let spec = spec.unwrap();
+    let mut writer = hound::WavWriter::create(out, spec)?;
+    for s in all_samples { writer.write_sample(s)?; }
+    writer.finalize()?;
+    Ok(())
 }
 
 
