@@ -19,11 +19,12 @@ slowapi==0.1.9
 limits==5.5.0
 
 # ===== AI & Audio Processing Dependencies =====
-# Fix NumPy compatibility with faster-whisper and torch
+# Fix NumPy compatibility with whisper.cpp and torch
 numpy<2.0.0
-# PyAV is required by faster-whisper - using version with pre-built wheels
+# PyAV for audio processing - using version with pre-built wheels
 av>=11.0,<13
-faster-whisper==1.0.3
+# HTTP client for whisper.cpp service
+httpx>=0.25.0
 
 # 🚨 PHASE 4.2: Speaker Diarization (CPU-optimized for VPS)  
 pyannote.audio==3.1.1

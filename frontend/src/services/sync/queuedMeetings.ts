@@ -9,7 +9,7 @@ export async function processQueuedMeetings(): Promise<void> {
   
   const meetings = await db.meetings
     .where('status')
-    .anyOf(['queued', 'local'])
+    .anyOf(['queued', 'local', 'completed'])
     .toArray()
   
   console.log('📋 Found meetings to sync:', meetings.length)
@@ -24,35 +24,66 @@ export async function processQueuedMeetings(): Promise<void> {
   
   for (const meeting of meetings) {
     try {
-      console.log(`📡 Syncing meeting: ${meeting.id} (${meeting.title})`)
+      console.log(`📡 Processing meeting: ${meeting.id} (${meeting.title}) - Status: ${meeting.status}`)
       
-      // Check if meeting has audio chunks
-      const chunkCount = await db.chunks
-        .where('meetingId')
-        .equals(meeting.id)
-        .count()
-      
-      if (chunkCount === 0) {
-        console.warn(`⚠️ Meeting ${meeting.id} has no audio chunks, skipping sync`)
-        // Update status to indicate no content to sync
-        await db.meetings.update(meeting.id, {
-          status: 'local',
-          updatedAt: Date.now()
-        })
-        continue
+      // Handle meetings that completed processing but need results retrieval
+      if (meeting.status === 'completed') {
+        console.log(`📥 Meeting ${meeting.id} completed processing, fetching results...`)
+        try {
+          // Import here to avoid circular dependency
+          const { fillMissingMeetingDetails } = await import('./meetingDetails')
+          await fillMissingMeetingDetails({ 
+            limit: 1,
+            onProgress: () => {} // Silent for background processing
+          })
+          
+          // Update to synced after retrieving results
+          await db.meetings.update(meeting.id, {
+            status: 'synced',
+            updatedAt: Date.now()
+          })
+          
+          processed++
+          console.log(`✅ Successfully retrieved results for completed meeting: ${meeting.id}`)
+          continue
+        } catch (error) {
+          console.error(`❌ Failed to retrieve results for completed meeting ${meeting.id}:`, error)
+          // Keep as completed for retry later
+          failed++
+          continue
+        }
       }
       
-      // Attempt to sync the meeting
-      await syncMeeting(meeting.id, (progress) => {
-        console.log(`📊 Sync progress for ${meeting.id}: ${progress.progress}% - ${progress.message}`)
-      })
-      
-      processed++
-      console.log(`✅ Successfully synced meeting: ${meeting.id}`)
+      // Handle meetings that need initial upload/processing
+      if (meeting.status === 'local' || meeting.status === 'queued') {
+        // Check if meeting has audio chunks
+        const chunkCount = await db.chunks
+          .where('meetingId')
+          .equals(meeting.id)
+          .count()
+        
+        if (chunkCount === 0) {
+          console.warn(`⚠️ Meeting ${meeting.id} has no audio chunks, skipping sync`)
+          // Update status to indicate no content to sync
+          await db.meetings.update(meeting.id, {
+            status: 'local',
+            updatedAt: Date.now()
+          })
+          continue
+        }
+        
+        // Attempt to sync the meeting
+        await syncMeeting(meeting.id, (progress) => {
+          console.log(`📊 Sync progress for ${meeting.id}: ${progress.progress}% - ${progress.message}`)
+        })
+        
+        processed++
+        console.log(`✅ Successfully synced meeting: ${meeting.id}`)
+      }
       
     } catch (error) {
       failed++
-      console.error(`❌ Failed to sync meeting ${meeting.id}:`, error)
+      console.error(`❌ Failed to process meeting ${meeting.id}:`, error)
       
       // Revert status to allow retry later
       await db.meetings.update(meeting.id, {
@@ -72,7 +103,7 @@ export async function processQueuedMeetings(): Promise<void> {
 export async function getQueuedMeetingsCount(): Promise<number> {
   return await db.meetings
     .where('status')
-    .anyOf(['queued', 'local'])
+    .anyOf(['queued', 'local', 'completed'])
     .count()
 }
 

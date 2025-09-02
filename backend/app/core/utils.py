@@ -9,7 +9,7 @@ from fastapi import HTTPException, Depends
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 import secrets
 from .config import settings
-from faster_whisper import WhisperModel
+from .whisper_cpp_adapter import WhisperModel
 
 logger = logging.getLogger("on_prem_note_taker")
 
@@ -33,7 +33,7 @@ def require_basic_auth(credentials: HTTPBasicCredentials = Depends(security)) ->
 
 def get_whisper_model(model_config: dict = None) -> WhisperModel:
     """
-    Get or create the Whisper model instance with memory management and optimization.
+    Get or create the whisper.cpp model instance with HTTP client optimization.
     
     Args:
         model_config: Optional configuration from WhisperOptimizer for optimal settings
@@ -41,99 +41,52 @@ def get_whisper_model(model_config: dict = None) -> WhisperModel:
     from .memory_manager import memory_manager
     
     try:
-        # 🚨 PHASE 3.1: Check memory pressure before loading model
+        # 🚨 PHASE 3.1: Check memory pressure (less critical for whisper.cpp HTTP client)
         memory_info = memory_manager.get_memory_usage()
         current_mb = memory_info.get('process', {}).get('rss_mb', 0)
         
-        logger.info(f"💾 Current memory usage: {current_mb:.1f}MB before Whisper model loading")
-        
-        # Force cleanup if memory pressure is detected
-        if memory_manager.check_memory_pressure():
-            logger.warning("🧹 Memory pressure detected, forcing cleanup before model load...")
-            memory_manager.cleanup_whisper_model(force=True)
+        logger.info(f"💾 Current memory usage: {current_mb:.1f}MB before whisper.cpp client setup")
         
         # 🚨 PHASE 3.5: Use optimized configuration if provided
         if model_config:
-            model_size = model_config.get('model_size', settings.whisper_model_name)
-            compute_type = model_config.get('compute_type', settings.whisper_compute_type)
-            device = model_config.get('device', settings.whisper_device)
-            cpu_threads = model_config.get('cpu_threads', settings.whisper_cpu_threads)
-            
-            logger.info(f"🎯 Using optimized Whisper configuration: {model_size} "
-                       f"(compute_type={compute_type}, threads={cpu_threads})")
+            model_name = model_config.get('model_name', settings.whisper_model_name)
+            # whisper.cpp client doesn't use these parameters directly
+            logger.info(f"🎯 Using optimized whisper.cpp configuration: {model_name}")
         else:
             # Fallback to settings configuration
-            model_size = settings.whisper_model_name
-            compute_type = settings.whisper_compute_type
-            device = settings.whisper_device
-            cpu_threads = settings.whisper_cpu_threads
+            model_name = settings.whisper_model_name
         
-        # FAILSAFE: Force CPU-compatible settings if float16 fails
-        if device == "cpu" and compute_type not in ["int8", "float32"]:
-            logger.warning(f"Forcing compute_type from {compute_type} to 'int8' for CPU device")
-            compute_type = "int8"
+        logger.info(f"Loading whisper.cpp client with model: {model_name}")
         
-        logger.info(f"Loading Whisper model: {model_size} with device={device}, compute_type={compute_type}")
-        
-        # Initialize Whisper model with VPS optimizations
-        # Note: beam_size, word_timestamps, vad_filter are transcribe() parameters, not constructor parameters
+        # Initialize whisper.cpp model wrapper
+        # This creates an HTTP client instead of loading model into memory
         model = WhisperModel(
-            model_size,  # Use optimized model size
-            compute_type=compute_type,
-            device=device,
-            cpu_threads=cpu_threads,
-            download_root=settings.whisper_download_root,
-            local_files_only=False
+            model_size_or_path=model_name,
+            device="cpu",  # whisper.cpp service handles CPU optimization
+            device_index=0,
+            compute_type="int8",  # Handled by whisper.cpp service
+            cpu_threads=settings.whisper_cpu_threads or 4
         )
         
-        # 🚨 PHASE 3.1: Register model with memory manager for cleanup tracking
+        # 🚨 PHASE 3.1: Register model with memory manager (lightweight for HTTP client)
         memory_manager.register_whisper_model(model)
         
-        # Log memory usage after model loading
+        # Log memory usage after client setup (should be minimal)
         after_memory = memory_manager.get_memory_usage()
         after_mb = after_memory.get('process', {}).get('rss_mb', 0)
-        model_memory_mb = after_mb - current_mb
+        client_memory_mb = after_mb - current_mb
         
-        logger.info(f"✅ Whisper model {model_size} loaded successfully")
-        logger.info(f"💾 Memory usage after loading: {after_mb:.1f}MB (model used ~{model_memory_mb:.1f}MB)")
+        logger.info(f"✅ whisper.cpp client initialized successfully")
+        logger.info(f"💾 Memory usage after setup: {after_mb:.1f}MB (client used ~{client_memory_mb:.1f}MB)")
         
         return model
         
     except Exception as e:
-        # 🚀 FAILSAFE: Try alternative compute types for CPU compatibility
-        if "float16" in str(e) and device == "cpu":
-            logger.warning(f"Float16 failed, trying CPU-compatible alternatives: {e}")
-            
-            for fallback_compute_type in ["int8", "float32"]:
-                try:
-                    logger.info(f"🔄 Attempting fallback with compute_type={fallback_compute_type}")
-                    
-                    # Force cleanup before retry
-                    memory_manager.cleanup_whisper_model(force=True)
-                    
-                    model = WhisperModel(
-                        settings.whisper_model_name,
-                        compute_type=fallback_compute_type,
-                        device="cpu",
-                        cpu_threads=settings.whisper_cpu_threads,
-                        download_root=settings.whisper_download_root,
-                        local_files_only=False
-                    )
-                    
-                    # Register fallback model
-                    memory_manager.register_whisper_model(model)
-                    
-                    logger.info(f"✅ FALLBACK SUCCESS: Whisper model loaded with compute_type={fallback_compute_type}")
-                    return model
-                except Exception as fallback_error:
-                    logger.warning(f"❌ Fallback {fallback_compute_type} failed: {fallback_error}")
-                    continue
-        
         # Force cleanup on failure
         memory_manager.cleanup_whisper_model(force=True)
         
-        logger.error(f"❌ CRITICAL: All Whisper model loading attempts failed: {e}")
-        raise HTTPException(status_code=500, detail=f"Failed to load Whisper model: {e}")
+        logger.error(f"❌ CRITICAL: whisper.cpp client setup failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to initialize whisper.cpp client: {e}")
 
 
 def validate_language(language: Optional[str]) -> str:

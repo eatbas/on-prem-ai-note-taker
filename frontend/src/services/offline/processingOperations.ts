@@ -1,7 +1,7 @@
 // Transcription and processing operations
 
 import { db } from '../db'
-import { transcribeAndSummarize } from '../api'
+import { transcribeAndSummarize, getMeeting as getApiMeeting } from '../api'
 import { getMeeting } from './meetingOperations'
 import { assembleFileFromChunks, assembleFilesByAudioType } from './fileOperations'
 import { getChunks } from './chunkOperations'
@@ -72,7 +72,7 @@ export async function syncMeeting(meetingId: string, onProgress?: (progress: Job
 			console.log(`📊 Job ${progress.jobId} - ${progress.phase}: ${progress.progress}% - ${progress.message}`)
 			
 			// Update local meeting status based on job progress
-			let localStatus: 'queued' | 'uploading' | 'processing' | 'synced' = 'queued'
+			let localStatus: 'queued' | 'uploading' | 'processing' | 'completed' = 'queued'
 			
 			if (progress.phase === 'QUEUED') {
 				localStatus = 'queued'
@@ -80,6 +80,8 @@ export async function syncMeeting(meetingId: string, onProgress?: (progress: Job
 				localStatus = 'uploading'
 			} else if (progress.phase === 'TRANSCRIBING' || progress.phase === 'SUMMARIZING') {
 				localStatus = 'processing'
+			} else if (progress.isComplete && progress.phase !== 'ERROR') {
+				localStatus = 'completed'  // Job finished, but haven't retrieved results yet
 			}
 			
 			// Update local status
@@ -111,7 +113,11 @@ export async function syncMeeting(meetingId: string, onProgress?: (progress: Job
 			throw error
 		}
 		
-		// Mark meeting as synced
+		// 🚨 CRITICAL FIX: Fetch and store results before marking as synced
+		console.log(`📥 Fetching processed results for meeting ${meetingId}`)
+		await fetchAndStoreProcessedResults(meetingId)
+		
+		// NOW mark as synced (after we have the results)
 		await markMeetingAsSynced(meetingId, meetingId)
 		
 		console.log(`✅ Successfully completed async sync for meeting ${meetingId}`)
@@ -188,6 +194,59 @@ export async function syncMeetingBlocking(meetingId: string): Promise<void> {
 			updatedAt: Date.now() 
 		})
 		throw e
+	}
+}
+
+/**
+ * 🚨 CRITICAL FIX: Fetch and store processed results from VPS
+ */
+async function fetchAndStoreProcessedResults(meetingId: string): Promise<void> {
+	try {
+		console.log(`📥 Fetching processed meeting data from VPS for ${meetingId}`)
+		
+		// Fetch the meeting from VPS with processed results
+		const vpsMeeting = await getApiMeeting(meetingId)
+		
+		if (!vpsMeeting) {
+			throw new Error('Meeting not found on VPS after processing')
+		}
+		
+		console.log(`📄 VPS meeting data:`, {
+			id: vpsMeeting.id,
+			title: vpsMeeting.title,
+			hasTranscription: !!vpsMeeting.transcription,
+			hasSummary: !!vpsMeeting.summary,
+			transcriptionLength: vpsMeeting.transcription?.length || 0,
+			summaryLength: vpsMeeting.summary?.length || 0
+		})
+		
+		// Store or update the transcript and summary
+		if (vpsMeeting.transcription || vpsMeeting.summary) {
+			await db.notes.put({
+				meetingId,
+				transcript: vpsMeeting.transcription || '',
+				summary: vpsMeeting.summary || undefined,
+				createdAt: Date.now()
+			})
+			console.log(`✅ Stored processed results for meeting ${meetingId}`)
+		}
+		
+		// Update meeting metadata if available
+		const updateData: any = { 
+			updatedAt: Date.now()
+		}
+		
+		if (vpsMeeting.title) updateData.title = vpsMeeting.title
+		if (vpsMeeting.language) updateData.language = vpsMeeting.language
+		if (typeof vpsMeeting.duration === 'number') updateData.duration = vpsMeeting.duration
+		
+		await db.meetings.update(meetingId, updateData)
+		
+		console.log(`✅ Successfully fetched and stored processed results for ${meetingId}`)
+		
+	} catch (error) {
+		console.error(`❌ Failed to fetch processed results for ${meetingId}:`, error)
+		throw new Error(`Failed to retrieve processed results: ${error instanceof Error ? error.message : 'Unknown error'}`)
 	}
 }
 

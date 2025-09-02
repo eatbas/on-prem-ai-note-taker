@@ -127,7 +127,7 @@ export async function markMeetingAsSynced(meetingId: string, vpsId?: string): Pr
       updatedAt: Date.now()
     })
     
-    console.log(`📝 Meeting ${meetingId} marked as synced`)
+    console.log(`📝 Meeting ${meetingId} marked as synced with VPS ID: ${vpsId || meetingId}`)
     
   } catch (error) {
     console.error(`❌ Failed to mark meeting ${meetingId} as synced:`, error)
