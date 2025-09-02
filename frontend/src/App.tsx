@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react'
 import { BrowserRouter, HashRouter, Routes, Route, useNavigate, useParams } from 'react-router-dom'
 import { useState, useEffect } from 'react'
+import { isTauri, isElectron, logPlatformInfo } from './lib/tauri'
 
 // 🚀 STAGE 3 OPTIMIZATION: Lazy load major components for code splitting
 const Dashboard = lazy(() => import('./features/meetings/pages/Dashboard'))
@@ -27,14 +28,11 @@ import { loadBackgroundProcessor, preloadCriticalServices } from './lib/serviceL
 import './services/cleanupJobs' // Import cleanup utilities for emergency use
 import { cleanupSyncedMeetings } from './services/sync/duplicateChecker'
 
-const isElectron = typeof navigator !== 'undefined' && 
-                  navigator.userAgent.toLowerCase().includes('electron') &&
-                  typeof window !== 'undefined' && 
-                  !!(window as any).electronAPI
-
 // Fix: Use a component instead of a variable to ensure proper React Router context
 function RouterWrapper({ children }: { children: React.ReactNode }) {
-  if (isElectron) {
+  const isDesktopApp = isTauri() || isElectron()
+  
+  if (isDesktopApp) {
     return <HashRouter>{children}</HashRouter>
   }
   return <BrowserRouter>{children}</BrowserRouter>
@@ -57,6 +55,11 @@ export default function App() {
 
   // Ensure API state manager is referenced so it gets imported and initialized
   console.log('🔗 API State Manager loaded:', !!apiStateManager)
+  
+  // Log platform information for debugging
+  useEffect(() => {
+    logPlatformInfo()
+  }, [])
 
   // Watch online status
   useEffect(() => {
@@ -184,6 +187,7 @@ export default function App() {
                 <Route path="/meeting/:meetingId" element={<MeetingRoute />} />
                 <Route path="/admin" element={<AdminDashboard />} />
                 <Route path="/recorder-test" element={<RecorderTestPage />} />
+                <Route path="/tauri-audio-test" element={<TauriAudioTestPage />} />
               </Routes>
             </Suspense>
           </AppShell>
@@ -295,6 +299,290 @@ function RecorderTestPage() {
         online={true}
         vpsUp={true}
       />
+    </div>
+  )
+}
+
+function TauriAudioTestPage() {
+  const [devices, setDevices] = useState<any[]>([])
+  const [isRecording, setIsRecording] = useState(false)
+  const [activeDevices, setActiveDevices] = useState<string[]>([])
+  const [bufferSize, setBufferSize] = useState(0)
+  const [platform, setPlatform] = useState('')
+
+  useEffect(() => {
+    const initializePlatform = async () => {
+      if (isTauri()) {
+        setPlatform('Tauri')
+        await loadDevices()
+      } else if (isElectron()) {
+        setPlatform('Electron')
+      } else {
+        setPlatform('Web Browser')
+      }
+    }
+    
+    initializePlatform()
+  }, [])
+
+  const loadDevices = async () => {
+    if (!isTauri()) return
+    
+    try {
+      const { tauriAudio } = await import('./services/tauriAudio')
+      const audioDevices = await tauriAudio.getAudioDevices()
+      setDevices(audioDevices)
+      console.log('🎵 Available audio devices:', audioDevices)
+    } catch (error) {
+      console.error('Failed to load audio devices:', error)
+    }
+  }
+
+  const startSystemAudio = async () => {
+    if (!isTauri()) return
+    
+    try {
+      const { tauriAudio } = await import('./services/tauriAudio')
+      const success = await tauriAudio.startSystemAudioCapture()
+      if (success) {
+        setIsRecording(true)
+        console.log('✅ System audio capture started!')
+      }
+    } catch (error) {
+      console.error('Failed to start system audio:', error)
+    }
+  }
+
+  const startMicrophone = async () => {
+    if (!isTauri()) return
+    
+    try {
+      const { tauriAudio } = await import('./services/tauriAudio')
+      const success = await tauriAudio.startMicrophoneCapture()
+      if (success) {
+        setIsRecording(true)
+        console.log('✅ Microphone capture started!')
+      }
+    } catch (error) {
+      console.error('Failed to start microphone:', error)
+    }
+  }
+
+  const stopCapture = async () => {
+    if (!isTauri()) return
+    
+    try {
+      const { tauriAudio } = await import('./services/tauriAudio')
+      await tauriAudio.stopCapture()
+      setIsRecording(false)
+      console.log('🛑 Audio capture stopped!')
+    } catch (error) {
+      console.error('Failed to stop capture:', error)
+    }
+  }
+
+  const checkStatus = async () => {
+    if (!isTauri()) return
+    
+    try {
+      const { tauriAudio } = await import('./services/tauriAudio')
+      const recording = await tauriAudio.isCurrentlyRecording()
+      const devices = await tauriAudio.getActiveDevices()
+      const bufferSize = await tauriAudio.getBufferSize()
+      
+      setIsRecording(recording)
+      setActiveDevices(devices)
+      setBufferSize(bufferSize)
+      
+      console.log('📊 Status:', { recording, devices, bufferSize })
+    } catch (error) {
+      console.error('Failed to check status:', error)
+    }
+  }
+
+  const showFloatingRecorder = async () => {
+    if (!isTauri()) return
+    
+    try {
+      const { safeInvoke } = await import('./lib/tauri')
+      await safeInvoke('show_floating_recorder')
+      console.log('🪟 Floating recorder shown!')
+    } catch (error) {
+      console.error('Failed to show floating recorder:', error)
+    }
+  }
+
+  const hideFloatingRecorder = async () => {
+    if (!isTauri()) return
+    
+    try {
+      const { safeInvoke } = await import('./lib/tauri')
+      await safeInvoke('hide_floating_recorder')
+      console.log('🫥 Floating recorder hidden!')
+    } catch (error) {
+      console.error('Failed to hide floating recorder:', error)
+    }
+  }
+
+  return (
+    <div style={{ padding: '20px', maxWidth: '800px' }}>
+      <h1>🔊 Tauri Native Audio Test</h1>
+      
+      <div style={{ marginBottom: '20px', padding: '15px', border: '1px solid #ddd', borderRadius: '8px' }}>
+        <h3>Platform: {platform}</h3>
+        <p>
+          {isTauri() && '✅ Tauri detected - Native audio available!'}
+          {isElectron() && '⚡ Electron detected - Limited browser audio'}
+          {!isTauri() && !isElectron() && '🌐 Web browser - Basic audio only'}
+        </p>
+      </div>
+
+      {isTauri() && (
+        <>
+          <div style={{ marginBottom: '20px' }}>
+            <h3>🎵 Available Audio Devices ({devices.length})</h3>
+            <button onClick={loadDevices} style={{ marginBottom: '10px' }}>
+              🔄 Refresh Devices
+            </button>
+            <div style={{ maxHeight: '200px', overflowY: 'auto', border: '1px solid #ddd', padding: '10px' }}>
+              {devices.map((device, index) => (
+                <div key={index} style={{ 
+                  padding: '5px', 
+                  margin: '5px 0', 
+                  backgroundColor: device.is_system ? '#e3f2fd' : '#f5f5f5',
+                  borderRadius: '4px'
+                }}>
+                  <strong>{device.name}</strong> 
+                  {device.is_system && ' 🔊 SYSTEM AUDIO'}
+                  <br />
+                  <small>ID: {device.id} | Channels: {device.channels} | Sample Rate: {device.sample_rate}Hz</small>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <h3>🪟 Window Controls</h3>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap', marginBottom: '15px' }}>
+              <button 
+                onClick={showFloatingRecorder}
+                style={{ 
+                  padding: '10px 15px', 
+                  backgroundColor: '#9C27B0', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                🪟 Show Floating Recorder
+              </button>
+              
+              <button 
+                onClick={hideFloatingRecorder}
+                style={{ 
+                  padding: '10px 15px', 
+                  backgroundColor: '#607D8B', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                🫥 Hide Floating Recorder
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <h3>🎙️ Audio Capture Controls</h3>
+            <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+              <button 
+                onClick={startSystemAudio} 
+                disabled={isRecording}
+                style={{ 
+                  padding: '10px 15px', 
+                  backgroundColor: '#2196F3', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: isRecording ? 'not-allowed' : 'pointer',
+                  opacity: isRecording ? 0.6 : 1
+                }}
+              >
+                🔊 Start System Audio
+              </button>
+              
+              <button 
+                onClick={startMicrophone} 
+                disabled={isRecording}
+                style={{ 
+                  padding: '10px 15px', 
+                  backgroundColor: '#4CAF50', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: isRecording ? 'not-allowed' : 'pointer',
+                  opacity: isRecording ? 0.6 : 1
+                }}
+              >
+                🎤 Start Microphone
+              </button>
+              
+              <button 
+                onClick={stopCapture} 
+                disabled={!isRecording}
+                style={{ 
+                  padding: '10px 15px', 
+                  backgroundColor: '#f44336', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: !isRecording ? 'not-allowed' : 'pointer',
+                  opacity: !isRecording ? 0.6 : 1
+                }}
+              >
+                🛑 Stop Capture
+              </button>
+              
+              <button 
+                onClick={checkStatus}
+                style={{ 
+                  padding: '10px 15px', 
+                  backgroundColor: '#FF9800', 
+                  color: 'white', 
+                  border: 'none', 
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                📊 Check Status
+              </button>
+            </div>
+          </div>
+
+          <div style={{ marginBottom: '20px' }}>
+            <h3>📊 Current Status</h3>
+            <div style={{ padding: '15px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
+              <p><strong>Recording:</strong> {isRecording ? '🔴 Active' : '⚫ Stopped'}</p>
+              <p><strong>Active Devices:</strong> {activeDevices.length > 0 ? activeDevices.join(', ') : 'None'}</p>
+              <p><strong>Buffer Size:</strong> {bufferSize.toLocaleString()} samples</p>
+            </div>
+          </div>
+        </>
+      )}
+
+      {!isTauri() && (
+        <div style={{ padding: '20px', backgroundColor: '#fff3cd', border: '1px solid #ffeaa7', borderRadius: '8px' }}>
+          <h3>⚠️ Tauri Not Detected</h3>
+          <p>This test page requires Tauri for native audio capture. You're currently running in {platform}.</p>
+          <p>To test native audio:</p>
+          <ol>
+            <li>Make sure you're running the Tauri desktop app</li>
+            <li>Use <code>cargo tauri dev</code> to start the app</li>
+          </ol>
+        </div>
+      )}
     </div>
   )
 }

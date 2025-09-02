@@ -64,10 +64,11 @@ async fn get_audio_data(
 
 #[tauri::command]
 async fn show_floating_recorder(
+    app: tauri::AppHandle,
     window_manager: tauri::State<'_, Arc<Mutex<WindowManager>>>
 ) -> Result<(), String> {
-    let manager = window_manager.lock().await;
-    manager.show_floating_recorder().await
+    let mut manager = window_manager.lock().await;
+    manager.show_floating_recorder(&app).await
         .map_err(|e| format!("Failed to show floating recorder: {}", e))
 }
 
@@ -78,6 +79,27 @@ async fn hide_floating_recorder(
     let manager = window_manager.lock().await;
     manager.hide_floating_recorder().await
         .map_err(|e| format!("Failed to hide floating recorder: {}", e))
+}
+
+#[tauri::command]
+async fn show_main_window(
+    app: tauri::AppHandle
+) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window("main") {
+        window.show().map_err(|e| format!("Failed to show main window: {}", e))?;
+        window.set_focus().map_err(|e| format!("Failed to focus main window: {}", e))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn handle_tray_event(
+    event: String,
+    tray_manager: tauri::State<'_, Arc<Mutex<TrayManager>>>
+) -> Result<(), String> {
+    let tray = tray_manager.lock().await;
+    tray.handle_tray_event(&event).await;
+    Ok(())
 }
 
 #[tauri::command]
@@ -150,6 +172,51 @@ async fn get_performance_metrics(
     Ok(monitor.get_metrics().clone())
 }
 
+#[tauri::command]
+async fn is_recording(
+    audio_capture: tauri::State<'_, Arc<Mutex<AudioCapture>>>
+) -> Result<bool, String> {
+    let capture = audio_capture.lock().await;
+    Ok(capture.is_recording())
+}
+
+#[tauri::command]
+async fn get_active_audio_devices(
+    audio_capture: tauri::State<'_, Arc<Mutex<AudioCapture>>>
+) -> Result<Vec<String>, String> {
+    let capture = audio_capture.lock().await;
+    Ok(capture.get_active_devices().await)
+}
+
+#[tauri::command]
+async fn get_audio_buffer_size(
+    audio_capture: tauri::State<'_, Arc<Mutex<AudioCapture>>>
+) -> Result<usize, String> {
+    let capture = audio_capture.lock().await;
+    capture.get_audio_buffer_size().await
+        .map_err(|e| format!("Failed to get buffer size: {}", e))
+}
+
+#[tauri::command]
+async fn get_audio_data_chunk(
+    max_samples: usize,
+    audio_capture: tauri::State<'_, Arc<Mutex<AudioCapture>>>
+) -> Result<Vec<f32>, String> {
+    let capture = audio_capture.lock().await;
+    capture.get_audio_data_chunk(max_samples).await
+        .map_err(|e| format!("Failed to get audio chunk: {}", e))
+}
+
+#[tauri::command]
+async fn stop_device_capture(
+    device_id: String,
+    audio_capture: tauri::State<'_, Arc<Mutex<AudioCapture>>>
+) -> Result<(), String> {
+    let mut capture = audio_capture.lock().await;
+    capture.stop_device_capture(&device_id).await
+        .map_err(|e| format!("Failed to stop device capture: {}", e))
+}
+
 fn main() {
     let audio_capture = Arc::new(Mutex::new(AudioCapture::new().unwrap()));
     let window_manager = Arc::new(Mutex::new(WindowManager::new()));
@@ -170,8 +237,15 @@ fn main() {
             start_audio_capture,
             stop_audio_capture,
             get_audio_data,
+            is_recording,
+            get_active_audio_devices,
+            get_audio_buffer_size,
+            get_audio_data_chunk,
+            stop_device_capture,
             show_floating_recorder,
             hide_floating_recorder,
+            show_main_window,
+            handle_tray_event,
             start_recording,
             stop_recording,
             ipc::send_ipc_message,

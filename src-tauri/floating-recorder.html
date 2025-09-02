@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>dgMeets - Recording</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            user-select: none;
+            -webkit-app-region: drag;
+        }
+
+        .recorder-container {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            min-width: 250px;
+            -webkit-app-region: no-drag;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-bottom: 15px;
+        }
+
+        .recording-dot {
+            width: 12px;
+            height: 12px;
+            background: #ff4757;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 600;
+            color: #fff;
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin-bottom: 10px;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 8px;
+            color: white;
+            padding: 8px 16px;
+            font-size: 12px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        .stop-btn {
+            background: rgba(255, 71, 87, 0.8);
+            border: 1px solid rgba(255, 71, 87, 0.9);
+        }
+
+        .stop-btn:hover {
+            background: rgba(255, 71, 87, 1);
+        }
+
+        .device-info {
+            font-size: 11px;
+            color: rgba(255, 255, 255, 0.7);
+            margin-top: 8px;
+        }
+
+        .timer {
+            font-size: 16px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 10px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .minimize-btn {
+            position: absolute;
+            top: 5px;
+            right: 5px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 12px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-app-region: no-drag;
+        }
+
+        .minimize-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .drag-handle {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            -webkit-app-region: drag;
+            cursor: move;
+        }
+    </style>
+</head>
+<body>
+    <div class="drag-handle"></div>
+    <button class="minimize-btn" onclick="hideFloatingRecorder()">×</button>
+    
+    <div class="recorder-container">
+        <div class="status-indicator">
+            <div class="recording-dot"></div>
+            <span class="status-text">Recording Active</span>
+        </div>
+        
+        <div class="timer" id="timer">00:00:00</div>
+        
+        <div class="controls">
+            <button class="control-btn" onclick="pauseRecording()">⏸️ Pause</button>
+            <button class="control-btn stop-btn" onclick="stopRecording()">⏹️ Stop</button>
+            <button class="control-btn" onclick="showMainWindow()">📱 Show App</button>
+        </div>
+        
+        <div class="device-info" id="deviceInfo">System Audio + Microphone</div>
+    </div>
+
+    <script>
+        let startTime = Date.now();
+        let timerInterval;
+        let isPaused = false;
+        let pausedTime = 0;
+
+        // Timer functionality
+        function updateTimer() {
+            if (isPaused) return;
+            
+            const elapsed = Date.now() - startTime - pausedTime;
+            const seconds = Math.floor(elapsed / 1000) % 60;
+            const minutes = Math.floor(elapsed / (1000 * 60)) % 60;
+            const hours = Math.floor(elapsed / (1000 * 60 * 60));
+            
+            const formatted = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            document.getElementById('timer').textContent = formatted;
+        }
+
+        // Start timer
+        timerInterval = setInterval(updateTimer, 1000);
+
+        // Control functions
+        async function stopRecording() {
+            try {
+                // Call Tauri command to stop recording
+                if (window.__TAURI__) {
+                    await window.__TAURI__.core.invoke('stop_audio_capture');
+                    await window.__TAURI__.core.invoke('hide_floating_recorder');
+                }
+                clearInterval(timerInterval);
+            } catch (error) {
+                console.error('Failed to stop recording:', error);
+            }
+        }
+
+        async function pauseRecording() {
+            if (isPaused) {
+                // Resume
+                isPaused = false;
+                startTime = Date.now() - pausedTime;
+                document.querySelector('.control-btn').innerHTML = '⏸️ Pause';
+                document.querySelector('.status-text').textContent = 'Recording Active';
+                document.querySelector('.recording-dot').style.animationPlayState = 'running';
+            } else {
+                // Pause
+                isPaused = true;
+                pausedTime = Date.now() - startTime;
+                document.querySelector('.control-btn').innerHTML = '▶️ Resume';
+                document.querySelector('.status-text').textContent = 'Recording Paused';
+                document.querySelector('.recording-dot').style.animationPlayState = 'paused';
+            }
+        }
+
+        async function showMainWindow() {
+            try {
+                if (window.__TAURI__) {
+                    await window.__TAURI__.core.invoke('show_main_window');
+                }
+            } catch (error) {
+                console.error('Failed to show main window:', error);
+            }
+        }
+
+        async function hideFloatingRecorder() {
+            try {
+                if (window.__TAURI__) {
+                    await window.__TAURI__.core.invoke('hide_floating_recorder');
+                }
+            } catch (error) {
+                console.error('Failed to hide floating recorder:', error);
+            }
+        }
+
+        // Initialize device info
+        async function updateDeviceInfo() {
+            try {
+                if (window.__TAURI__) {
+                    const devices = await window.__TAURI__.core.invoke('get_active_audio_devices');
+                    const deviceNames = devices.map(id => {
+                        if (id.includes('system')) return 'System Audio';
+                        if (id.includes('input')) return 'Microphone';
+                        return id;
+                    });
+                    document.getElementById('deviceInfo').textContent = deviceNames.join(' + ') || 'No devices active';
+                }
+            } catch (error) {
+                console.error('Failed to get device info:', error);
+            }
+        }
+
+        // Update device info every 2 seconds
+        setInterval(updateDeviceInfo, 2000);
+        updateDeviceInfo();
+
+        // Prevent context menu
+        document.addEventListener('contextmenu', e => e.preventDefault());
+        
+        // Handle window focus
+        document.addEventListener('DOMContentLoaded', () => {
+            document.body.style.opacity = '0';
+            setTimeout(() => {
+                document.body.style.transition = 'opacity 0.3s ease';
+                document.body.style.opacity = '1';
+            }, 100);
+        });
+    </script>
+</body>
+</html>
