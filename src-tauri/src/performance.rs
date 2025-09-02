@@ -1,4 +1,4 @@
-use std::time::Instant;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -10,14 +10,12 @@ pub struct PerformanceMetrics {
 }
 
 pub struct PerformanceMonitor {
-    start_time: Instant,
     metrics: PerformanceMetrics,
 }
 
 impl PerformanceMonitor {
     pub fn new() -> Self {
         Self {
-            start_time: Instant::now(),
             metrics: PerformanceMetrics {
                 audio_capture_latency: 0.0,
                 memory_usage: 0,
@@ -27,17 +25,7 @@ impl PerformanceMonitor {
         }
     }
 
-    pub async fn measure_audio_capture(&mut self, operation: impl FnOnce() -> ()) {
-        let start = Instant::now();
-        operation();
-        self.metrics.audio_capture_latency = start.elapsed().as_millis() as f64;
-    }
 
-    pub async fn measure_file_operation(&mut self, operation: impl FnOnce() -> ()) {
-        let start = Instant::now();
-        operation();
-        self.metrics.file_operations_time = start.elapsed().as_millis() as f64;
-    }
 
     pub async fn update_system_metrics(&mut self) {
         // Get system memory and CPU usage

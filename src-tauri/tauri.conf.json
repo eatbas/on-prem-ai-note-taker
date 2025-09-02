@@ -32,6 +32,9 @@
         "resizable": true,
         "fullscreen": false
       }
-    ]
+    ],
+    "security": {
+      "csp": null
+    }
   }
 }

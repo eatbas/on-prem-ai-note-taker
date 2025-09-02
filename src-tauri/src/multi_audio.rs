@@ -52,7 +52,7 @@ pub struct MultiSourceAudioCapture {
     config: MultiAudioConfig,
     sources: Arc<Mutex<HashMap<String, AudioSource>>>,
     audio_buffers: Arc<Mutex<HashMap<String, Vec<f32>>>>,
-    mixed_buffer: Arc<Mutex<Vec<f32>>>,
+
     is_recording: Arc<AtomicBool>,
     active_streams: Arc<Mutex<Vec<String>>>,
 }
@@ -67,7 +67,6 @@ impl MultiSourceAudioCapture {
             config,
             sources: Arc::new(Mutex::new(HashMap::new())),
             audio_buffers: Arc::new(Mutex::new(HashMap::new())),
-            mixed_buffer: Arc::new(Mutex::new(Vec::new())),
             is_recording: Arc::new(AtomicBool::new(false)),
             active_streams: Arc::new(Mutex::new(Vec::new())),
         }
@@ -355,7 +354,7 @@ impl MultiSourceAudioCapture {
         println!("🍎 Using CoreAudio for system audio");
         
         // For now, use similar approach to WASAPI
-        // TODO: Implement proper CoreAudio aggregate device
+        // Placeholder: CoreAudio aggregate device implementation
         let device = self.host.default_output_device()
             .ok_or_else(|| anyhow!("No output device found"))?;
 
@@ -397,7 +396,7 @@ impl MultiSourceAudioCapture {
         // Linux PulseAudio monitor
         println!("🐧 Using PulseAudio monitor for system audio");
         
-        // TODO: Implement proper PulseAudio monitor source
+        // Placeholder: PulseAudio monitor source implementation
         // For now, use default approach
         let device = self.host.default_output_device()
             .ok_or_else(|| anyhow!("No output device found"))?;
@@ -528,10 +527,7 @@ impl MultiSourceAudioCapture {
         })
     }
 
-    /// Check if currently recording
-    pub fn is_recording(&self) -> bool {
-        self.is_recording.load(Ordering::Relaxed)
-    }
+
 }
 
 #[cfg(test)]

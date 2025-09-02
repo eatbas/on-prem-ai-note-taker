@@ -5,9 +5,7 @@ pub struct TrayManager {
 }
 
 impl TrayManager {
-    pub fn new() -> Self {
-        Self { app_handle: None }
-    }
+
 
     pub fn new_with_handle(app_handle: AppHandle) -> Self {
         Self { app_handle: Some(app_handle) }

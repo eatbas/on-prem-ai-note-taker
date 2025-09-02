@@ -31,31 +31,6 @@ services:
       timeout: 10s
       retries: 5
 
-  whisper-cpp:
-    build:
-      context: ./whisper-cpp
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    ports:
-      - "8001:8001"
-    deploy:
-      resources:
-        limits:
-          cpus: '6.0'  # Use all CPU cores for whisper.cpp optimization
-          memory: 6G   # Dedicated memory for whisper.cpp
-        reservations:
-          cpus: '2.0'
-          memory: 2G
-    environment:
-      - WHISPER_MODELS_DIR=/app/models
-      - WHISPER_THREADS=6  # Use all available CPU threads
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-    volumes:
-      - whisper_cpp_models:/app/models
 
   backend:
     build:
@@ -65,22 +40,19 @@ services:
     depends_on:
       - ollama
       - redis
-      - whisper-cpp  # Add dependency on whisper.cpp service
     env_file:
       - .env  # Load all variables from centralized .env file
     environment:
       # Override specific Docker networking values
       OLLAMA_BASE_URL: http://ollama:11434  # Docker service name for internal communication
       REDIS_URL: redis://redis:6379  # Docker service name for internal communication
-      WHISPER_CPP_URL: http://whisper-cpp:8001  # whisper.cpp service URL
-      WHISPER_DOWNLOAD_ROOT: ./models
     ports:
       - "8000:8000"
     deploy:
       resources:
         limits:
-          cpus: '3.0'  # Reduced since whisper.cpp handles transcription
-          memory: 6G   # Reduced memory allocation
+          cpus: '4.0'  # Increased since no whisper.cpp service
+          memory: 8G   # Increased memory allocation
         reservations:
           cpus: '1.0'
           memory: 2G
@@ -89,8 +61,7 @@ services:
       interval: 30s
       timeout: 10s
       retries: 5
-    volumes:
-      - whisper_models:/models
+
 
   # Frontend will run on your local computer, not on VPS
   # frontend:
@@ -131,7 +102,5 @@ services:
 
 volumes:
   ollama_models:
-  whisper_models:
-  whisper_cpp_models:  # Dedicated volume for whisper.cpp models
   redis_data:
 

@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, Emitter};
+use tauri::{AppHandle, Emitter};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct IPCMessage {
@@ -30,15 +30,7 @@ impl IPCBridge {
         }
     }
 
-    // Send message to specific window
-    pub async fn send_to_window(&self, window_label: &str, event: &str, data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(ref handle) = self.app_handle {
-            if let Some(window) = handle.get_webview_window(window_label) {
-                window.emit(event, data)?;
-            }
-        }
-        Ok(())
-    }
+
 
     // Broadcast to all windows
     pub async fn broadcast(&self, event: &str, data: serde_json::Value) -> Result<(), Box<dyn std::error::Error>> {

@@ -17,6 +17,4 @@ pub fn load_environment() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-pub fn get_env_var(key: &str) -> Option<String> {
-    env::var(key).ok()
-}
+

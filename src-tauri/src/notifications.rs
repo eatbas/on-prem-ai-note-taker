@@ -1,16 +1,16 @@
 use tauri::AppHandle;
 
 pub struct NotificationManager {
-    app_handle: Option<AppHandle>,
+
 }
 
 impl NotificationManager {
     pub fn new() -> Self {
-        Self { app_handle: None }
+        Self {}
     }
 
-    pub fn new_with_handle(app_handle: AppHandle) -> Self {
-        Self { app_handle: Some(app_handle) }
+    pub fn new_with_handle(_app_handle: AppHandle) -> Self {
+        Self {}
     }
 
     pub async fn show_notification(&self, title: &str, body: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -86,17 +86,5 @@ impl NotificationManager {
         Ok(())
     }
 
-    pub async fn show_recording_notification(&self, is_recording: bool) -> Result<(), Box<dyn std::error::Error>> {
-        if is_recording {
-            self.show_notification(
-                "Recording Started",
-                "dgMeets is now recording your meeting"
-            ).await
-        } else {
-            self.show_notification(
-                "Recording Stopped",
-                "Your meeting recording has been saved"
-            ).await
-        }
-    }
+
 }
