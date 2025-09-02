@@ -469,19 +469,7 @@ fn main() {
             let coord_state = StdArc::new(TokioMutex::new(coord));
             app.manage(coord_state.clone());
 
-            // Listen to audio:chunk and forward to coordinator
-            let app_handle = app.handle().clone();
-            app_handle.listen_global("audio:chunk", move |event| {
-                if let Some(payload) = event.payload() {
-                    if let Ok(meta) = serde_json::from_str::<ChunkEvent>(payload) {
-                        let coord_state = coord_state.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let coordinator = coord_state.lock().await;
-                            coordinator.handle_chunk(&meta.session_id, &meta.path, meta.start_ms, meta.end_ms).await;
-                        });
-                    }
-                }
-            });
+            // Note: Coordinator is invoked directly from plugin on chunk emit
             Ok(())
         })
         .manage(audio_capture)
@@ -524,6 +512,7 @@ fn main() {
             audio_capture_plugin::ac_stop_all,
             audio_capture_plugin::ac_get_active_session_info,
             audio_capture_plugin::ac_stop_and_finalize,
+            audio_capture_plugin::ac_toggle_separate_emission,
             // Phase 4: Multi-audio and Whisper commands
             discover_audio_sources,
             start_multi_recording,

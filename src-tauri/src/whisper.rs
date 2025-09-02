@@ -194,16 +194,16 @@ pub struct DiarizationTurn {
 }
 
 #[tauri::command]
-pub async fn diarize_wav_file(path: String) -> Result<Vec<DiarizationTurn>> {
+pub async fn diarize_wav_file(path: String) -> Result<Vec<DiarizationTurn>, String> {
     let base = std::env::var("LOCAL_DIARIZER_URL").unwrap_or_else(|_| "http://127.0.0.1:8124".to_string());
     let url = format!("{}/diarize", base);
     let client = reqwest::Client::new();
-    let form = reqwest::multipart::Form::new()
-        .file("file", path)
-        .map_err(|e| anyhow!(e.to_string()))?;
+    let bytes = tokio::fs::read(&path).await.map_err(|e| e.to_string())?;
+    let part = reqwest::multipart::Part::bytes(bytes).file_name("audio.wav");
+    let form = reqwest::multipart::Form::new().part("file", part);
     let resp = client.post(url).multipart(form).send().await
-        .map_err(|e| anyhow!(e.to_string()))?;
-    let json: serde_json::Value = resp.json().await.map_err(|e| anyhow!(e.to_string()))?;
+        .map_err(|e| e.to_string())?;
+    let json: serde_json::Value = resp.json().await.map_err(|e| e.to_string())?;
     let turns = json.get("turns").and_then(|v| v.as_array()).cloned().unwrap_or_default();
     let mut out = Vec::new();
     for t in turns {
@@ -233,9 +233,9 @@ impl LocalWhisperService {
         let base = std::env::var("LOCAL_TRANSCRIBER_URL").unwrap_or_else(|_| "http://127.0.0.1:8123".to_string());
         let url = format!("{}/transcribe", base);
         let client = reqwest::Client::new();
-        let form = reqwest::multipart::Form::new()
-            .file("file", path)
-            .map_err(|e| anyhow!(e.to_string()))?;
+        let bytes = tokio::fs::read(path).await.map_err(|e| anyhow!(e.to_string()))?;
+        let part = reqwest::multipart::Part::bytes(bytes).file_name("audio.wav");
+        let form = reqwest::multipart::Form::new().part("file", part);
         let resp = client.post(url).multipart(form).send().await
             .map_err(|e| anyhow!(e.to_string()))?;
         let json: serde_json::Value = resp.json().await.map_err(|e| anyhow!(e.to_string()))?;

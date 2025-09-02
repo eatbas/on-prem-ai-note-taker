@@ -14,6 +14,7 @@ export default function LiveTranscript() {
   const [rows, setRows] = useState<PartialEvent[]>([])
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [separate, setSeparate] = useState(false)
   const unsubRef = useRef<() => void>()
 
   useEffect(() => {
@@ -76,6 +77,25 @@ export default function LiveTranscript() {
         <button onClick={stop} disabled={busy}>Stop</button>
         <div style={{ flex: 1 }} />
         <button onClick={exportTxt} disabled={!rows.length}>Export .txt</button>
+      </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#374151' }}>
+          <input
+            type="checkbox"
+            checked={separate}
+            onChange={async (e) => {
+              const enabled = e.target.checked
+              setSeparate(enabled)
+              try {
+                await invoke('ac_toggle_separate_emission', { enabled })
+              } catch (err) {
+                console.error('toggle separate failed', err)
+              }
+            }}
+          />
+          Keep tracks separate (emit mic/system separately)
+        </label>
       </div>
 
       <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, padding: 12, maxHeight: 420, overflow: 'auto' }}>

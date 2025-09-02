@@ -3,6 +3,7 @@ use std::{path::PathBuf, sync::Arc, time::{Duration}};
 use tokio::{sync::Mutex, time::sleep};
 use anyhow::{Result, anyhow};
 use uuid::Uuid;
+use tauri::{Emitter, Manager};
 
 use crate::multi_audio::{MultiSourceAudioCapture, MultiAudioConfig, AudioSource, AudioSourceType};
 
@@ -29,6 +30,7 @@ pub struct AudioChunker {
     kind: Option<String>,
     start_instant_ms: u128,
     chunk_index: u64,
+    emit_separate: bool,
 }
 
 impl AudioChunker {
@@ -51,6 +53,7 @@ impl AudioChunker {
             kind: None,
             start_instant_ms: 0,
             chunk_index: 0,
+            emit_separate: false,
         }
     }
 
@@ -121,6 +124,7 @@ impl AudioChunker {
         let sample_rate = self.sample_rate;
         let src_ids = source_ids.clone();
         let kind_string = kind.to_string();
+        let emit_separate_flag = self.emit_separate;
 
         tokio::spawn(async move {
             let mut accumulated: Vec<f32> = Vec::new();
@@ -159,7 +163,39 @@ impl AudioChunker {
                             bytes: std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0),
                             kind: kind_string.clone(),
                         };
-                        let _ = handle.emit("audio:chunk", meta);
+                        // Emit to frontend
+                        let _ = handle.emit("audio:chunk", meta.clone());
+                        // Also forward to coordinator server-side
+                        if let Some(state_ref) = handle.try_state::<std::sync::Arc<tokio::sync::Mutex<crate::coordinator::Coordinator>>>() {
+                            let coord_state = state_ref.inner().clone();
+                            let meta_for_bg = meta.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let coordinator = coord_state.lock().await;
+                                coordinator.handle_chunk(&meta_for_bg.session_id, &meta_for_bg.path, meta_for_bg.start_ms, meta_for_bg.end_ms).await;
+                            });
+                        }
+
+                        // Optionally emit separate mic/system chunks if available
+                        if emit_separate_flag && src_ids.len() > 1 {
+                            let mic_buf = capture.get_source_audio(&src_ids[0], Some(target_samples / 5)).await;
+                            let sys_buf = capture.get_source_audio(&src_ids[1], Some(target_samples / 5)).await;
+                            if !mic_buf.is_empty() {
+                                let mic_path = session_dir.join(format!("chunk_{:04}_mic.wav", index as usize));
+                                let _ = write_wav_chunk(&mic_path, sample_rate, &mic_buf);
+                                let mut m = ChunkEvent { ..meta.clone() };
+                                m.path = mic_path.to_string_lossy().to_string();
+                                m.kind = "mic".to_string();
+                                let _ = handle.emit("audio:chunk_mic", m);
+                            }
+                            if !sys_buf.is_empty() {
+                                let sys_path = session_dir.join(format!("chunk_{:04}_sys.wav", index as usize));
+                                let _ = write_wav_chunk(&sys_path, sample_rate, &sys_buf);
+                                let mut m = ChunkEvent { ..meta.clone() };
+                                m.path = sys_path.to_string_lossy().to_string();
+                                m.kind = "system".to_string();
+                                let _ = handle.emit("audio:chunk_sys", m);
+                            }
+                        }
                     }
                 }
             }
@@ -216,6 +252,13 @@ pub async fn ac_stop_and_finalize(
         let coordinator = coord_state.lock().await;
         coordinator.post_process(&dir.to_string_lossy()).await;
     }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn ac_toggle_separate_emission(state: tauri::State<'_, Arc<Mutex<AudioChunker>>>, enabled: bool) -> Result<(), String> {
+    let mut chunker = state.lock().await;
+    chunker.emit_separate = enabled;
     Ok(())
 }
 

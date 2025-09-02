@@ -183,6 +183,12 @@ export default function App() {
                     recordingMeetingId={recordingMeetingId}
                   />
                 } />
+                <Route path="/live" element={
+                  <div style={{ padding: 16 }}>
+                    {/* Lightweight mount of LiveTranscript without the full shell if desired */}
+                    {React.createElement(require('./components/LiveTranscript').default)}
+                  </div>
+                } />
                 
                 <Route path="/meeting/:meetingId" element={<MeetingRoute />} />
                 <Route path="/admin" element={<AdminDashboard />} />
