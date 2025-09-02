@@ -163,9 +163,11 @@ export class StreamingUploader {
         // Update progress to uploading
         this.updateProgress(index, blob.size, 'uploading')
         
-        // Convert blob to file for upload
-        const file = new File([blob], `chunk_${index}_${audioType}.webm`, { 
-          type: blob.type || 'audio/webm'
+        // Convert blob to file for upload with correct extension
+        const detectedType = blob.type || 'audio/webm'
+        const extension = detectedType.includes('wav') ? 'wav' : 'webm'
+        const file = new File([blob], `chunk_${index}_${audioType}.${extension}`, { 
+          type: detectedType
         })
 
         // Upload chunk to backend

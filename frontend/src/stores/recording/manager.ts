@@ -73,8 +73,8 @@ export class GlobalRecordingManager {
 		return this.lifecycleManager.attemptResumeRecording(options)
 	}
 
-	forceStopRecording(): void {
-		this.lifecycleManager.forceStopRecording()
+	async forceStopRecording(): Promise<void> {
+		await this.lifecycleManager.forceStopRecording()
 	}
 
 	// Public API Methods - State Queries

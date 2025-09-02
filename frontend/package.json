@@ -10,7 +10,10 @@
 		"analyze": "npx vite-bundle-analyzer dist",
 		"preview": "vite preview --port 5173",
 		"type-check": "tsc --noEmit",
-		"size-check": "npx bundlesize"
+		"size-check": "npx bundlesize",
+		"unused-check": "npx unimported",
+		"unused-files": "npx unimported --show-unused-files",
+		"unused-exports": "npx ts-unused-exports tsconfig.json"
 	},
 	"dependencies": {
 		"clsx": "^2.1.1",

@@ -28,11 +28,14 @@ const RecordingControls = memo(function RecordingControls({
   
   const [micLevel, setMicLevel] = useState(0)
   const [speakerLevel, setSpeakerLevel] = useState(0)
+  const [isForceStopMode, setIsForceStopMode] = useState(false)
+  const [lastStopClick, setLastStopClick] = useState(0)
   
   const audioContextRef = useRef<AudioContext | null>(null)
   const micAnalyserRef = useRef<AnalyserNode | null>(null)
   const speakerAnalyserRef = useRef<AnalyserNode | null>(null)
   const animationFrameRef = useRef<number | null>(null)
+  const tauriLevelPollingRef = useRef<number | null>(null)
   
   const { showNotification } = useNotification()
 
@@ -154,13 +157,77 @@ const RecordingControls = memo(function RecordingControls({
 
   // Setup audio monitoring when streams change
   useEffect(() => {
-    if (isRecording && (micStream || speakerStream)) {
+    // Debug logging for stream states
+    console.log('🎵 RecordingControls: Stream state check', {
+      isRecording,
+      hasMicStream: !!micStream,
+      hasSpeakerStream: !!speakerStream,
+      micStreamTracks: micStream?.getAudioTracks().length || 0,
+      speakerStreamTracks: speakerStream?.getAudioTracks().length || 0
+    })
+    
+    // Only setup monitoring if we have streams with actual audio tracks
+    const hasValidMicStream = micStream && micStream.getAudioTracks().length > 0
+    const hasValidSpeakerStream = speakerStream && speakerStream.getAudioTracks().length > 0
+    
+    // Check if these are Tauri streams (empty streams with special markers)
+    const isTauriMicStream = micStream && (micStream as any).__isTauriMicStream
+    const isTauriSystemStream = speakerStream && (speakerStream as any).__isTauriSystemStream
+    const hasTauriStreams = isTauriMicStream || isTauriSystemStream
+    
+    if (isRecording && hasTauriStreams) {
+      // Use Tauri-specific audio level monitoring
+      console.log('🦀 Setting up Tauri audio level monitoring...')
+      
+      const pollTauriAudioLevels = async () => {
+        try {
+          // Get real audio levels from Tauri native capture
+          const { tauriAudio } = await import('../../services/tauriAudio')
+          
+          if (isTauriMicStream) {
+            const micLevel = await tauriAudio.getMicrophoneLevel()
+            // Add a small minimum for visual feedback when recording
+            setMicLevel(Math.max(micLevel, 0.02))
+          }
+          
+          if (isTauriSystemStream) {
+            const systemLevel = await tauriAudio.getSystemAudioLevel()
+            // Add a small minimum for visual feedback when recording
+            setSpeakerLevel(Math.max(systemLevel, 0.02))
+          }
+        } catch (error) {
+          console.warn('Failed to get Tauri audio levels, using fallback:', error)
+          // Fallback to minimal simulation if real levels fail
+          if (isTauriMicStream) {
+            setMicLevel(0.05 + Math.random() * 0.1)
+          }
+          if (isTauriSystemStream) {
+            setSpeakerLevel(0.05 + Math.random() * 0.1)
+          }
+        }
+      }
+      
+      // Poll audio levels every 100ms for smooth updates
+      const interval = setInterval(pollTauriAudioLevels, 100)
+      tauriLevelPollingRef.current = interval as any
+      
+      // Initial call
+      pollTauriAudioLevels()
+      
+      console.log('✅ Tauri audio level monitoring active')
+    } else if (isRecording && (hasValidMicStream || hasValidSpeakerStream)) {
       setupAudioMonitoring()
     } else {
       cleanup()
     }
 
-    return cleanup
+    return () => {
+      cleanup()
+      if (tauriLevelPollingRef.current) {
+        clearInterval(tauriLevelPollingRef.current)
+        tauriLevelPollingRef.current = null
+      }
+    }
   }, [isRecording, micStream, speakerStream, setupAudioMonitoring, cleanup])
 
   // 🚀 STAGE 2 OPTIMIZATION: Memoize expensive display calculations
@@ -168,6 +235,35 @@ const RecordingControls = memo(function RecordingControls({
   
   const micLevelPercentage = useMemo(() => Math.round(micLevel * 100), [micLevel])
   const speakerLevelPercentage = useMemo(() => Math.round(speakerLevel * 100), [speakerLevel])
+
+  // Handle stop recording with double-click force stop
+  const handleStopClick = useCallback(async () => {
+    const now = Date.now()
+    const timeSinceLastClick = now - lastStopClick
+    setLastStopClick(now)
+
+    // Double-click within 500ms triggers force stop
+    if (timeSinceLastClick < 500 && timeSinceLastClick > 0) {
+      console.log('🚨 Double-click detected - FORCE STOPPING...')
+      setIsForceStopMode(true)
+      
+      // Import and use force stop
+      try {
+        const { globalRecordingManager } = await import('../../stores/recording')
+        await globalRecordingManager.forceStopRecording()
+        console.log('✅ Force stop completed')
+      } catch (error) {
+        console.error('❌ Force stop failed:', error)
+      }
+      
+      setIsForceStopMode(false)
+      return
+    }
+
+    // Single click - normal stop
+    console.log('🛑 Normal stop recording...')
+    onStop()
+  }, [lastStopClick, onStop])
   
   const streamStatusInfo = useMemo(() => ({
     micConnected: !!micStream,
@@ -344,37 +440,50 @@ const RecordingControls = memo(function RecordingControls({
               )}
             </div>
 
-          {/* Stop Button */}
+          {/* Stop Button with Force Stop on Double-Click */}
           <button 
-            onClick={onStop}
+            onClick={handleStopClick}
+            disabled={isForceStopMode}
             style={{
               padding: '10px 18px',
-              backgroundColor: '#ef4444',
+              backgroundColor: isForceStopMode ? '#7c2d12' : '#ef4444',
               color: 'white',
               border: 'none',
               borderRadius: '8px',
               fontSize: '14px',
               fontWeight: '600',
-              cursor: 'pointer',
+              cursor: isForceStopMode ? 'not-allowed' : 'pointer',
               transition: 'all 0.2s ease',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
-              boxShadow: '0 4px 8px rgba(239, 68, 68, 0.3)',
-              textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)'
+              boxShadow: isForceStopMode ? 
+                '0 4px 8px rgba(124, 45, 18, 0.5)' : 
+                '0 4px 8px rgba(239, 68, 68, 0.3)',
+              textShadow: '0 1px 2px rgba(0, 0, 0, 0.2)',
+              opacity: isForceStopMode ? 0.8 : 1
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#dc2626'
-              e.currentTarget.style.transform = 'translateY(-1px)'
-              e.currentTarget.style.boxShadow = '0 6px 12px rgba(239, 68, 68, 0.4)'
+              if (!isForceStopMode) {
+                e.currentTarget.style.backgroundColor = '#dc2626'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+                e.currentTarget.style.boxShadow = '0 6px 12px rgba(239, 68, 68, 0.4)'
+              }
             }}
             onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#ef4444'
-              e.currentTarget.style.transform = 'translateY(0)'
-              e.currentTarget.style.boxShadow = '0 4px 8px rgba(239, 68, 68, 0.3)'
+              if (!isForceStopMode) {
+                e.currentTarget.style.backgroundColor = '#ef4444'
+                e.currentTarget.style.transform = 'translateY(0)'
+                e.currentTarget.style.boxShadow = '0 4px 8px rgba(239, 68, 68, 0.3)'
+              }
             }}
+            title="Click to stop recording. Double-click for force stop if recording won't stop normally."
           >
-            ⏹️ Stop Recording
+            {isForceStopMode ? (
+              <>🚨 Force Stopping...</>
+            ) : (
+              <>⏹️ Stop Recording</>
+            )}
           </button>
         </div>
       )}

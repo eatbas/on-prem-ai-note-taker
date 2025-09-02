@@ -33,11 +33,11 @@ export class RecordingLifecycleManager {
 			const state = this.stateManager.getState()
 			this.stateManager.updateState({ micChunkIndex: 0 })
 			
-			// Create data handler for audio chunks
-			const micChunkIndex = { value: 0 }
+			// Create data handler for mixed audio chunks (optimized for Whisper)
+			const chunkIndex = { value: 0 }
 			const onDataAvailable = AudioRecordingManager.createDataAvailableHandler(
 				meetingId,
-				micChunkIndex,
+				chunkIndex,
 				(error) => this.stateManager.setError(error)
 			)
 			
@@ -171,11 +171,11 @@ export class RecordingLifecycleManager {
 	}
 
 	// Force stop recording (for emergencies)
-	forceStopRecording(): void {
+	async forceStopRecording(): Promise<void> {
 		console.warn('🚨 EMERGENCY: Force stopping recording and releasing microphone...')
 		
 		const state = this.stateManager.getState()
-		this.audioManager.forceStopRecording(state)
+		await this.audioManager.forceStopRecording(state)
 		
 		// Clear saved state
 		this.stateManager.clearSavedState()

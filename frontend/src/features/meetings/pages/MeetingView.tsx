@@ -31,16 +31,11 @@ const MeetingView = memo(function MeetingView({ meetingId, onBack }: MeetingView
   const { showToast, ToastContainer } = useToast()
 
   // Audio state
-  const [audioUrls, setAudioUrls] = useState<{
-    microphone: string | null
-    system: string | null
-  }>({ microphone: null, system: null })
-  const [activeAudioType, setActiveAudioType] = useState<'microphone' | 'system'>('microphone')
+  const [audioUrl, setAudioUrl] = useState<string | null>(null)
   const [isLoadingAudio, setIsLoadingAudio] = useState(false)
-  const [dualAudioInfo, setDualAudioInfo] = useState<any>(null)
+  const [audioInfo, setAudioInfo] = useState<any>(null)
   
-  const micAudioRef = useRef<HTMLAudioElement>(null)
-  const systemAudioRef = useRef<HTMLAudioElement>(null)
+  const audioRef = useRef<HTMLAudioElement>(null)
 
   // Delete state
   const [showDeleteModal, setShowDeleteModal] = useState(false)
@@ -54,7 +49,7 @@ const MeetingView = memo(function MeetingView({ meetingId, onBack }: MeetingView
 
   // Load audio data when audio tab is active
   useEffect(() => {
-    if (activeTab === 'audio' && meeting && !dualAudioInfo) {
+    if (activeTab === 'audio' && meeting && !audioInfo) {
       loadAudioData()
     }
   }, [activeTab, meeting])
@@ -93,43 +88,86 @@ const MeetingView = memo(function MeetingView({ meetingId, onBack }: MeetingView
       const chunks = await db.chunks.where('meetingId').equals(meetingId).toArray()
       
       if (chunks.length > 0) {
-        // Group chunks by audio type
+        // Handle mixed audio chunks (optimized for Whisper) or fallback to separate streams
+        const mixedChunks = chunks.filter(c => c.audioType === 'mixed')
         const micChunks = chunks.filter(c => c.audioType === 'microphone')
         const systemChunks = chunks.filter(c => c.audioType === 'system' || c.audioType === 'speaker')
         
-        // Calculate statistics
-        const micSize = micChunks.reduce((sum, c) => sum + c.blob.size, 0)
-        const systemSize = systemChunks.reduce((sum, c) => sum + c.blob.size, 0)
+        // Prioritize mixed chunks (best for Whisper), then microphone, then system
+        const primaryChunks = mixedChunks.length > 0 ? mixedChunks : 
+                             micChunks.length > 0 ? micChunks : systemChunks
+        const allChunks = chunks.filter(c => 
+          c.audioType === 'mixed' || 
+          c.audioType === 'microphone' || 
+          c.audioType === 'system' || 
+          c.audioType === 'speaker'
+        )
         
-        setDualAudioInfo({
-          microphone: {
-            chunks: micChunks.length,
-            size: micSize,
-            hasData: micSize > 0,
-            whisperBenefit: micSize > 0 ? 'Available' : 'No data'
-          },
-          system: {
-            chunks: systemChunks.length,
-            size: systemSize,
-            hasData: systemSize > 0,
-            whisperBenefit: systemSize > 0 ? 'Available' : 'No data'
-          },
-          hasSeparateStreams: micChunks.length > 0 && systemChunks.length > 0
-        })
+        if (primaryChunks.length > 0) {
+          // Calculate statistics for all chunks combined
+          const totalSize = allChunks.reduce((sum, c) => sum + c.blob.size, 0)
+          
+          setAudioInfo({
+            chunks: allChunks.length,
+            size: totalSize,
+            hasData: totalSize > 0,
+            mixedChunks: mixedChunks.length,
+            microphoneChunks: micChunks.length,
+            systemChunks: systemChunks.length,
+            audioType: mixedChunks.length > 0 ? 'mixed' : 
+                      micChunks.length > 0 ? 'microphone' : 'system'
+          })
 
-        // Create audio URLs for playback
-        if (micChunks.length > 0) {
-          const micBlobs = micChunks.sort((a, b) => a.index - b.index).map(c => c.blob)
-          const micFile = new File(micBlobs, 'microphone.webm', { type: 'audio/webm' })
-          const micUrl = URL.createObjectURL(micFile)
-          setAudioUrls(prev => ({ ...prev, microphone: micUrl }))
-        }
-
-        if (systemChunks.length > 0) {
-          const systemBlobs = systemChunks.sort((a, b) => a.index - b.index).map(c => c.blob)
-          const systemFile = new File(systemBlobs, 'system.webm', { type: 'audio/webm' })
-          const systemUrl = URL.createObjectURL(systemFile)
-          setAudioUrls(prev => ({ ...prev, system: systemUrl }))
+          // Use proper audio file assembly for playback
+          try {
+            console.log(`🎵 Assembling audio file for playback...`)
+            if (mixedChunks.length > 0) {
+              console.log(`🎵 Using mixed audio (mic+system) - optimal for Whisper (${primaryChunks.length} chunks)`)
+            } else if (micChunks.length > 0) {
+              console.log(`🎵 Using microphone audio (${primaryChunks.length} chunks)`)
+            } else {
+              console.log(`🎵 Using system audio (${primaryChunks.length} chunks)`)
+            }
+            
+            // Use the proper file assembly function that handles audio format correctly
+            const audioFiles = await assembleFilesByAudioType(meetingId)
+            
+            // Get the best available audio file for playback
+            let audioFile: File | null = null
+            if (audioFiles.mixed) {
+              audioFile = audioFiles.mixed
+              console.log(`🎙️ Using mixed audio file for playback: ${(audioFile.size / 1024).toFixed(2)} KB`)
+            } else if (audioFiles.microphone) {
+              audioFile = audioFiles.microphone
+              console.log(`🎤 Using microphone audio file for playback: ${(audioFile.size / 1024).toFixed(2)} KB`)
+            } else if (audioFiles.system || audioFiles.speaker) {
+              audioFile = audioFiles.system || audioFiles.speaker!
+              console.log(`🔊 Using system audio file for playback: ${(audioFile.size / 1024).toFixed(2)} KB`)
+            }
+            
+            if (audioFile) {
+              const url = URL.createObjectURL(audioFile)
+              setAudioUrl(url)
+              console.log(`✅ Audio file ready for playback: ${audioFile.name}`)
+            } else {
+              console.error('❌ No valid audio file found for playback')
+              showToast('No valid audio file found', 'error')
+            }
+            
+          } catch (audioError) {
+            console.error('❌ Failed to assemble audio file:', audioError)
+            showToast('Failed to prepare audio for playback', 'error')
+            
+            // Fallback to simple blob concatenation (may not work well)
+            const audioBlobs = primaryChunks.sort((a, b) => a.index - b.index).map(c => c.blob)
+            const firstBlob = audioBlobs[0]
+            const detectedType = firstBlob.type || 'audio/webm'
+            const fileExtension = detectedType.includes('wav') ? 'wav' : 'webm'
+            const audioFile = new File(audioBlobs, `audio.${fileExtension}`, { type: detectedType })
+            const url = URL.createObjectURL(audioFile)
+            setAudioUrl(url)
+            console.log(`⚠️ Using fallback audio concatenation`)
+          }
         }
       }
     } catch (error) {
@@ -227,8 +265,8 @@ const MeetingView = memo(function MeetingView({ meetingId, onBack }: MeetingView
       } else if (deleteOperation === 'audio') {
         await deleteAudioChunksLocally(meetingId)
         showToast('Audio chunks deleted', 'success')
-        setDualAudioInfo(null)
-        setAudioUrls({ microphone: null, system: null })
+        setAudioInfo(null)
+        setAudioUrl(null)
       }
     } catch (error) {
       console.error('Failed to delete:', error)
@@ -240,10 +278,11 @@ const MeetingView = memo(function MeetingView({ meetingId, onBack }: MeetingView
     }
   }
 
-  const handleDownload = async (type: 'microphone' | 'system') => {
+  const handleDownload = async () => {
     try {
       const files = await assembleFilesByAudioType(meetingId)
-      const file = type === 'microphone' ? files.microphone : files.speaker || files.system
+      // Prioritize microphone audio, fallback to system audio
+      const file = files.microphone || files.speaker || files.system
       
       if (file) {
         const url = URL.createObjectURL(file)
@@ -271,12 +310,9 @@ const MeetingView = memo(function MeetingView({ meetingId, onBack }: MeetingView
       case 'audio':
         return (
           <MeetingAudio
-            audioUrls={audioUrls}
-            activeAudioType={activeAudioType}
-            setActiveAudioType={setActiveAudioType}
-            micAudioRef={micAudioRef}
-            systemAudioRef={systemAudioRef}
-            dualAudioInfo={dualAudioInfo}
+            audioUrl={audioUrl}
+            audioRef={audioRef}
+            audioInfo={audioInfo}
             isLoadingAudio={isLoadingAudio}
             onDownload={handleDownload}
           />

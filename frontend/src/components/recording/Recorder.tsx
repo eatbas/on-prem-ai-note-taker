@@ -282,6 +282,7 @@ export default function Recorder({
         showStopButton={showStopButton}
         error={globalRecordingState.error}
         micStream={globalRecordingState.micStream}
+        speakerStream={globalRecordingState.systemStream}
       />
 
 

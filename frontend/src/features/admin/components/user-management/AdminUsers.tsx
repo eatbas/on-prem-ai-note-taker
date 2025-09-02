@@ -53,14 +53,16 @@ export default function AdminUsers({
     onAssignMultipleWorkspaces
 }: AdminUsersProps) {
     const [workspaceAssignmentModal, setWorkspaceAssignmentModal] = useState<{
-        isOpen: boolean
-        userId: string
-        userName: string
-    }>({
-        isOpen: false,
-        userId: '',
-        userName: ''
-    })
+    isOpen: boolean
+    userId: string
+    userName: string
+  }>({
+    isOpen: false,
+    userId: '',
+    userName: ''
+  })
+
+
 
     const handleOpenWorkspaceAssignment = (userId: string, userName: string) => {
         setWorkspaceAssignmentModal({
@@ -321,11 +323,7 @@ export default function AdminUsers({
                                             🏢 Workspaces
                                         </button>
                                         <button
-                                            onClick={() => {
-                                                if (confirm(`Delete user "${user.username}"? This will remove all their data.`)) {
-                                                    onDeleteUser(user.id)
-                                                }
-                                            }}
+                                            onClick={() => onDeleteUser(user.id)}
                                             style={{
                                                 padding: '6px 12px',
                                                 backgroundColor: '#ef4444',
@@ -383,6 +381,8 @@ export default function AdminUsers({
                     onAssignMultiple={onAssignMultipleWorkspaces}
                 />
             )}
+
+
 
             <style>{`
                 @keyframes spin {

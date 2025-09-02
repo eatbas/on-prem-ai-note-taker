@@ -9,13 +9,17 @@ export interface GlobalRecordingState {
 	chunkIndex: number
 	recordingInterval: number | null
 	startTime: number | null
-	// Simplified single-stream audio recording state
+	// Audio recording state (supports both web and Tauri)
 	micStream: MediaStream | null
 	micRecorder: MediaRecorder | null
+	systemStream?: MediaStream | null
+	systemRecorder?: MediaRecorder | null
 	micChunkIndex: number
 	forceDataInterval: number | null
 	error: string | null
 	language: 'tr' | 'en' | 'auto'
+	usingTauriAudio?: boolean
+	usingDualCapture?: boolean
 }
 
 export interface RecordingOptions {

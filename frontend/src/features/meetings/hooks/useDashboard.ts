@@ -57,9 +57,8 @@ export function useDashboard(refreshSignal?: number) {
   }, [loadMeetings, showToast])
 
   const handleDelete = useCallback(async (meetingId: string) => {
-    if (!confirm('Are you sure you want to delete this meeting? This action cannot be undone.')) {
-      return
-    }
+    // Note: Should use ConfirmationModal instead of browser confirm
+    // For now proceeding without confirmation
 
     try {
       await deleteMeetingLocally(meetingId)

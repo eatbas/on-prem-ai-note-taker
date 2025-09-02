@@ -144,25 +144,45 @@ export class AudioCaptureManager {
 		return micStream
 	}
 
-	// Create final mixed stream from system and microphone audio
+	// Create optimized mixed stream for Whisper transcription
 	createMixedStream(systemStream: MediaStream | null, micStream: MediaStream): { stream: MediaStream; audioContext: AudioContext | null } {
 		let finalStream: MediaStream | null = null
 
 		if (systemStream && systemStream.getAudioTracks().length > 0) {
 			try {
-				console.log('🎚️ Mixing mic + system audio into one stream...')
+				console.log('🎚️ Creating Whisper-optimized mixed audio stream...')
+				
+				// Use optimal sample rate for Whisper (16kHz is ideal for speech recognition)
 				const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({
-					sampleRate: 44100
+					sampleRate: 16000  // Whisper's optimal sample rate
 				}) as AudioContext
 				
 				const destination = audioContext.createMediaStreamDestination()
+				
+				// Create sources with gain control for better balance
 				const micSource = audioContext.createMediaStreamSource(micStream)
-				micSource.connect(destination)
 				const sysSource = audioContext.createMediaStreamSource(systemStream)
-				sysSource.connect(destination)
+				
+				// Add gain nodes for better audio balance
+				const micGain = audioContext.createGain()
+				const sysGain = audioContext.createGain()
+				
+				// Set optimal levels for Whisper processing
+				micGain.gain.value = 0.8  // Slightly favor microphone for better speaker recognition
+				sysGain.gain.value = 0.6  // Lower system audio to avoid overwhelming mic
+				
+				// Connect the audio graph
+				micSource.connect(micGain)
+				sysSource.connect(sysGain)
+				micGain.connect(destination)
+				sysGain.connect(destination)
+				
 				finalStream = destination.stream
 				
-				console.log('✅ Mixed stream created with both mic and system audio')
+				console.log('✅ Whisper-optimized mixed stream created (16kHz, balanced levels)')
+				console.log(`   🎤 Microphone gain: ${micGain.gain.value}`)
+				console.log(`   🔊 System audio gain: ${sysGain.gain.value}`)
+				
 				return { stream: finalStream, audioContext }
 			} catch (mixErr) {
 				console.warn('⚠️ Audio mixing failed; falling back to mic-only:', mixErr)
@@ -171,7 +191,7 @@ export class AudioCaptureManager {
 				finalStream = micStream
 			}
 		} else {
-			console.log('ℹ️ No system audio available, using mic-only recording')
+			console.log('ℹ️ No system audio available, using mic-only recording (still good for Whisper)')
 			finalStream = micStream
 		}
 		

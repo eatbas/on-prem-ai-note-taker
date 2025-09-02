@@ -1,94 +1,63 @@
 import React, { useState, useRef, useEffect } from 'react'
 
 interface MeetingAudioProps {
-  audioUrls: {
-    microphone: string | null
-    system: string | null
-  }
-  activeAudioType: 'microphone' | 'system'
-  setActiveAudioType: (type: 'microphone' | 'system') => void
-  micAudioRef: React.RefObject<HTMLAudioElement>
-  systemAudioRef: React.RefObject<HTMLAudioElement>
-  dualAudioInfo: any
+  audioUrl: string | null
+  audioRef: React.RefObject<HTMLAudioElement>
+  audioInfo: any
   isLoadingAudio: boolean
-  onDownload: (type: 'microphone' | 'system') => void
+  onDownload: () => void
 }
 
 export default function MeetingAudio({
-  audioUrls,
-  activeAudioType,
-  setActiveAudioType,
-  micAudioRef,
-  systemAudioRef,
-  dualAudioInfo,
+  audioUrl,
+  audioRef,
+  audioInfo,
   isLoadingAudio,
   onDownload
 }: MeetingAudioProps) {
-  const [playbackState, setPlaybackState] = useState<{
-    microphone: 'playing' | 'paused' | 'stopped'
-    system: 'playing' | 'paused' | 'stopped'
-  }>({
-    microphone: 'stopped',
-    system: 'stopped'
-  })
+  const [playbackState, setPlaybackState] = useState<'playing' | 'paused' | 'stopped'>('stopped')
 
-  // Sync playback state with audio elements
+  // Sync playback state with audio element
   useEffect(() => {
-    const micAudio = micAudioRef.current
-    const systemAudio = systemAudioRef.current
+    const audio = audioRef.current
 
-    const updatePlaybackState = (audio: HTMLAudioElement, type: 'microphone' | 'system') => {
+    const updatePlaybackState = (audio: HTMLAudioElement) => {
       if (audio.paused) {
-        setPlaybackState(prev => ({ ...prev, [type]: audio.currentTime === 0 ? 'stopped' : 'paused' }))
+        setPlaybackState(audio.currentTime === 0 ? 'stopped' : 'paused')
       } else {
-        setPlaybackState(prev => ({ ...prev, [type]: 'playing' }))
+        setPlaybackState('playing')
       }
     }
 
-    const micPlayHandler = () => updatePlaybackState(micAudio!, 'microphone')
-    const micPauseHandler = () => updatePlaybackState(micAudio!, 'microphone')
-    const micEndedHandler = () => setPlaybackState(prev => ({ ...prev, microphone: 'stopped' }))
+    const playHandler = () => updatePlaybackState(audio!)
+    const pauseHandler = () => updatePlaybackState(audio!)
+    const endedHandler = () => setPlaybackState('stopped')
 
-    const systemPlayHandler = () => updatePlaybackState(systemAudio!, 'system')
-    const systemPauseHandler = () => updatePlaybackState(systemAudio!, 'system')
-    const systemEndedHandler = () => setPlaybackState(prev => ({ ...prev, system: 'stopped' }))
-
-    if (micAudio) {
-      micAudio.addEventListener('play', micPlayHandler)
-      micAudio.addEventListener('pause', micPauseHandler)
-      micAudio.addEventListener('ended', micEndedHandler)
-    }
-
-    if (systemAudio) {
-      systemAudio.addEventListener('play', systemPlayHandler)
-      systemAudio.addEventListener('pause', systemPauseHandler)
-      systemAudio.addEventListener('ended', systemEndedHandler)
+    if (audio) {
+      audio.addEventListener('play', playHandler)
+      audio.addEventListener('pause', pauseHandler)
+      audio.addEventListener('ended', endedHandler)
     }
 
     return () => {
-      if (micAudio) {
-        micAudio.removeEventListener('play', micPlayHandler)
-        micAudio.removeEventListener('pause', micPauseHandler)
-        micAudio.removeEventListener('ended', micEndedHandler)
-      }
-      if (systemAudio) {
-        systemAudio.removeEventListener('play', systemPlayHandler)
-        systemAudio.removeEventListener('pause', systemPauseHandler)
-        systemAudio.removeEventListener('ended', systemEndedHandler)
+      if (audio) {
+        audio.removeEventListener('play', playHandler)
+        audio.removeEventListener('pause', pauseHandler)
+        audio.removeEventListener('ended', endedHandler)
       }
     }
-  }, [micAudioRef, systemAudioRef, audioUrls])
+  }, [audioRef, audioUrl])
 
-  const handlePlay = (type: 'microphone' | 'system') => {
-    const audio = type === 'microphone' ? micAudioRef.current : systemAudioRef.current
+  const handlePlay = () => {
+    const audio = audioRef.current
     if (audio) {
       audio.play()
       // State will be updated by event listeners
     }
   }
 
-  const handlePause = (type: 'microphone' | 'system') => {
-    const audio = type === 'microphone' ? micAudioRef.current : systemAudioRef.current
+  const handlePause = () => {
+    const audio = audioRef.current
     if (audio) {
       audio.pause()
       // State will be updated by event listeners
@@ -111,7 +80,7 @@ export default function MeetingAudio({
         marginBottom: '16px',
         color: '#1f2937'
       }}>
-        🎵 Audio Recordings
+        🎵 Audio Recording
       </h2>
 
       {isLoadingAudio && (
@@ -121,54 +90,12 @@ export default function MeetingAudio({
           color: '#6b7280'
         }}>
           <div style={{ fontSize: '32px', marginBottom: '16px' }}>⏳</div>
-          <p>Loading audio files...</p>
+          <p>Loading audio file...</p>
         </div>
       )}
 
-      {dualAudioInfo && (
+      {audioInfo && (
         <div style={{ marginBottom: '24px' }}>
-          {/* Audio Type Selector */}
-          <div style={{ 
-            display: 'flex', 
-            gap: '12px', 
-            marginBottom: '20px',
-            justifyContent: 'center'
-          }}>
-            <button
-              onClick={() => setActiveAudioType('microphone')}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: activeAudioType === 'microphone' ? '#3b82f6' : '#f3f4f6',
-                color: activeAudioType === 'microphone' ? 'white' : '#374151',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              🎤 Microphone ({dualAudioInfo.microphone.chunks} chunks)
-            </button>
-            
-            <button
-              onClick={() => setActiveAudioType('system')}
-              style={{
-                padding: '12px 24px',
-                backgroundColor: activeAudioType === 'system' ? '#3b82f6' : '#f3f4f6',
-                color: activeAudioType === 'system' ? 'white' : '#374151',
-                border: 'none',
-                borderRadius: '6px',
-                fontSize: '14px',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              🔊 System Audio ({dualAudioInfo.system.chunks} chunks)
-            </button>
-          </div>
-
           {/* Audio Player and Info */}
           <div style={{ 
             backgroundColor: '#f8fafc',
@@ -188,15 +115,16 @@ export default function MeetingAudio({
                 color: '#1f2937',
                 margin: 0
               }}>
-                {activeAudioType === 'microphone' ? '🎤 Microphone Audio' : '🔊 System Audio'}
+                {audioInfo?.audioType === 'mixed' ? '🎙️ Mixed Audio (Optimized for Whisper)' :
+                 audioInfo?.audioType === 'system' ? '🔊 System Audio' : '🎤 Microphone Audio'}
               </h3>
               
               <div style={{ display: 'flex', gap: '8px' }}>
-                {audioUrls[activeAudioType] && (
+                {audioUrl && (
                   <>
-                    {playbackState[activeAudioType] === 'playing' ? (
+                    {playbackState === 'playing' ? (
                       <button
-                        onClick={() => handlePause(activeAudioType)}
+                        onClick={handlePause}
                         style={{
                           padding: '8px 16px',
                           backgroundColor: '#ef4444',
@@ -211,7 +139,7 @@ export default function MeetingAudio({
                       </button>
                     ) : (
                       <button
-                        onClick={() => handlePlay(activeAudioType)}
+                        onClick={handlePlay}
                         style={{
                           padding: '8px 16px',
                           backgroundColor: '#22c55e',
@@ -227,7 +155,7 @@ export default function MeetingAudio({
                     )}
                     
                     <button
-                      onClick={() => onDownload(activeAudioType)}
+                      onClick={onDownload}
                       style={{
                         padding: '8px 16px',
                         backgroundColor: '#3b82f6',
@@ -246,41 +174,14 @@ export default function MeetingAudio({
             </div>
 
             {/* Audio Element */}
-            {audioUrls[activeAudioType] && (
+            {audioUrl && (
               <audio
-                ref={activeAudioType === 'microphone' ? micAudioRef : systemAudioRef}
-                src={audioUrls[activeAudioType] || ''}
+                ref={audioRef}
+                src={audioUrl}
                 controls
                 style={{ width: '100%', marginBottom: '16px' }}
                 preload="metadata"
               />
-            )}
-
-            {/* System Audio Warning */}
-            {activeAudioType === 'system' && dualAudioInfo.system.chunks === 0 && (
-              <div style={{
-                backgroundColor: '#fef3c7',
-                border: '1px solid #f59e0b',
-                borderRadius: '6px',
-                padding: '12px',
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px'
-              }}>
-                <div style={{ fontSize: '20px' }}>⚠️</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: '600', color: '#92400e', marginBottom: '4px' }}>
-                    No System Audio Captured
-                  </div>
-                  <div style={{ fontSize: '14px', color: '#92400e' }}>
-                    System audio capture may have failed. Try these solutions:
-                    <br />• <strong>Windows:</strong> Enable "Stereo Mix" in Sound Control Panel
-                    <br />• <strong>Mac:</strong> Use apps like BlackHole or Loopback for system audio routing
-                    <br />• <strong>All:</strong> Check console logs for specific error messages
-                  </div>
-                </div>
-              </div>
             )}
 
             {/* Audio Info */}
@@ -299,7 +200,7 @@ export default function MeetingAudio({
                   Chunks
                 </div>
                 <div style={{ fontSize: '16px', fontWeight: '600', color: '#374151' }}>
-                  {dualAudioInfo[activeAudioType].chunks}
+                  {audioInfo.chunks}
                 </div>
               </div>
               
@@ -313,7 +214,7 @@ export default function MeetingAudio({
                   File Size
                 </div>
                 <div style={{ fontSize: '16px', fontWeight: '600', color: '#374151' }}>
-                  {formatFileSize(dualAudioInfo[activeAudioType].size)}
+                  {formatFileSize(audioInfo.size)}
                 </div>
               </div>
               
@@ -327,7 +228,7 @@ export default function MeetingAudio({
                   Quality
                 </div>
                 <div style={{ fontSize: '16px', fontWeight: '600', color: '#374151' }}>
-                  {dualAudioInfo[activeAudioType].hasData ? '✅ Good' : '❌ No Data'}
+                  {audioInfo.hasData ? '✅ Good' : '❌ No Data'}
                 </div>
               </div>
             </div>
@@ -335,7 +236,7 @@ export default function MeetingAudio({
         </div>
       )}
 
-      {!dualAudioInfo && !isLoadingAudio && (
+      {!audioInfo && !isLoadingAudio && (
         <div style={{ 
           textAlign: 'center', 
           color: '#6b7280', 
@@ -343,7 +244,7 @@ export default function MeetingAudio({
           padding: '60px 20px'
         }}>
           <div style={{ fontSize: '48px', marginBottom: '16px' }}>🎵</div>
-          <p>No audio recordings found</p>
+          <p>No audio recording found</p>
         </div>
       )}
     </div>

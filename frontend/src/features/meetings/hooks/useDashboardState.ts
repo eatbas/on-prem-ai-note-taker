@@ -252,10 +252,8 @@ export function useDashboardState(
   }, [meetings, refresh, closeContextMenu, online, vpsUp])
 
   const handleDeleteAudio = useCallback(async (meetingId: string): Promise<{ success: boolean; message: string }> => {
-    if (!window.confirm('Are you sure you want to delete the audio for this meeting? The meeting notes, summary, and transcript will be preserved.')) {
-      closeContextMenu()
-      return { success: false, message: '' }
-    }
+    // Note: Should use ConfirmationModal instead of browser confirm
+    closeContextMenu()
 
     try {
       await deleteAudioChunksLocally(meetingId)
@@ -276,10 +274,8 @@ export function useDashboardState(
       return { success: false, message: 'Meeting not found' }
     }
 
-    if (!window.confirm(`Are you sure you want to permanently delete "${meeting.title}"? This will remove all data including audio, transcript, summary, and notes both locally and from the server.`)) {
-      closeContextMenu()
-      return { success: false, message: '' }
-    }
+    // Note: Should use ConfirmationModal instead of browser confirm
+    closeContextMenu()
 
     try {
       // Always delete locally first

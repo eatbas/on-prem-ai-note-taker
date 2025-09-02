@@ -1,6 +1,6 @@
 import React, { useEffect, useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useToast } from '../../../components/common'
+import { useToast, ConfirmationModal } from '../../../components/common'
 import { JobQueue } from '../../../components/queue'
 
 // Import organized admin components
@@ -103,6 +103,19 @@ const AdminDashboard = memo(function AdminDashboard() {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedUser, setSelectedUser] = useState('')
+  
+  // Confirmation modal state
+  const [confirmation, setConfirmation] = useState<{
+    isOpen: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+  }>({
+    isOpen: false,
+    title: '',
+    message: '',
+    onConfirm: () => {}
+  })
   
   const { showToast, ToastContainer } = useToast()
 
@@ -225,33 +238,45 @@ const AdminDashboard = memo(function AdminDashboard() {
   }
 
   const handleDeleteUser = async (userId: string) => {
-    if (!confirm('Are you sure? This will delete the user and ALL their meetings permanently.')) {
-      return
-    }
+    const user = users.find(u => u.id === userId)
+    const userName = user?.username || 'Unknown'
     
-    try {
-      await deleteUser(userId)
-      await loadUsersData() // Reload users
-      showToast('User deleted successfully', 'success')
-    } catch (err) {
-      console.error('Failed to delete user:', err)
-      showToast(`Failed to delete user: ${err}`, 'error')
-    }
+    setConfirmation({
+      isOpen: true,
+      title: 'Delete User',
+      message: `Are you sure you want to delete user "${userName}"? This will permanently remove the user and ALL their meetings. This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await deleteUser(userId)
+          await loadUsersData() // Reload users
+          showToast('User deleted successfully', 'success')
+        } catch (err) {
+          console.error('Failed to delete user:', err)
+          showToast(`Failed to delete user: ${err}`, 'error')
+        }
+      }
+    })
   }
 
   const handleDeleteMeeting = async (meetingId: string) => {
-    if (!confirm('Are you sure? This will delete the meeting permanently.')) {
-      return
-    }
+    const meeting = meetings.find(m => m.id === meetingId)
+    const meetingTitle = meeting?.title || 'Untitled Meeting'
     
-    try {
-      await deleteMeeting(meetingId)
-      await loadMeetingsData() // Reload current page
-      showToast('Meeting deleted successfully', 'success')
-    } catch (err) {
-      console.error('Failed to delete meeting:', err)
-      showToast(`Failed to delete meeting: ${err}`, 'error')
-    }
+    setConfirmation({
+      isOpen: true,
+      title: 'Delete Meeting',
+      message: `Are you sure you want to delete "${meetingTitle}"? This will permanently remove the meeting and all its data. This action cannot be undone.`,
+      onConfirm: async () => {
+        try {
+          await deleteMeeting(meetingId)
+          await loadMeetingsData() // Reload current page
+          showToast('Meeting deleted successfully', 'success')
+        } catch (err) {
+          console.error('Failed to delete meeting:', err)
+          showToast(`Failed to delete meeting: ${err}`, 'error')
+        }
+      }
+    })
   }
 
   const handleMeetingPageChange = (offset: number) => {
@@ -273,10 +298,24 @@ const AdminDashboard = memo(function AdminDashboard() {
   }
 
   const handleDeactivateWorkspace = async (id: number) => {
-    if (!confirm('Deactivate this workspace? Users will be unassigned.')) return
-    await deactivateWorkspace(id)
-    await loadWorkspacesData()
-    showToast('Workspace deactivated successfully', 'success')
+    const workspace = workspaces.find(w => w.id === id)
+    const workspaceName = workspace?.name || 'Unknown Workspace'
+    
+    setConfirmation({
+      isOpen: true,
+      title: 'Deactivate Workspace',
+      message: `Are you sure you want to deactivate workspace "${workspaceName}"? All users will be unassigned from this workspace. You can reactivate it later if needed.`,
+      onConfirm: async () => {
+        try {
+          await deactivateWorkspace(id)
+          await loadWorkspacesData()
+          showToast('Workspace deactivated successfully', 'success')
+        } catch (err) {
+          console.error('Failed to deactivate workspace:', err)
+          showToast(`Failed to deactivate workspace: ${err}`, 'error')
+        }
+      }
+    })
   }
 
   const handleAssignWorkspace = async (userId: string, workspaceId: number | null) => {
@@ -482,6 +521,17 @@ const AdminDashboard = memo(function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={confirmation.isOpen}
+        onClose={() => setConfirmation(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmation.onConfirm}
+        title={confirmation.title}
+        message={confirmation.message}
+        confirmText="Delete"
+        danger={true}
+      />
 
       <ToastContainer />
     </div>
