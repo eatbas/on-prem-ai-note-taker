@@ -33,6 +33,9 @@ use std::sync::Arc;
 use tokio::sync::Mutex;
 use tauri::Manager;
 use std::path::PathBuf;
+use std::sync::Arc as StdArc;
+use tokio::sync::Mutex as TokioMutex;
+use plugins::audio_capture::ChunkEvent;
 
 #[tauri::command]
 async fn get_audio_devices(
@@ -459,7 +462,26 @@ fn main() {
         .setup(|app| {
             // Assign app handle to audio chunker after app build
             audio_chunker.set_app_handle(app.handle().clone());
-            app.manage(std::sync::Arc::new(tokio::sync::Mutex::new(audio_chunker)));
+            app.manage(StdArc::new(TokioMutex::new(audio_chunker)));
+
+            // Replace coordinator with real handle
+            let coord = coordinator::Coordinator::new(app.handle().clone());
+            let coord_state = StdArc::new(TokioMutex::new(coord));
+            app.manage(coord_state.clone());
+
+            // Listen to audio:chunk and forward to coordinator
+            let app_handle = app.handle().clone();
+            app_handle.listen_global("audio:chunk", move |event| {
+                if let Some(payload) = event.payload() {
+                    if let Ok(meta) = serde_json::from_str::<ChunkEvent>(payload) {
+                        let coord_state = coord_state.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let coordinator = coord_state.lock().await;
+                            coordinator.handle_chunk(&meta.session_id, &meta.path, meta.start_ms, meta.end_ms).await;
+                        });
+                    }
+                }
+            });
             Ok(())
         })
         .manage(audio_capture)
