@@ -13,7 +13,7 @@ import { Recorder } from './features/recording'
 // Import shared utilities
 import { useToast, ErrorBoundary } from './components/common'
 import { watchOnline } from './services'
-import { globalRecordingManager } from './stores/globalRecordingManager'
+import { globalRecordingManager } from './stores/recording'
 import { useVpsHealth } from './stores/apiStateManager'
 
 // Import API state manager to ensure it initializes

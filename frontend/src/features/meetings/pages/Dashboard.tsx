@@ -925,51 +925,7 @@ const Dashboard = memo(function Dashboard({
 											</div>
 										)}
 									</div>
-									<div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-										{m.status !== 'sent' && (
-											<button 
-												onClick={(e) => {
-													createRippleEffect(e)
-													e.stopPropagation()
-													retry(m.id)
-												}} 
-												disabled={!online || sendingMeetings.has(m.id) || m.status === 'queued'} 
-												style={{ 
-													padding: '8px 16px',
-													backgroundColor: (sendingMeetings.has(m.id) || m.status === 'queued') ? '#9ca3af' : '#10b981',
-													color: 'white',
-													border: 'none',
-													borderRadius: '4px',
-													cursor: (online && !sendingMeetings.has(m.id) && m.status !== 'queued') ? 'pointer' : 'not-allowed',
-													fontWeight: '500',
-													opacity: online ? 1 : 0.6,
-													transition: 'all 0.2s ease',
-													transform: 'scale(1)',
-													minWidth: '80px'
-												}}
-												onMouseDown={(e) => {
-													if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
-														e.currentTarget.style.transform = 'scale(0.95)'
-														e.currentTarget.style.backgroundColor = '#059669'
-													}
-												}}
-												onMouseUp={(e) => {
-													if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
-														e.currentTarget.style.transform = 'scale(1)'
-														e.currentTarget.style.backgroundColor = '#10b981'
-													}
-												}}
-												onMouseLeave={(e) => {
-													if (online && !sendingMeetings.has(m.id) && m.status !== 'queued') {
-														e.currentTarget.style.transform = 'scale(1)'
-														e.currentTarget.style.backgroundColor = '#10b981'
-													}
-												}}
-											>
-												{(sendingMeetings.has(m.id) || m.status === 'queued') ? '⏳ Processing...' : '📤 Send'}
-											</button>
-										)}
-									</div>
+									{/* Manual send button removed: processing is automatic */}
 								</li>
 							))}
 						</ul>

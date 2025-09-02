@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react'
 import { db } from '../../services'
-import { globalRecordingManager, GlobalRecordingState } from '../../stores/globalRecordingManager'
+import { globalRecordingManager, GlobalRecordingState } from '../../stores/recording'
 import { queueMeetingProcessing } from '../../services/backgroundProcessor'
 import { useToast } from '../common'
 import { useNotification } from '../../contexts/NotificationContext'
@@ -187,6 +187,19 @@ export default function Recorder({
     // Stop recording using global recording manager (handles both audio and state)
     const stoppedMeetingId = await globalRecordingManager.stopRecording()
     console.log(`🎯 Recording stopped, meetingId from globalRecordingManager: ${stoppedMeetingId}`)
+
+    // Optimistically mark the meeting as queued so Dashboard shows updated status immediately
+    if (stoppedMeetingId) {
+      try {
+        await db.meetings.update(stoppedMeetingId, {
+          status: 'queued',
+          duration: recordingTime,
+          updatedAt: Date.now()
+        })
+      } catch (updateError) {
+        console.warn('⚠️ Failed to optimistically update meeting status to queued:', updateError)
+      }
+    }
 
     // Notify Electron
     if (window.electronAPI) {

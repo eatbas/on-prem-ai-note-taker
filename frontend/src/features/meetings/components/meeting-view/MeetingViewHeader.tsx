@@ -71,10 +71,10 @@ const MeetingViewHeader = memo(function MeetingViewHeader({
   const status = getStatusDisplay()
 
   const tabs = [
-    { id: 'summary', label: '📋 Summary', icon: '📋' },
-    { id: 'transcript', label: '📝 Transcript', icon: '📝' },
-    { id: 'audio', label: '🎵 Audio', icon: '🎵' },
-    { id: 'speakers', label: '👥 Speakers', icon: '👥' }
+    { id: 'summary', label: 'Summary', icon: '📋' },
+    { id: 'transcript', label: 'Transcript', icon: '📝' },
+    { id: 'audio', label: 'Audio', icon: '🎵' },
+    { id: 'speakers', label: 'Speakers', icon: '👥' }
   ]
 
   return (

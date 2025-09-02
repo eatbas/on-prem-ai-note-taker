@@ -215,8 +215,8 @@ function createFloatingRecorderWindow() {
 	const { width, height } = primaryDisplay.workAreaSize
 	
 	// Position the floating recorder in the top-right corner initially
-	const floatingWidth = 260
-	const floatingHeight = 64
+	const floatingWidth = 180
+	const floatingHeight = 42
 	const x = width - floatingWidth - 20
 	const y = 20
 	
@@ -323,7 +323,7 @@ app.whenReady().then(async () => {
 		
 		// Set permissions for system audio capture (more restrictive)
 		session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-			const allowedPermissions = ['microphone', 'desktop-capture', 'media', 'camera']
+			const allowedPermissions = ['microphone', 'desktop-capture', 'display-capture', 'media', 'camera']
 			
 			if (allowedPermissions.includes(permission)) {
 				console.log(`✅ Granting permission: ${permission}`)
@@ -336,7 +336,7 @@ app.whenReady().then(async () => {
 
 		// Handle permission check requests
 		session.defaultSession.setPermissionCheckHandler((webContents, permission, requestingOrigin, details) => {
-			const allowedPermissions = ['microphone', 'desktop-capture', 'media', 'camera']
+			const allowedPermissions = ['microphone', 'desktop-capture', 'display-capture', 'media', 'camera']
 			return allowedPermissions.includes(permission)
 		})
 
@@ -578,6 +578,76 @@ ipcMain.on('open-mic-selector-from-floating', () => {
 
 
 
+
+// IPC handler for desktop sources (for system audio capture)
+ipcMain.on('get-desktop-sources', async (event) => {
+	try {
+		console.log('🔍 Main process: Getting desktop sources for system audio capture...')
+		
+		// Add comprehensive safety checks
+		if (!event || !event.reply) {
+			console.error('❌ Main process: Invalid event object')
+			return
+		}
+		
+		// Check if the renderer is still valid
+		if (event.sender && event.sender.isDestroyed()) {
+			console.error('❌ Main process: Renderer is destroyed, skipping desktop sources request')
+			return
+		}
+		
+		const { desktopCapturer } = require('electron')
+		if (!desktopCapturer || !desktopCapturer.getSources) {
+			throw new Error('desktopCapturer not available in main process')
+		}
+		
+		// Add timeout to prevent hanging
+		const sourcesPromise = desktopCapturer.getSources({
+			types: ['screen'],
+			thumbnailSize: { width: 0, height: 0 }
+		})
+		
+		const timeoutPromise = new Promise((_, reject) => 
+			setTimeout(() => reject(new Error('desktopCapturer timeout')), 10000)
+		)
+		
+		const sources = await Promise.race([sourcesPromise, timeoutPromise])
+		
+		console.log('✅ Main process: Found desktop sources:', sources.length)
+		
+		// Send response with error handling
+		try {
+			if (!event.sender || event.sender.isDestroyed()) {
+				console.error('❌ Main process: Renderer destroyed before reply')
+				return
+			}
+			
+			event.reply('desktop-sources-response', {
+				success: true,
+				sources: sources
+			})
+		} catch (replyError) {
+			console.error('❌ Main process: Failed to send reply:', replyError)
+		}
+	} catch (error) {
+		console.error('❌ Main process: Failed to get desktop sources:', error)
+		
+		// Send error response with error handling
+		try {
+			if (!event.sender || event.sender.isDestroyed()) {
+				console.error('❌ Main process: Renderer destroyed before error reply')
+				return
+			}
+			
+			event.reply('desktop-sources-response', {
+				success: false,
+				error: error.message || 'Unknown error'
+			})
+		} catch (replyError) {
+			console.error('❌ Main process: Failed to send error reply:', replyError)
+		}
+	}
+})
 
 // IPC handlers for tray actions
 ipcMain.on('tray-action', (event, action) => {

@@ -24,59 +24,150 @@ contextBridge.exposeInMainWorld('desktopCapture', {
 	// Windows: capture system audio from desktop source (drop video), fallback to getDisplayMedia
 	captureSystemAudio: async () => {
 		try {
-			console.log('🔊 Attempting system audio via desktopCapturer...')
-			const { desktopCapturer } = require('electron')
-			const sources = await desktopCapturer.getSources({
-				types: ['screen'],
-				thumbnailSize: { width: 0, height: 0 }
-			})
-			if (!sources || sources.length === 0) {
-				throw new Error('No screen sources available')
-			}
-			const source = sources[0]
-			console.log('🖥️ Using screen source:', source.name, source.id)
-			const stream = await navigator.mediaDevices.getUserMedia({
-				audio: {
-					mandatory: {
-						chromeMediaSource: 'desktop',
-						chromeMediaSourceId: source.id
-					}
-				},
-				video: {
-					mandatory: {
-						chromeMediaSource: 'desktop',
-						chromeMediaSourceId: source.id
-					}
-				}
-			})
-			// Drop video tracks; keep audio only
-			stream.getVideoTracks().forEach(t => t.stop())
-			const audioTracks = stream.getAudioTracks()
-			if (audioTracks.length > 0) {
-				console.log('✅ System audio capture successful via desktop source:', {
-					trackLabels: audioTracks.map(t => t.label)
-				})
-				return stream
-			}
-			throw new Error('No audio tracks on desktop stream')
-		} catch (e1) {
-			console.warn('⚠️ desktopCapturer path failed, falling back to getDisplayMedia:', e1)
-			try {
-				const stream = await navigator.mediaDevices.getDisplayMedia({
-					video: true,
-					audio: true
-				})
-				stream.getVideoTracks().forEach(t => t.stop())
-				const audioTracks = stream.getAudioTracks()
-				if (audioTracks.length > 0) {
-					console.log('✅ System audio via getDisplayMedia fallback')
-					return stream
-				}
-				throw new Error('No audio tracks on getDisplayMedia stream')
-			} catch (e2) {
-				console.log('⚠️ System audio not available (fallback to mic-only):', e2?.message || e2)
+			console.log('🔊 Attempting system audio capture...')
+			
+			// Add comprehensive safety checks to prevent crashes
+			if (!ipcRenderer || typeof ipcRenderer.send !== 'function') {
+				console.log('⚠️ IPC not available, skipping system audio capture')
 				return null
 			}
+			
+			// Check if system audio is disabled
+			if (localStorage.getItem('systemAudioDisabled') === 'true') {
+				console.log('🚫 System audio capture disabled by user preference')
+				return null
+			}
+			
+			// Check if getDisplayMedia is available
+			if (!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia) {
+				console.log('⚠️ getDisplayMedia not available, skipping system audio capture')
+				return null
+			}
+			
+			// Try system audio capture methods
+			try {
+				// Try getDisplayMedia first (most reliable method)
+				try {
+					console.log('🎯 Trying getDisplayMedia method...')
+					
+					// Add timeout to prevent hanging
+					const displayMediaPromise = navigator.mediaDevices.getDisplayMedia({
+						video: { cursor: 'never' },   // minimal video to unlock audio
+						audio: {
+							// @ts-ignore Chromium hint to prefer system audio if available
+							systemAudio: 'include',
+							channelCount: 2,
+							sampleRate: 44100
+						}
+					})
+					
+					const timeoutPromise = new Promise((_, reject) => 
+						setTimeout(() => reject(new Error('getDisplayMedia timeout')), 8000)
+					)
+					
+					const stream = await Promise.race([displayMediaPromise, timeoutPromise])
+					
+					// Drop video tracks immediately after getting the stream
+					stream.getVideoTracks().forEach(track => {
+						console.log('🎥 Dropping video track:', track.label)
+						track.stop()
+					})
+					
+					const audioTracks = stream.getAudioTracks()
+					if (audioTracks.length > 0) {
+						console.log('✅ System audio capture successful via getDisplayMedia:', {
+							trackLabels: audioTracks.map(t => t.label),
+							trackCount: audioTracks.length
+						})
+						return stream
+					}
+					throw new Error('No audio tracks on getDisplayMedia stream')
+				} catch (e1) {
+					console.warn('⚠️ getDisplayMedia failed, trying desktopCapturer fallback:', e1)
+					
+					// Fallback to desktopCapturer method via IPC to main process
+					try {
+						console.log('🔄 Requesting desktopCapturer from main process...')
+						
+						// Send IPC request to main process to get desktop sources with timeout
+						const sources = await new Promise((resolve, reject) => {
+							const timeout = setTimeout(() => {
+								console.log('⏰ IPC timeout - desktopCapturer request took too long')
+								reject(new Error('IPC timeout'))
+							}, 5000) // Increased timeout for IPC
+							
+							ipcRenderer.once('desktop-sources-response', (event, result) => {
+								clearTimeout(timeout)
+								if (result && result.success) {
+									resolve(result.sources)
+								} else {
+									reject(new Error(result?.error || 'Unknown IPC error'))
+								}
+							})
+							
+							try {
+								ipcRenderer.send('get-desktop-sources')
+							} catch (ipcError) {
+								clearTimeout(timeout)
+								reject(new Error(`IPC send failed: ${ipcError.message}`))
+							}
+						})
+						
+						if (!sources || sources.length === 0) {
+							throw new Error('No screen sources available')
+						}
+						
+						const source = sources[0]
+						console.log('🖥️ Using screen source:', source.name, source.id)
+						
+						// Request both video and audio for desktop capture, then drop video tracks
+						const userMediaPromise = navigator.mediaDevices.getUserMedia({
+							video: {
+								mandatory: {
+									chromeMediaSource: 'desktop',
+									chromeMediaSourceId: source.id
+								}
+							},
+							audio: {
+								mandatory: {
+									chromeMediaSource: 'desktop',
+									chromeMediaSourceId: source.id
+								}
+							}
+						})
+						
+						const userMediaTimeoutPromise = new Promise((_, reject) => 
+							setTimeout(() => reject(new Error('getUserMedia timeout')), 5000)
+						)
+						
+						const stream = await Promise.race([userMediaPromise, userMediaTimeoutPromise])
+						
+						// Drop video tracks to keep audio-only
+						stream.getVideoTracks().forEach(track => {
+							console.log('🎥 Dropping desktop video track:', track.label)
+							track.stop()
+						})
+						
+						const audioTracks = stream.getAudioTracks()
+						if (audioTracks.length > 0) {
+							console.log('✅ System audio capture successful via desktopCapturer:', {
+								trackLabels: audioTracks.map(t => t.label)
+							})
+							return stream
+						}
+						throw new Error('No audio tracks on desktop stream')
+					} catch (e2) {
+						console.log('⚠️ desktopCapturer also failed:', e2)
+						throw e2
+					}
+				}
+			} catch (e3) {
+				console.log('⚠️ All system audio capture methods failed (fallback to mic-only):', e3?.message || e3)
+				return null
+			}
+		} catch (error) {
+			console.log('⚠️ All system audio capture methods failed (fallback to mic-only):', error?.message || error)
+			return null
 		}
 	}
 })

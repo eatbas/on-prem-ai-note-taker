@@ -7,7 +7,7 @@
 // Import them directly from their individual files when needed statically.
 
 // State Managers
-export { globalRecordingManager } from './globalRecordingManager'
+export { globalRecordingManager } from './recording'
 export { jobQueueManager } from './jobQueueManager'
 
 // API Managers
@@ -15,4 +15,4 @@ export { apiStateManager } from './apiStateManager'
 export { electronApiOptimizer } from './electronApiOptimizer'
 
 // Re-export types
-export type { GlobalRecordingState } from './globalRecordingManager'
+export type { GlobalRecordingState } from './recording'

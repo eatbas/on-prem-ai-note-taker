@@ -21,46 +21,46 @@
 
         .floating-recorder {
             background: #1f2937;
-            border: 2px solid #8b5cf6;
-            border-radius: 10px;
-            padding: 8px 10px;
-            box-shadow: 0 10px 30px rgba(0,0,0,.4);
+            border: 1px solid #8b5cf6;
+            border-radius: 6px;
+            padding: 4px 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,.3);
             display: flex;
             align-items: center;
-            gap: 10px;
-            min-width: 210px;
-            height: 54px;
+            gap: 6px;
+            min-width: 160px;
+            height: 32px;
             position: relative;
         }
 
         .drag-handle {
             display: flex;
             flex-direction: column;
-            gap: 4px;
+            gap: 2px;
             opacity: 0.7;
             cursor: grab;
             -webkit-app-region: drag;
         }
 
         .drag-line {
-            width: 12px;
-            height: 2px;
+            width: 8px;
+            height: 1px;
             background-color: #9ca3af;
-            border-radius: 4px;
+            border-radius: 2px;
         }
 
-        .recording-indicator { width: 8px; height: 8px; background-color: #ef4444; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
+        .recording-indicator { width: 6px; height: 6px; background-color: #ef4444; border-radius: 50%; animation: pulse 1.5s ease-in-out infinite; }
 
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
         }
 
-        .recording-time { color: #e5e7eb; font-size: 14px; font-weight: 700; font-family: monospace; min-width: 50px; text-align:center; }
+        .recording-time { color: #e5e7eb; font-size: 10px; font-weight: 600; font-family: monospace; min-width: 35px; text-align:center; }
 
-        .audio-waveform { display:flex; align-items:center; gap:2px; height:18px; flex:1; }
+        .audio-waveform { display:flex; align-items:center; gap:1px; height:12px; flex:1; }
 
-        .wave-bar { width:2px; background: #a78bfa; border-radius:2px; animation: wave .9s ease-in-out infinite; }
+        .wave-bar { width:1px; background: #a78bfa; border-radius:1px; animation: wave .9s ease-in-out infinite; }
 
         .wave-bar:nth-child(odd) {
             animation-delay: 0.1s;
@@ -71,13 +71,13 @@
         }
 
         @keyframes wave {
-            0%, 100% { height: 8px; }
-            50% { height: 32px; }
+            0%, 100% { height: 4px; }
+            50% { height: 16px; }
         }
 
-        .controls { display:flex; gap:6px; -webkit-app-region: no-drag; }
+        .controls { display:flex; gap:3px; -webkit-app-region: no-drag; }
 
-        .control-btn { background:#374151; border:none; border-radius:6px; padding:6px; color:#e5e7eb; cursor:pointer; width:26px; height:26px; display:flex; align-items:center; justify-content:center; }
+        .control-btn { background:#374151; border:none; border-radius:3px; padding:3px; color:#e5e7eb; cursor:pointer; width:18px; height:18px; display:flex; align-items:center; justify-content:center; font-size:8px; }
 
         .control-btn:hover {
             background: rgba(139, 92, 246, 1);
@@ -120,24 +120,12 @@
             <div class="wave-bar"></div>
             <div class="wave-bar"></div>
             <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
-            <div class="wave-bar"></div>
         </div>
 
         <!-- Controls -->
         <div class="controls">
             <button class="control-btn" id="micBtn" title="Select Microphone">🎤</button>
-            <button class="control-btn stop-btn" id="stopBtn" title="Stop Recording">■</button>
+            <button class="control-btn stop-btn" id="stopBtn" title="Stop Recording">⏹</button>
         </div>
     </div>
 

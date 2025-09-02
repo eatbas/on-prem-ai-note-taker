@@ -107,8 +107,9 @@ def get_or_create_user_by_username(db: Session, username: str) -> User:
 
 def get_or_create_user_from_header(db: Session, x_user_id: Optional[str] = None) -> User:
     """
-    Get or create user based on X-User-Id header or system detection.
-    This is the main function that should be used across all routers.
+    Get or create user strictly from X-User-Id header.
+    In production we no longer fallback to system detection to avoid phantom users
+    created from container hostnames.
     
     Args:
         db: Database session
@@ -117,24 +118,24 @@ def get_or_create_user_from_header(db: Session, x_user_id: Optional[str] = None)
     Returns:
         User: The existing or newly created user
     """
-    if x_user_id:
-        # 🐛 FIX: Clean and validate header value
-        clean_user_id = x_user_id.strip()
-        
-        # Extract username from user ID format: user_{username}
-        if clean_user_id.startswith('user_'):
-            username = clean_user_id[5:]  # Remove 'user_' prefix
-            # 🐛 FIX: Validate extracted username
-            if not username or username == '':
-                raise ValueError(f"Invalid user ID format: '{clean_user_id}' - username cannot be empty")
-        else:
-            username = clean_user_id
-        
-        print(f"🔍 Extracting username '{username}' from header '{clean_user_id}'")
-        return get_or_create_user_by_username(db, username)
-    
-    # Fallback to system username detection if no header provided
-    return get_or_create_user_by_system_detection(db)
+    if not x_user_id:
+        # Enforce explicit header to avoid accidental container-based users
+        from fastapi import HTTPException
+        raise HTTPException(status_code=400, detail="X-User-Id header required")
+
+    # Clean and validate header value
+    clean_user_id = x_user_id.strip()
+
+    # Extract username from user ID format: user_{username}
+    if clean_user_id.startswith('user_'):
+        username = clean_user_id[5:]
+        if not username or username == '':
+            raise ValueError(f"Invalid user ID format: '{clean_user_id}' - username cannot be empty")
+    else:
+        username = clean_user_id
+
+    print(f"🔍 Extracting username '{username}' from header '{clean_user_id}'")
+    return get_or_create_user_by_username(db, username)
 
 
 def get_or_create_user_by_system_detection(db: Session) -> User:

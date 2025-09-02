@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { Recorder, FloatingRecorder } from '../../features/recording'
 import { useToast } from '../common'
-import { globalRecordingManager } from '../../stores/globalRecordingManager'
+import { globalRecordingManager } from '../../stores/recording'
 import { getComputerUsername } from '../../utils/usernameDetector'
 import dgMeetsLogo from '../../../../logo/dgMeets-512.png'
 
@@ -15,7 +15,7 @@ interface AppShellProps {
   availableTags: [string, number][]
   setAvailableTags: (tags: [string, number][]) => void
   refreshSignal: number
-  setRefreshSignal: (signal: number) => void
+  setRefreshSignal: React.Dispatch<React.SetStateAction<number>>
   vpsUp: boolean
   children: React.ReactNode
 }
@@ -75,12 +75,12 @@ export default function AppShell({
 
   const handleRecordingCreated = (meetingId: string) => {
     console.log('🎙️ Recording created:', meetingId)
-    setRefreshSignal(refreshSignal + 1)
+    setRefreshSignal(prev => prev + 1)
   }
 
   const handleRecordingStopped = (meetingId: string) => {
     console.log('🛑 Recording stopped:', meetingId)
-    setRefreshSignal(refreshSignal + 1)
+    setRefreshSignal(prev => prev + 1)
   }
 
   const handleFloatingRecorderStop = () => {
