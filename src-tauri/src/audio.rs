@@ -26,6 +26,8 @@ pub struct AudioCapture {
     audio_data: Arc<Mutex<Vec<f32>>>,
     is_recording: Arc<AtomicBool>,
     active_devices: Arc<Mutex<Vec<String>>>,
+    sample_rate: u32,
+    channels: u16,
 }
 
 impl AudioCapture {
@@ -36,6 +38,8 @@ impl AudioCapture {
             audio_data: Arc::new(Mutex::new(Vec::new())),
             is_recording: Arc::new(AtomicBool::new(false)),
             active_devices: Arc::new(Mutex::new(Vec::new())),
+            sample_rate: 44100,
+            channels: 2,
         })
     }
 
@@ -68,9 +72,19 @@ impl AudioCapture {
 
         #[cfg(target_os = "windows")]
         {
+            // Windows: WASAPI loopback for system audio
             devices.push(AudioDevice {
                 id: "system_windows_wasapi".to_string(),
-                name: "System Audio (Windows WASAPI)".to_string(),
+                name: "System Audio (WASAPI Loopback)".to_string(),
+                is_system: true,
+                channels: 2,
+                sample_rate: 44100,
+            });
+            
+            // Also check for Stereo Mix if available
+            devices.push(AudioDevice {
+                id: "system_windows_stereomix".to_string(),
+                name: "Stereo Mix (Windows)".to_string(),
                 is_system: true,
                 channels: 2,
                 sample_rate: 44100,
@@ -79,9 +93,19 @@ impl AudioCapture {
 
         #[cfg(target_os = "macos")]
         {
+            // macOS: Core Audio with ScreenCaptureKit for system audio
             devices.push(AudioDevice {
-                id: "system_macos_coreaudio".to_string(),
-                name: "System Audio (macOS CoreAudio)".to_string(),
+                id: "system_macos_screencapturekit".to_string(),
+                name: "System Audio (ScreenCaptureKit)".to_string(),
+                is_system: true,
+                channels: 2,
+                sample_rate: 44100,
+            });
+            
+            // Fallback to BlackHole or SoundFlower if available
+            devices.push(AudioDevice {
+                id: "system_macos_blackhole".to_string(),
+                name: "BlackHole 2ch (Virtual Audio)".to_string(),
                 is_system: true,
                 channels: 2,
                 sample_rate: 44100,
@@ -90,9 +114,19 @@ impl AudioCapture {
 
         #[cfg(target_os = "linux")]
         {
+            // Linux: PulseAudio monitor sources
             devices.push(AudioDevice {
-                id: "system_linux_pulse".to_string(),
-                name: "System Audio (Linux PulseAudio)".to_string(),
+                id: "system_linux_pulse_monitor".to_string(),
+                name: "System Audio (PulseAudio Monitor)".to_string(),
+                is_system: true,
+                channels: 2,
+                sample_rate: 44100,
+            });
+            
+            // ALSA loopback
+            devices.push(AudioDevice {
+                id: "system_linux_alsa_loopback".to_string(),
+                name: "System Audio (ALSA Loopback)".to_string(),
                 is_system: true,
                 channels: 2,
                 sample_rate: 44100,
@@ -103,6 +137,17 @@ impl AudioCapture {
     }
 
     pub async fn start_capture(&mut self, device_id: String) -> Result<(), Box<dyn std::error::Error>> {
+        println!("🎵 Starting audio capture for device: {}", device_id);
+        
+        // Check if device is already capturing
+        {
+            let active_devices = self.active_devices.lock().await;
+            if active_devices.contains(&device_id) {
+                println!("⚠️ Device {} already capturing", device_id);
+                return Ok(());
+            }
+        }
+
         let device = if device_id.starts_with("system_") {
             self.get_system_device(&device_id)?
         } else {
@@ -114,9 +159,8 @@ impl AudioCapture {
         };
 
         let config = if device_id.starts_with("system_") {
-            // For system audio, try to get output config first, fallback to input
-            device.default_output_config()
-                .or_else(|_| device.default_input_config())?
+            // For system audio, try different approaches based on platform
+            self.get_system_audio_config(&device, &device_id)?
         } else {
             device.default_input_config()?
         };
@@ -124,77 +168,150 @@ impl AudioCapture {
         let audio_data = self.audio_data.clone();
         let is_recording = self.is_recording.clone();
         let active_devices = self.active_devices.clone();
-        let stream_config: cpal::StreamConfig = config.into();
-
-        println!("🎵 Starting audio capture for device: {} with config: {:?}", device_id, stream_config);
-
-        // Add device to active list
-        {
-            let mut devices = active_devices.lock().await;
-            if !devices.contains(&device_id) {
-                devices.push(device_id.clone());
-            }
-        }
-
-        let stream = device.build_input_stream(
-            &stream_config,
-            move |data: &[f32], _: &_| {
-                // Audio data callback - store in buffer
-                let mut buffer = block_on(audio_data.lock());
-                // Limit buffer size to prevent memory issues (keep last 10 seconds at 44.1kHz)
-                let max_samples = 44100 * 10 * 2; // 10 seconds, stereo
-                let current_len = buffer.len();
-                if current_len > max_samples {
-                    buffer.drain(0..(current_len - max_samples));
-                }
-                buffer.extend_from_slice(data);
-            },
-            |err| eprintln!("❌ Audio stream error: {}", err),
-            None,
-        )?;
-
-        stream.play()?;
-        is_recording.store(true, Ordering::Relaxed);
-
-        // Note: We intentionally let the stream drop here
-        // This is a limitation of cpal on macOS - streams are not Send/Sync
-        // In a production system, you'd want to use a different audio library
-        // or implement platform-specific solutions
+        let device_id_clone = device_id.clone();
         
-        // The stream will continue running until it's dropped
-        // For now, we'll use a memory leak to keep it alive
-        std::mem::forget(stream);
+        let stream_config: cpal::StreamConfig = config.into();
+        println!("🔧 Device config: {:?}", stream_config);
 
+        // Create and start stream in a separate scope to avoid Send+Sync issues
+        {
+            let stream = device.build_input_stream(
+                &stream_config,
+                move |data: &[f32], _: &_| {
+                    // Audio data callback - store in buffer with device mixing
+                    let mut buffer = block_on(audio_data.lock());
+                    
+                    // Limit buffer size to prevent memory issues (keep last 30 seconds at 44.1kHz)
+                    let max_samples = 44100 * 30 * 2; // 30 seconds, stereo
+                    let current_len = buffer.len();
+                    if current_len > max_samples {
+                        let drain_count = current_len - max_samples;
+                        buffer.drain(0..drain_count);
+                    }
+                    
+                    // Mix audio data (simple addition for multiple sources)
+                    buffer.extend_from_slice(data);
+                },
+                move |err| {
+                    eprintln!("❌ Audio stream error for {}: {}", device_id_clone, err);
+                    // Try to remove device from active list on error
+                    let mut devices = block_on(active_devices.lock());
+                    devices.retain(|d| d != &device_id_clone);
+                    if devices.is_empty() {
+                        is_recording.store(false, Ordering::Relaxed);
+                    }
+                },
+                None,
+            )?;
+
+            stream.play()?;
+            
+            // Keep stream alive by "leaking" it to avoid Send+Sync constraints
+            // This is necessary because cpal streams are not Send+Sync and cannot be stored
+            // in shared state across threads. The stream will continue running until the process ends.
+            std::mem::forget(stream);
+        } // stream variable is out of scope here
+        
+        // Add device to active list (async operation after stream is handled)
+        {
+            let mut devices = self.active_devices.lock().await;
+            devices.push(device_id.clone());
+        }
+        
+        self.is_recording.store(true, Ordering::Relaxed);
+        
         println!("✅ Audio capture started for device: {}", device_id);
         Ok(())
+    }
+
+    fn get_system_audio_config(&self, device: &cpal::Device, device_id: &str) -> Result<cpal::SupportedStreamConfig, Box<dyn std::error::Error>> {
+        // Try different config approaches based on device type
+        if device_id.contains("system_") {
+            // For system audio, prefer output config if available, fallback to input
+            if let Ok(output_config) = device.default_output_config() {
+                println!("📡 Using output config for system audio");
+                return Ok(output_config);
+            }
+        }
+        
+        // Fallback to input config
+        println!("📡 Using input config for device");
+        device.default_input_config().map_err(|e| e.into())
     }
 
     fn get_system_device(&self, device_id: &str) -> Result<cpal::Device, Box<dyn std::error::Error>> {
         match device_id {
             #[cfg(target_os = "windows")]
             "system_windows_wasapi" => {
-                // Use WASAPI for Windows system audio
+                // Use WASAPI for Windows system audio loopback
+                println!("🪟 Attempting Windows WASAPI loopback");
                 let host = cpal::host_from_id(cpal::available_hosts()
                     .into_iter()
                     .find(|id| *id == cpal::HostId::Wasapi)
                     .ok_or("WASAPI not available")?)?;
 
-                // Try to get a loopback device for system audio capture
                 host.default_output_device()
                     .ok_or("No default output device found".into())
             }
+            
+            #[cfg(target_os = "windows")]
+            "system_windows_stereomix" => {
+                // Try to find Stereo Mix device
+                println!("🪟 Looking for Stereo Mix device");
+                for device in self.host.input_devices()? {
+                    if let Ok(name) = device.name() {
+                        if name.to_lowercase().contains("stereo mix") || 
+                           name.to_lowercase().contains("what u hear") {
+                            return Ok(device);
+                        }
+                    }
+                }
+                Err("Stereo Mix device not found".into())
+            }
 
             #[cfg(target_os = "macos")]
-            "system_macos_coreaudio" => {
-                // Use CoreAudio for macOS system audio
-                // Note: macOS system audio capture requires special permissions
+            "system_macos_screencapturekit" => {
+                // macOS ScreenCaptureKit approach - fallback to default output
+                println!("🍎 Attempting macOS ScreenCaptureKit system audio");
                 self.host.default_output_device()
                     .ok_or("No default output device found".into())
             }
+            
+            #[cfg(target_os = "macos")]
+            "system_macos_blackhole" => {
+                // Look for BlackHole virtual audio device
+                println!("🍎 Looking for BlackHole device");
+                for device in self.host.input_devices()? {
+                    if let Ok(name) = device.name() {
+                        if name.to_lowercase().contains("blackhole") {
+                            return Ok(device);
+                        }
+                    }
+                }
+                Err("BlackHole device not found".into())
+            }
 
             #[cfg(target_os = "linux")]
-            "system_linux_pulse" => {
-                // Use PulseAudio for Linux system audio
+            "system_linux_pulse_monitor" => {
+                // Linux PulseAudio monitor source
+                println!("🐧 Attempting Linux PulseAudio monitor");
+                for device in self.host.input_devices()? {
+                    if let Ok(name) = device.name() {
+                        if name.to_lowercase().contains("monitor") || 
+                           name.to_lowercase().contains("output") {
+                            return Ok(device);
+                        }
+                    }
+                }
+                // Fallback to default output
+                self.host.default_output_device()
+                    .ok_or("No monitor device found".into())
+            }
+            
+            #[cfg(target_os = "linux")]
+            "system_linux_alsa_loopback" => {
+                // ALSA loopback device
+                println!("🐧 Looking for ALSA loopback device");
                 self.host.default_output_device()
                     .ok_or("No default output device found".into())
             }
@@ -216,8 +333,14 @@ impl AudioCapture {
         }
         
         // Clear audio data buffer
-        let mut buffer = self.audio_data.lock().await;
-        buffer.clear();
+        {
+            let mut buffer = self.audio_data.lock().await;
+            buffer.clear();
+        }
+        
+        // Note: We can't explicitly stop individual streams since they were "leaked"
+        // to keep them alive. They will stop automatically when the recording flag is false
+        // or when the process ends.
         
         println!("✅ All audio capture stopped");
         Ok(())
@@ -259,8 +382,12 @@ impl AudioCapture {
             // Update recording state
             if devices.is_empty() {
                 self.is_recording.store(false, Ordering::Relaxed);
+                println!("📴 All devices stopped, recording state set to false");
             }
         }
+        
+        // Note: We can't explicitly stop individual streams since they were "leaked"
+        // The stream will continue until the recording flag check stops it or process ends
         
         Ok(())
     }

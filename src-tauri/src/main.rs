@@ -513,6 +513,45 @@ fn main() {
                 eprintln!("Failed to load environment: {}", e);
             }).ok();
 
+            // Inject authentication credentials and user info into frontend when window is ready
+            let app_handle_for_auth = app.handle().clone();
+            tauri::async_runtime::spawn(async move {
+                // Wait a bit for the main window to be ready
+                tokio::time::sleep(tokio::time::Duration::from_millis(1000)).await;
+                
+                if let Some(main_window) = app_handle_for_auth.get_webview_window("main") {
+                    let auth_username = std::env::var("BASIC_AUTH_USERNAME").unwrap_or_else(|_| "myca".to_string());
+                    let auth_password = std::env::var("BASIC_AUTH_PASSWORD").unwrap_or_else(|_| "wj2YyxrJ4cqcXgCA".to_string());
+                    let api_base_url = std::env::var("VITE_API_BASE_URL").unwrap_or_else(|_| "http://95.111.244.159:8000/api".to_string());
+                    
+                    // Get the actual computer username
+                    let computer_username = std::env::var("USER")
+                        .or_else(|_| std::env::var("USERNAME"))
+                        .or_else(|_| std::env::var("LOGNAME"))
+                        .unwrap_or_else(|_| "eatbas".to_string());
+                    
+                    let inject_script = format!(
+                        r#"
+                        window.BASIC_AUTH = {{
+                            username: "{}",
+                            password: "{}"
+                        }};
+                        window.API_BASE_URL = "{}";
+                        window.USER_ID = "user_{}";
+                        console.log("🔑 Tauri: Injected authentication credentials for user: {}");
+                        console.log("🆔 Tauri: Set user ID to: user_{}");
+                        "#,
+                        auth_username, auth_password, api_base_url, computer_username, computer_username, computer_username
+                    );
+                    
+                    if let Err(e) = main_window.eval(&inject_script) {
+                        eprintln!("Failed to inject auth credentials: {}", e);
+                    } else {
+                        println!("✅ Injected credentials for user: {}", computer_username);
+                    }
+                }
+            });
+
             // Store tray manager for future use (note: system tray needs to be set up separately)
             app.manage(tray_manager);
 
