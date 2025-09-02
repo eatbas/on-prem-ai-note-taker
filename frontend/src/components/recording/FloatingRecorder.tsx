@@ -15,7 +15,7 @@ export default function FloatingRecorder({
 	meetingId
 }: FloatingRecorderProps) {
 	const isElectron = typeof window !== 'undefined' && (window as any).electronAPI
-	const isTauri = typeof window !== 'undefined' && window.__TAURI__ !== undefined
+	const isTauri = typeof window !== 'undefined' && (window as any).__TAURI__ !== undefined
 
 	// Handle Tauri floating recorder
 	useEffect(() => {

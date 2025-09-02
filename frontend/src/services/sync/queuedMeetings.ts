@@ -116,7 +116,7 @@ export async function getFailedSyncMeetings(maxAgeMs: number = 30 * 60 * 1000): 
   const meetings = await db.meetings
     .where('status')
     .equals('local')
-    .and(meeting => {
+    .and((meeting: any) => {
       return meeting.last_sync_attempt && meeting.last_sync_attempt > cutoff
     })
     .toArray()

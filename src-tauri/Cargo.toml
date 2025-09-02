@@ -26,6 +26,14 @@ cpal = "0.15"  # Cross-platform audio I/O
 rodio = "0.17" # Audio playback/recording
 hound = "3.5"  # WAV file I/O
 
+# Local Whisper AI integration (placeholder for now)
+# TODO: Add proper ML dependencies when ecosystem stabilizes
+# candle-core = "0.7"         # Machine learning framework (when available)
+# whisper-rs = "0.11"         # Rust Whisper bindings (when compatible)
+# hf-hub = "0.3"              # Hugging Face model hub
+anyhow = "1.0"                # Error handling
+dirs = "5.0"                  # Directory utilities
+
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.
 # If you use cargo directly instead of tauri's cli you can use this feature flag to switch between tauri's `dev` and `build` modes.

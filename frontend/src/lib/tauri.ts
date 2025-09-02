@@ -1,4 +1,14 @@
-// Tauri detection and platform utilities
+// Tauri API utilities - Desktop App Only
+
+// Extend Window interface for Tauri
+declare global {
+  interface Window {
+    __TAURI__?: {
+      core: { invoke: Function }
+      event: { listen: Function }
+    }
+  }
+}
 
 /**
  * Check if we're running in Tauri
@@ -8,36 +18,10 @@ export const isTauri = (): boolean => {
 }
 
 /**
- * Check if we're running in Electron
- */
-export const isElectron = (): boolean => {
-  return typeof window !== 'undefined' && (window as any).electronAPI !== undefined
-}
-
-/**
- * Check if we're running in a regular web browser
- */
-export const isWeb = (): boolean => {
-  return !isTauri() && !isElectron()
-}
-
-/**
- * Get the current platform type
- */
-export const getPlatform = (): 'tauri' | 'electron' | 'web' => {
-  if (isTauri()) return 'tauri'
-  if (isElectron()) return 'electron'
-  return 'web'
-}
-
-/**
- * Safe Tauri API imports - only import when needed
+ * Get Tauri API functions
+ * This app is TAURI-ONLY, no web/electron support
  */
 export const getTauriAPI = async () => {
-  if (!isTauri()) {
-    throw new Error('Tauri not available')
-  }
-
   try {
     const { invoke } = await import('@tauri-apps/api/core')
     const { listen } = await import('@tauri-apps/api/event')
@@ -45,72 +29,61 @@ export const getTauriAPI = async () => {
     return { invoke, listen }
   } catch (error) {
     console.error('Failed to import Tauri APIs:', error)
-    // Fallback for development
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    
+    // Fallback to window.__TAURI__ (injected by Tauri runtime)
+    if (typeof window !== 'undefined' && window.__TAURI__) {
       return {
-        invoke: (window as any).__TAURI__.core.invoke,
-        listen: (window as any).__TAURI__.event.listen
+        invoke: window.__TAURI__.core.invoke,
+        listen: window.__TAURI__.event.listen
       }
     }
-    throw error
+    
+    throw new Error(`Tauri API not available: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 
 /**
- * Safely invoke Tauri commands
+ * Invoke Tauri commands safely
  */
-export const safeInvoke = async (cmd: string, args?: any): Promise<any> => {
-  if (!isTauri()) {
-    throw new Error('Tauri not available')
-  }
-
+export const invoke = async (cmd: string, args?: any): Promise<any> => {
   try {
-    // Try modern API first
-    const { invoke } = await getTauriAPI()
-    return await invoke(cmd, args)
+    const { invoke: tauriInvoke } = await getTauriAPI()
+    return await tauriInvoke(cmd, args)
   } catch (error) {
-    // Fallback to window API
-    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
-      return await (window as any).__TAURI__.core.invoke(cmd, args)
-    }
-    console.error(`Failed to invoke Tauri command '${cmd}':`, error)
+    console.error(`Failed to invoke command '${cmd}':`, error)
     throw error
   }
 }
 
 /**
- * Get platform-specific capabilities
+ * Listen to Tauri events
  */
-export const getPlatformCapabilities = () => {
-  const platform = getPlatform()
-  
-  return {
-    platform,
-    hasNativeSystemAudio: platform === 'tauri',
-    hasElectronSystemAudio: platform === 'electron',
-    hasWebAudio: true, // All platforms support basic web audio
-    hasFileSystem: platform !== 'web',
-    hasNotifications: platform !== 'web',
-    hasSystemTray: platform !== 'web',
-    hasFloatingWindows: platform !== 'web'
+export const listen = async (event: string, handler: (event: any) => void) => {
+  try {
+    const { listen: tauriListen } = await getTauriAPI()
+    return await tauriListen(event, handler)
+  } catch (error) {
+    console.error(`Failed to listen to event '${event}':`, error)
+    throw error
   }
 }
 
 /**
- * Log platform information
+ * Log platform information for debugging
  */
-export const logPlatformInfo = () => {
-  const capabilities = getPlatformCapabilities()
+export const logPlatformInfo = (): void => {
+  console.log('🚀 dgMeets - Tauri Desktop App')
+  console.log('Platform: Native Desktop (Tauri)')
+  console.log('Environment Variables:', {
+    API_BASE_URL: import.meta.env.VITE_API_BASE_URL,
+    APP_MODE: import.meta.env.VITE_APP_MODE,
+    TAURI_BACKEND_URL: import.meta.env.TAURI_BACKEND_URL,
+  })
   
-  console.log('🖥️  Platform Information:')
-  console.log('   Platform:', capabilities.platform)
-  console.log('   Native System Audio:', capabilities.hasNativeSystemAudio ? '✅' : '❌')
-  console.log('   Electron System Audio:', capabilities.hasElectronSystemAudio ? '✅' : '❌')
-  console.log('   Web Audio API:', capabilities.hasWebAudio ? '✅' : '❌')
-  console.log('   File System Access:', capabilities.hasFileSystem ? '✅' : '❌')
-  console.log('   System Notifications:', capabilities.hasNotifications ? '✅' : '❌')
-  console.log('   System Tray:', capabilities.hasSystemTray ? '✅' : '❌')
-  console.log('   Floating Windows:', capabilities.hasFloatingWindows ? '✅' : '❌')
-  
-  return capabilities
+  // Check if Tauri APIs are available
+  if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+    console.log('✅ Tauri APIs: Available')
+  } else {
+    console.log('❌ Tauri APIs: Not Available')
+  }
 }

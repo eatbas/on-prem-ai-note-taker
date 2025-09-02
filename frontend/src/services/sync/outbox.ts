@@ -32,7 +32,7 @@ export async function processOutbox(): Promise<void> {
   const items = await db.outbox
     .where('status')
     .anyOf(['pending', 'error'])
-    .orderBy('createdAt')
+    // .orderBy('createdAt') // TODO: Fix this when Dexie types are updated
     .toArray()
   
   console.log('📋 Found outbox items to process:', items.length)

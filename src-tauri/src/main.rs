@@ -4,6 +4,8 @@
 )]
 
 mod audio;
+mod multi_audio;
+mod whisper;
 mod env;
 mod windows;
 mod tray;
@@ -14,6 +16,8 @@ mod performance;
 mod error;
 
 use audio::{AudioCapture, AudioDevice};
+use multi_audio::{MultiSourceAudioCapture, MultiAudioConfig, AudioSource};
+use whisper::{LocalWhisperService, WhisperManager, WhisperConfig};
 use windows::WindowManager;
 use tray::TrayManager;
 use ipc::IPCBridge;
@@ -217,6 +221,98 @@ async fn stop_device_capture(
         .map_err(|e| format!("Failed to stop device capture: {}", e))
 }
 
+// ============ NEW PHASE 4 COMMANDS: Multi-Audio & Whisper ============
+
+#[tauri::command]
+async fn discover_audio_sources(
+    multi_audio: tauri::State<'_, Arc<Mutex<MultiSourceAudioCapture>>>
+) -> Result<Vec<AudioSource>, String> {
+    let capture = multi_audio.lock().await;
+    capture.discover_sources().await
+        .map_err(|e| format!("Failed to discover audio sources: {}", e))
+}
+
+#[tauri::command]
+async fn start_multi_recording(
+    source_ids: Vec<String>,
+    multi_audio: tauri::State<'_, Arc<Mutex<MultiSourceAudioCapture>>>
+) -> Result<(), String> {
+    let capture = multi_audio.lock().await;
+    capture.start_multi_recording(source_ids).await
+        .map_err(|e| format!("Failed to start multi-recording: {}", e))
+}
+
+#[tauri::command]
+async fn stop_multi_recording(
+    multi_audio: tauri::State<'_, Arc<Mutex<MultiSourceAudioCapture>>>
+) -> Result<(), String> {
+    let capture = multi_audio.lock().await;
+    capture.stop_recording().await
+        .map_err(|e| format!("Failed to stop multi-recording: {}", e))
+}
+
+#[tauri::command]
+async fn get_mixed_audio_data(
+    max_samples: Option<usize>,
+    multi_audio: tauri::State<'_, Arc<Mutex<MultiSourceAudioCapture>>>
+) -> Result<Vec<f32>, String> {
+    let capture = multi_audio.lock().await;
+    Ok(capture.get_mixed_audio(max_samples).await)
+}
+
+#[tauri::command]
+async fn get_source_audio_data(
+    source_id: String,
+    max_samples: Option<usize>,
+    multi_audio: tauri::State<'_, Arc<Mutex<MultiSourceAudioCapture>>>
+) -> Result<Vec<f32>, String> {
+    let capture = multi_audio.lock().await;
+    Ok(capture.get_source_audio(&source_id, max_samples).await)
+}
+
+#[tauri::command]
+async fn get_multi_audio_status(
+    multi_audio: tauri::State<'_, Arc<Mutex<MultiSourceAudioCapture>>>
+) -> Result<serde_json::Value, String> {
+    let capture = multi_audio.lock().await;
+    Ok(capture.get_status().await)
+}
+
+#[tauri::command]
+async fn initialize_whisper(
+    whisper_manager: tauri::State<'_, Arc<Mutex<WhisperManager>>>
+) -> Result<(), String> {
+    let manager = whisper_manager.lock().await;
+    
+    // Add default Whisper service
+    let config = WhisperConfig::default();
+    let service = LocalWhisperService::new(config);
+    
+    manager.add_service(service).await
+        .map_err(|e| format!("Failed to initialize Whisper: {}", e))?;
+    
+    Ok(())
+}
+
+#[tauri::command]
+async fn transcribe_audio_data(
+    audio_data: Vec<f32>,
+    sample_rate: u32,
+    whisper_manager: tauri::State<'_, Arc<Mutex<WhisperManager>>>
+) -> Result<String, String> {
+    let manager = whisper_manager.lock().await;
+    manager.transcribe(&audio_data, sample_rate).await
+        .map_err(|e| format!("Failed to transcribe audio: {}", e))
+}
+
+#[tauri::command]
+async fn get_whisper_models(
+    whisper_manager: tauri::State<'_, Arc<Mutex<WhisperManager>>>
+) -> Result<Vec<serde_json::Value>, String> {
+    let manager = whisper_manager.lock().await;
+    Ok(manager.list_services().await)
+}
+
 fn main() {
     let audio_capture = Arc::new(Mutex::new(AudioCapture::new().unwrap()));
     let window_manager = Arc::new(Mutex::new(WindowManager::new()));
@@ -224,6 +320,11 @@ fn main() {
     let ipc_bridge = Arc::new(Mutex::new(IPCBridge::new()));
     let notification_manager = Arc::new(Mutex::new(NotificationManager::new()));
     let fs_manager = Arc::new(Mutex::new(FileSystemManager::new()));
+    
+    // Phase 4: Multi-audio and Whisper managers
+    let multi_audio_config = MultiAudioConfig::default();
+    let multi_audio = Arc::new(Mutex::new(MultiSourceAudioCapture::new(multi_audio_config)));
+    let whisper_manager = Arc::new(Mutex::new(WhisperManager::new()));
 
     tauri::Builder::default()
         .manage(audio_capture)
@@ -232,6 +333,8 @@ fn main() {
         .manage(ipc_bridge.clone())
         .manage(notification_manager.clone())
         .manage(fs_manager)
+        .manage(multi_audio)
+        .manage(whisper_manager)
         .invoke_handler(tauri::generate_handler![
             get_audio_devices,
             start_audio_capture,
@@ -253,7 +356,17 @@ fn main() {
             show_notification,
             save_recording_file,
             list_recording_files,
-            get_performance_metrics
+            get_performance_metrics,
+            // Phase 4: Multi-audio and Whisper commands
+            discover_audio_sources,
+            start_multi_recording,
+            stop_multi_recording,
+            get_mixed_audio_data,
+            get_source_audio_data,
+            get_multi_audio_status,
+            initialize_whisper,
+            transcribe_audio_data,
+            get_whisper_models
         ])
         .setup(move |app| {
             let tray_manager = Arc::new(Mutex::new(TrayManager::new_with_handle(app.handle().clone())));
