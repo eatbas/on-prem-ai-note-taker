@@ -1,7 +1,7 @@
 # 🎤 On-Prem AI Note Taker — Phased Development Plan
 
 **Goal:** Restructure project around **Tauri v2** with **native audio capture**, **local Whisper transcription**, and **speaker diarization** (pyannote).  
-**Status:** Planning → Implementation  
+**Status:** Implementation — Phases 1–7 complete; 8 in progress  
 
 ---
 
@@ -14,6 +14,22 @@
 We are already migrated to **Tauri**, but we need to **remove old audio paths** and **restructure the repo** with a streaming pipeline.
 
 ---
+
+## ✅ Current Progress
+
+- Phases 1–7 implemented and committed to `main`:
+  - Cleanup and repo structure prepared
+  - Tauri audio capture module with 10s WAV chunking and `audio:chunk` events
+  - Local FastAPI services: transcriber (8123) and diarizer (8124)
+  - Rust coordinator wiring: chunk → transcribe → optional diarize → emit `transcript:partial` and append `transcript.jsonl` and `live.txt`
+  - Frontend `LiveTranscript` UI with Start/Stop, live rows, and exports (.txt, .jsonl, .srt)
+  - Route added: `#/live`
+- Phase 8 (separate tracks) started: toggle added; emits `audio:chunk_mic` and `audio:chunk_sys` and saves `chunk_####_{mic|sys}.wav` when enabled.
+
+How to try quickly:
+- Start transcriber and diarizer (below)
+- Start app and navigate to `#/live`
+- Use Start Mix; toggle "Keep tracks separate" if needed; export as .txt/.jsonl/.srt
 
 ## 🏗️ Target Architecture
 
@@ -62,7 +78,7 @@ Copy-paste each block into Cursor with **GPT-5** selected.
 
 **Cursor Prompt:**
 ```
-Create a Tauri v2 plugin at `src-tauri/plugins/audio_capture`:
+Create a Tauri v2 plugin at `src-tauri/src/plugins/audio_capture.rs`:
 
 Commands:
 - get_devices()
@@ -76,7 +92,7 @@ Behavior:
 - Windows: WASAPI loopback (default render device)
 - Linux: PulseAudio/PipeWire monitor source
 - Chunking: write 10s WAV files to app_data_dir()/recordings/<sessionId>/
-- Emit Tauri event "audio:chunk" with metadata after each chunk
+- Emit Tauri event "audio:chunk" with metadata after each chunk (and optionally `audio:chunk_mic` / `audio:chunk_sys`)
 ```
 
 **Deliverable:**  
@@ -106,6 +122,8 @@ Defaults:
 - Model: "medium"
 - compute_type="int8"
 - beam_size=5
+Env/Config:
+- `LOCAL_TRANSCRIBER_URL` (default `http://127.0.0.1:8123`)
 ```
 
 **Deliverable:**  
@@ -133,6 +151,8 @@ POST /diarize
 Implementation:
 - Load pyannote pipeline with HF_TOKEN env
 - Map raw speaker IDs -> stable "Speaker 1..N"
+Env/Config:
+- `LOCAL_DIARIZER_URL` (default `http://127.0.0.1:8124`)
 ```
 
 **Deliverable:**  
@@ -204,14 +224,12 @@ Create `src/components/LiveTranscript.tsx`:
 Features:
 - Start Mic / System / Mix / Stop buttons
 - Render transcript rows: [HH:MM:SS] Speaker 2: text...
-- Show latency per segment
 - Export buttons (.txt, .jsonl, .srt)
-- Settings panel:
-  - Transcriber mode (local/remote)
-  - Whisper model (medium/large-v3/distil-*)
-  - Language hint (tr/en)
-  - Diarization toggle + maxSpeakers
-  - Chunk size (8–20s)
+- Route: `#/live`
+- Separate-tracks toggle (emit mic/system separately)
+Planned next:
+- Latency per segment
+- Settings: transcriber mode, whisper model, language, diarization settings, chunk size
 ```
 
 **Deliverable:**  
