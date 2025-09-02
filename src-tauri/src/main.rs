@@ -14,7 +14,16 @@ mod notifications;
 mod fs;
 mod performance;
 mod error;
+mod coordinator;
 
+// Plugin module
+mod audio_capture_plugin {
+    pub use crate::plugins::audio_capture::*;
+}
+
+mod plugins {
+    pub mod audio_capture;
+}
 use audio::{AudioCapture, AudioDevice};
 use multi_audio::{MultiSourceAudioCapture, MultiAudioConfig, AudioSource};
 use whisper::{LocalWhisperService, WhisperManager, WhisperConfig, WhisperQuality, SupportedLanguages, ModelInfo, WhisperDevice, SpeakerSegment};
@@ -28,6 +37,7 @@ use env::load_environment;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tauri::Manager;
+use std::path::PathBuf;
 
 #[tauri::command]
 async fn get_audio_devices(
@@ -445,7 +455,18 @@ fn main() {
     let multi_audio = Arc::new(Mutex::new(MultiSourceAudioCapture::new(multi_audio_config)));
     let whisper_manager = Arc::new(Mutex::new(WhisperManager::new()));
 
+    // Audio chunker for plugin-style capture
+    let sample_rate = 48000u32;
+    let chunk_secs = 10u64;
+    let mut audio_chunker = audio_capture_plugin::AudioChunker::new(sample_rate, chunk_secs);
+
     tauri::Builder::default()
+        .setup(|app| {
+            // Assign app handle to audio chunker after app build
+            audio_chunker.set_app_handle(app.handle().clone());
+            app.manage(std::sync::Arc::new(tokio::sync::Mutex::new(audio_chunker)));
+            Ok(())
+        })
         .manage(audio_capture)
         .manage(window_manager.clone())
         .manage(perf_monitor)
@@ -476,6 +497,12 @@ fn main() {
             save_recording_file,
             list_recording_files,
             get_performance_metrics,
+            // Audio capture plugin-style commands
+            audio_capture_plugin::ac_get_devices,
+            audio_capture_plugin::ac_start_mic,
+            audio_capture_plugin::ac_start_system,
+            audio_capture_plugin::ac_start_mix,
+            audio_capture_plugin::ac_stop_all,
             // Phase 4: Multi-audio and Whisper commands
             discover_audio_sources,
             start_multi_recording,
