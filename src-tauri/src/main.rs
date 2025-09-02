@@ -15,15 +15,10 @@ mod fs;
 mod performance;
 mod error;
 mod coordinator;
+mod plugins;
 
 // Plugin module
-mod audio_capture_plugin {
-    pub use crate::plugins::audio_capture::*;
-}
-
-mod plugins {
-    pub mod audio_capture;
-}
+use plugins::audio_capture as audio_capture_plugin;
 use audio::{AudioCapture, AudioDevice};
 use multi_audio::{MultiSourceAudioCapture, MultiAudioConfig, AudioSource};
 use whisper::{LocalWhisperService, WhisperManager, WhisperConfig, WhisperQuality, SupportedLanguages, ModelInfo, WhisperDevice, SpeakerSegment};

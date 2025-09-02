@@ -196,6 +196,20 @@ impl LocalWhisperService {
         }
     }
 
+    /// Transcribe a WAV file via local FastAPI transcriber if configured
+    pub async fn transcribe_wav_file(&self, path: &str) -> Result<String> {
+        let base = std::env::var("LOCAL_TRANSCRIBER_URL").unwrap_or_else(|_| "http://127.0.0.1:8123".to_string());
+        let url = format!("{}/transcribe", base);
+        let client = reqwest::Client::new();
+        let form = reqwest::multipart::Form::new()
+            .file("file", path)
+            .map_err(|e| anyhow!(e.to_string()))?;
+        let resp = client.post(url).multipart(form).send().await
+            .map_err(|e| anyhow!(e.to_string()))?;
+        let json: serde_json::Value = resp.json().await.map_err(|e| anyhow!(e.to_string()))?;
+        Ok(json.get("text").and_then(|v| v.as_str()).unwrap_or("").to_string())
+    }
+
     /// Initialize the Whisper model with automatic best model selection
     pub async fn initialize(&mut self) -> Result<()> {
         if self.is_initialized {

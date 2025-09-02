@@ -34,6 +34,7 @@ uuid = { version = "1.6", features = ["v4"] }
 # hf-hub = "0.3"              # Hugging Face model hub
 anyhow = "1.0"                # Error handling
 dirs = "5.0"                  # Directory utilities
+reqwest = { version = "0.11", features = ["json", "multipart", "stream", "blocking", "rustls-tls"] }
 
 [features]
 # this feature is used for production builds or when `devPath` points to the filesystem and the built-in dev server is disabled.
