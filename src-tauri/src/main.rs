@@ -523,6 +523,7 @@ fn main() {
             audio_capture_plugin::ac_start_mix,
             audio_capture_plugin::ac_stop_all,
             audio_capture_plugin::ac_get_active_session_info,
+            audio_capture_plugin::ac_stop_and_finalize,
             // Phase 4: Multi-audio and Whisper commands
             discover_audio_sources,
             start_multi_recording,

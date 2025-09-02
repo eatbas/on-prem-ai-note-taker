@@ -198,6 +198,27 @@ pub async fn ac_get_active_session_info(state: tauri::State<'_, Arc<Mutex<AudioC
     })
 }
 
+#[tauri::command]
+pub async fn ac_stop_and_finalize(
+  state: tauri::State<'_, Arc<Mutex<AudioChunker>>>,
+  coord_state: tauri::State<'_, Arc<tokio::sync::Mutex<crate::coordinator::Coordinator>>>
+) -> Result<(), String> {
+    // Grab session dir before stopping
+    let session_dir = {
+        let chunker = state.lock().await;
+        chunker.session_dir.clone()
+    };
+    {
+        let mut chunker = state.lock().await;
+        let _ = chunker.stop_all().await;
+    }
+    if let Some(dir) = session_dir {
+        let coordinator = coord_state.lock().await;
+        coordinator.post_process(&dir.to_string_lossy()).await;
+    }
+    Ok(())
+}
+
 fn write_wav_chunk(path: &PathBuf, sample_rate: u32, data: &[f32]) -> Result<()> {
     if let Some(parent) = path.parent() { std::fs::create_dir_all(parent)?; }
     let spec = hound::WavSpec {
