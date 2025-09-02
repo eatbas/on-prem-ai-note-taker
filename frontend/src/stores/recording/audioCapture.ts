@@ -186,8 +186,25 @@ export class AudioCaptureManager {
 
 	// Create MediaRecorder with proper event handlers
 	createMediaRecorder(stream: MediaStream, onDataAvailable: (event: BlobEvent) => Promise<void>): MediaRecorder {
+		// Pick a supported mime type to avoid zero-byte chunks on some platforms
+		const candidateMimeTypes = [
+			'audio/webm;codecs=opus',
+			'audio/webm',
+			'audio/ogg;codecs=opus'
+		]
+		let selectedMime: string | undefined
+		for (const type of candidateMimeTypes) {
+			try {
+				if ((window as any).MediaRecorder && MediaRecorder.isTypeSupported(type)) {
+					selectedMime = type
+					break
+				}
+			} catch (_) {
+				// Ignore detection errors and continue
+			}
+		}
 		const recordingOptions: MediaRecorderOptions = {
-			mimeType: 'audio/webm;codecs=opus',
+			mimeType: selectedMime,
 			bitsPerSecond: 128000
 		}
 		

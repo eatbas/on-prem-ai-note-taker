@@ -12,7 +12,7 @@ from fastapi import HTTPException, UploadFile, BackgroundTasks
 from sqlalchemy.orm import Session
 
 from ..core.config import settings
-from ..models.user import get_or_create_user
+from ..models.user import get_or_create_user_from_header
 from ..models import Meeting, Transcription, Summary, Speaker, SpeakerSegment
 from ..core.utils import get_whisper_model, validate_language
 from ..clients.ollama_client import OllamaClient
@@ -61,8 +61,8 @@ class MeetingService:
         except HTTPException as e:
             raise HTTPException(status_code=400, detail=str(e.detail))
         
-        # Get or create user
-        user = get_or_create_user(db)
+        # Get or create user strictly from header-provided user_id
+        user = get_or_create_user_from_header(db, user_id)
         
         # Create meeting record
         meeting_id = str(uuid.uuid4())
@@ -228,7 +228,7 @@ class MeetingService:
             raise HTTPException(status_code=400, detail=str(e.detail))
         
         # Verify meeting exists and belongs to user
-        user = get_or_create_user(db)
+        user = get_or_create_user_from_header(db, user_id)
         meeting = db.query(Meeting).filter(
             Meeting.id == meeting_id,
             Meeting.user_id == user.id

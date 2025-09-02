@@ -16,7 +16,7 @@ from ..clients.ollama_client import OllamaClient
 from ..core.config import settings
 from ..database import get_db
 from ..models import Meeting, Transcription, Summary
-from ..models.user import get_or_create_user
+from ..models.user import get_or_create_user_from_header
 
 logger = logging.getLogger(__name__)
 
@@ -175,7 +175,7 @@ class ChunkedTranscriptionService:
             # Save to database if needed
             try:
                 db = next(get_db())
-                user = get_or_create_user(db)
+                user = get_or_create_user_from_header(db, user_id)
                 
                 # Create meeting record
                 meeting_id = job_id

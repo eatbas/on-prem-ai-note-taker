@@ -17,7 +17,7 @@ from .core.config import settings
 from .clients.ollama_client import OllamaClient
 from .database import get_db
 from .models import Meeting, Transcription, Summary
-from .models.user import get_or_create_user
+from .models.user import get_or_create_user_from_header
 from .core.utils import get_whisper_model, validate_language, require_basic_auth
 from .core.prompts import get_single_summary_prompt
 
@@ -198,7 +198,7 @@ async def process_transcribe_and_summarize_job(
             # Save to database if user exists
             try:
                 db = next(get_db())
-                user = get_or_create_user(db)
+                user = get_or_create_user_from_header(db, user_id)
                 
                 # Create meeting record
                 meeting_id = job_id  # Use job_id as meeting_id for simplicity

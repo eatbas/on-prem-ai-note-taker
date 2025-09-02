@@ -48,17 +48,27 @@ export class AudioRecordingManager {
 			// Persist media references in global state (getState() returns a copy)
 			setState({ micStream: finalStream, micRecorder: recorder })
 			
-			// Start recording with reasonable chunk size
-			const chunkMs = 1000  // 1 second chunks
-			console.log(`🎙️ Starting single-stream recording with ${chunkMs}ms chunks`)
-			recorder.start(chunkMs)
+			// Start recording without timeslice; we will pull data on our own cadence
+			console.log('🎙️ Starting single-stream recording without timeslice')
+			recorder.start()
 			
-			// Simple backup data capture
+			// Prime the recorder to avoid initial zero-byte chunk on some platforms
+			setTimeout(() => {
+				try {
+					if (recorder.state === 'recording') {
+						recorder.requestData()
+					}
+				} catch (e) {
+					console.warn('⚠️ Initial recorder.requestData() failed:', e)
+				}
+			}, 400)
+			
+			// Pull data at 1s intervals
 			const forceDataInterval = window.setInterval(() => {
 				if (recorder.state === 'recording') {
 					recorder.requestData()
 				}
-			}, 5000)
+			}, 1000)
 			setState({ forceDataInterval })
 			
 			console.log('✅ Simplified audio recording started successfully')
@@ -166,7 +176,10 @@ export class AudioRecordingManager {
 					onError(`Failed to save audio: ${error}`)
 				}
 			} else {
-				console.warn(`⚠️ Empty mic data: ${event.data?.size || 0} bytes, meetingId: ${meetingId}`)
+				// Avoid noisy logs; just trace once in a while
+				if (micChunkIndex.value % 5 === 0) {
+					console.log(`⏳ Waiting for mic data... last size=${event.data?.size || 0}`)
+				}
 			}
 		}
 	}
