@@ -492,6 +492,8 @@ fn main() {
             save_recording_file,
             list_recording_files,
             get_performance_metrics,
+            // Diarizer helper
+            whisper::diarize_wav_file,
             // Audio capture plugin-style commands
             audio_capture_plugin::ac_get_devices,
             audio_capture_plugin::ac_start_mic,

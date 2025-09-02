@@ -186,6 +186,38 @@ pub struct TranscriptionResult {
     pub formatted_output: String,               // Formatted for VPS AI model
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct DiarizationTurn {
+    pub start: f32,
+    pub end: f32,
+    pub speaker: String,
+}
+
+#[tauri::command]
+pub async fn diarize_wav_file(path: String) -> Result<Vec<DiarizationTurn>> {
+    let base = std::env::var("LOCAL_DIARIZER_URL").unwrap_or_else(|_| "http://127.0.0.1:8124".to_string());
+    let url = format!("{}/diarize", base);
+    let client = reqwest::Client::new();
+    let form = reqwest::multipart::Form::new()
+        .file("file", path)
+        .map_err(|e| anyhow!(e.to_string()))?;
+    let resp = client.post(url).multipart(form).send().await
+        .map_err(|e| anyhow!(e.to_string()))?;
+    let json: serde_json::Value = resp.json().await.map_err(|e| anyhow!(e.to_string()))?;
+    let turns = json.get("turns").and_then(|v| v.as_array()).cloned().unwrap_or_default();
+    let mut out = Vec::new();
+    for t in turns {
+        if let (Some(s), Some(e), Some(sp)) = (t.get("start"), t.get("end"), t.get("speaker")) {
+            out.push(DiarizationTurn {
+                start: s.as_f64().unwrap_or(0.0) as f32,
+                end: e.as_f64().unwrap_or(0.0) as f32,
+                speaker: sp.as_str().unwrap_or("").to_string(),
+            });
+        }
+    }
+    Ok(out)
+}
+
 impl LocalWhisperService {
     /// Create a new Whisper service
     pub fn new(config: WhisperConfig) -> Self {

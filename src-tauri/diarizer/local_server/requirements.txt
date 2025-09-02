@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+numpy
+soundfile
+torch
+pyannote.audio==3.*
+
