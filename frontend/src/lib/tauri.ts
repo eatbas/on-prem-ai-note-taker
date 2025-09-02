@@ -45,6 +45,13 @@ export const getTauriAPI = async () => {
     return { invoke, listen }
   } catch (error) {
     console.error('Failed to import Tauri APIs:', error)
+    // Fallback for development
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      return {
+        invoke: (window as any).__TAURI__.core.invoke,
+        listen: (window as any).__TAURI__.event.listen
+      }
+    }
     throw error
   }
 }
@@ -58,9 +65,14 @@ export const safeInvoke = async (cmd: string, args?: any): Promise<any> => {
   }
 
   try {
+    // Try modern API first
     const { invoke } = await getTauriAPI()
     return await invoke(cmd, args)
   } catch (error) {
+    // Fallback to window API
+    if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+      return await (window as any).__TAURI__.core.invoke(cmd, args)
+    }
     console.error(`Failed to invoke Tauri command '${cmd}':`, error)
     throw error
   }
