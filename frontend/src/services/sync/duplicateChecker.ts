@@ -35,7 +35,7 @@ export async function checkMeetingExists(meetingId: string): Promise<boolean> {
     return response.exists
     
   } catch (error) {
-    console.error(`❌ Failed to check meeting existence for ${meetingId}:`, error)
+    console.log(`ℹ️ Failed to check meeting existence for ${meetingId} (this is normal if offline):`, error)
     // If we can't check, assume it doesn't exist and allow sync
     return false
   }
@@ -55,7 +55,8 @@ export async function getSyncedMeetingIds(scope?: 'personal' | 'workspace' | 'al
     return meetings
     
   } catch (error) {
-    console.error(`❌ Failed to fetch synced meeting IDs:`, error)
+    console.log(`ℹ️ Failed to fetch synced meeting IDs (this is normal if offline or not authenticated):`, error)
+    // Return empty array instead of throwing - this is a non-critical operation
     return []
   }
 }

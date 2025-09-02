@@ -1,10 +1,12 @@
-import React, { useEffect, useMemo, useState, useCallback, memo, Suspense, lazy } from 'react'
+import React, { useEffect, useMemo, useState, useCallback, memo } from 'react'
 import { listMeetings, syncMeeting, watchOnline, deleteMeetingLocally, deleteAudioChunksLocally, getMeetings, getVpsHealth, updateMeeting, runVpsDiagnostics, quickVpsTest, VpsDiagnosticResult, deleteMeeting, db } from '../../../services'
 import { getComputerUsername } from '../../../utils/usernameDetector'
 import { useUserWorkspace } from '../../../hooks/useUserWorkspace'
 
-// 🚀 STAGE 3 OPTIMIZATION: Lazy load AskLlama component (only loaded when "llama" tab is active)
-const AskLlama = lazy(() => import('../../admin/pages/AskLlama'))
+
+
+// Import Local Processing Panel
+import LocalProcessingPanel from '../../../components/processing/LocalProcessingPanel'
 
 import { useToast } from '../../../components/common'
 import { createRippleEffect } from '../../../utils'
@@ -44,8 +46,10 @@ const Dashboard = memo(function Dashboard({
 	const [error, setError] = useState<string | null>(null)
     const [currentPage, setCurrentPage] = useState(1)
     const meetingsPerPage = 3  // Changed from 5 to 3 so you can see pagination with 4 meetings
-	const [activeTab, setActiveTab] = useState<'local' | 'llama' | 'workspace'>('local')
-	// 🚨 MULTI-WORKSPACE: Add workspace sub-tab state
+	const [activeTab, setActiveTab] = useState<'local' | 'workspace'>('local')
+	
+	// Check if we're in Tauri environment for local AI features
+	const isTauriEnvironment = typeof window !== 'undefined' && (window as any).__TAURI__
 	const [activeWorkspaceSubTab, setActiveWorkspaceSubTab] = useState<'all' | number>('all')
 
 	const [sendingMeetings, setSendingMeetings] = useState<Set<string>>(new Set())
@@ -693,11 +697,12 @@ const Dashboard = memo(function Dashboard({
 							: `${userWorkspace?.name || 'Workspace'} ☁️`, 
 						icon: '🏢' 
 					}] : []),
-					{ id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
+
+
 				].map((tab) => (
 					<button
 						key={tab.id}
-						onClick={() => setActiveTab(tab.id as 'local' | 'llama' | 'workspace')}
+						onClick={() => setActiveTab(tab.id as 'local' | 'workspace')}
 						style={{
 							flex: 1,
 							padding: '16px 24px',
@@ -745,37 +750,24 @@ const Dashboard = memo(function Dashboard({
 			{/* Diagnostic Results moved to Admin Dashboard */}
 
 			{/* Tab Content */}
-			{activeTab === 'llama' && (
-				<Suspense fallback={
-					<div style={{
-						display: 'flex',
-						justifyContent: 'center',
-						alignItems: 'center',
-						height: '200px',
-						color: '#64748b'
-					}}>
-						<div style={{ textAlign: 'center' }}>
-							<div style={{
-								width: '32px',
-								height: '32px',
-								border: '3px solid #e2e8f0',
-								borderTop: '3px solid #3b82f6',
-								borderRadius: '50%',
-								animation: 'spin 1s linear infinite',
-								margin: '0 auto 12px'
-							}} />
-							🤖 Loading AI Assistant...
-						</div>
-					</div>
-				}>
-				<AskLlama online={online} vpsUp={vpsUp} />
-				</Suspense>
-			)}
+			
+
 			
 			{/* Job Queue moved to Admin Dashboard */}
 
 			{activeTab === 'local' && (
 				<>
+					{/* Local AI Processing Panel - Only show in Tauri environment */}
+					{isTauriEnvironment && (
+						<LocalProcessingPanel 
+							onMeetingProcessed={() => {
+								// Refresh meetings after processing
+								refresh()
+								showToast('Meeting processed successfully!', 'success')
+							}}
+						/>
+					)}
+					
 					{serverLoading && (
 						<div style={{ 
 							textAlign: 'center', 

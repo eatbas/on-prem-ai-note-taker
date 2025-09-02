@@ -24,10 +24,7 @@ from .meetings import (
     AdminMeetingResponse,
     UserWorkspace,
 )
-from .chat import (
-    ChatRequest,
-    ChatResponse,
-)
+
 
 __all__ = [
     # Transcription schemas
@@ -50,7 +47,5 @@ __all__ = [
     "AdminUserResponse",
     "AdminMeetingResponse",
     "UserWorkspace",
-    # Chat schemas
-    "ChatRequest",
-    "ChatResponse",
+
 ]

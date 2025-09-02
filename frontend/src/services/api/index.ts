@@ -9,7 +9,7 @@ export * from './core'
 // Feature modules
 export * from './transcription'
 export * from './summarization'
-export * from './chat'
+
 export * from './meetings'
 export * from './jobs'
 export * from './queue'
@@ -20,7 +20,7 @@ export * from './workspaces'
 // Legacy compatibility - maintain existing import paths
 export { transcribe, transcribeAndSummarize, submitTranscribeAndSummarizeJob, submitQueueTranscription } from './transcription'
 export { summarize, submitQueueSummarization } from './summarization'
-export { chat } from './chat'
+
 export { 
   getMeetings, 
   getVpsMeetings, 

@@ -85,8 +85,12 @@ export default function App() {
           console.log('🔄 VPS health state updated manually')
         }
         
-        // 🧹 PHASE 2: Cleanup synced meetings to prevent duplicates
-        await cleanupSyncedMeetings()
+        // 🧹 PHASE 2: Cleanup synced meetings to prevent duplicates (only if online)
+        if (navigator.onLine) {
+          await cleanupSyncedMeetings()
+        } else {
+          console.log('📱 Skipping cleanup - offline mode')
+        }
       } catch (error) {
         console.error('❌ Manual VPS health check failed:', error)
       }

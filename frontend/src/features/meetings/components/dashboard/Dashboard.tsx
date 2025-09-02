@@ -1,11 +1,10 @@
-import React, { memo, Suspense, lazy } from 'react'
+import React, { memo } from 'react'
 import { useUserWorkspace } from '../../../../hooks/useUserWorkspace'
 import { useToast } from '../../../../components/common'
 import { getComputerUsername } from '../../../../utils/usernameDetector'
 import { useDashboardState } from '../../hooks/useDashboardState'
 
-// Lazy load components for better performance
-const AskLlama = lazy(() => import('../../../admin/pages/AskLlama'))
+
 
 // Import dashboard components
 import {
@@ -158,7 +157,7 @@ const Dashboard = memo(function Dashboard({
       icon: '🏢'
     }] : []),
     { id: 'vps', label: '☁️ VPS Meetings', icon: '🌐' },
-    { id: 'llama', label: '🤖 Ask AI Assistant', icon: '💬' }
+
   ]
 
   const renderTabContent = () => {
@@ -201,17 +200,7 @@ const Dashboard = memo(function Dashboard({
           />
         )
 
-      case 'llama':
-        return (
-          <Suspense fallback={
-            <LoadingProgress
-              message="Loading AI Assistant..."
-              type="default"
-            />
-          }>
-            <AskLlama online={online} vpsUp={vpsUp} />
-          </Suspense>
-        )
+
 
       default:
         return null

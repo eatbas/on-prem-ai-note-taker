@@ -51,7 +51,7 @@ frontend/src/
 │   ├── Dashboard.tsx
 │   ├── MeetingView.tsx
 │   ├── AdminDashboard.tsx
-│   ├── AskLlama.tsx
+
 │   └── index.ts                 # Page exports
 │
 ├── utils/                        # 🛠️ Legacy utilities (to be moved to lib/)
@@ -88,7 +88,7 @@ frontend/src/
 - **Types**: Meeting, MeetingMetadata, TranscriptionResult
 
 #### ⚙️ Admin Feature (`features/admin/`)
-- **Components**: AdminDashboard, AskLlama
+- **Components**: AdminDashboard
 - **Types**: Job, JobStatus, JobProgress
 
 #### 📊 Queue Feature (`features/queue/`)

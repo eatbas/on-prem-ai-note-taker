@@ -18,5 +18,4 @@ export * from './monitoring'
 // Administrative tools
 export * from './tools'
 
-// Chat components
-export * from './chat'
+
