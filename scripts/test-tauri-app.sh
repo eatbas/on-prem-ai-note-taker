@@ -38,6 +38,10 @@ print_test() {
     echo -e "${BLUE}🧪 $1${NC}"
 }
 
+# Fast mode flags (default FAST=1). Override: FAST=0 to run full tests
+FAST=${FAST:-1}
+SKIP_FRONTEND_BUILD=${SKIP_FRONTEND_BUILD:-0}
+
 # Test counter
 TESTS_PASSED=0
 TESTS_FAILED=0
@@ -109,15 +113,24 @@ print_info "🔨 Running Compilation Tests..."
 
 cd src-tauri
 
-run_test "Rust code compiles without errors" "cargo check --quiet"
-
-run_test "Rust code has no warnings" "cargo check 2>&1 | grep -q 'warning:' && false || true"
+if [[ "$FAST" -eq 1 ]]; then
+    run_test "Rust compiles (warnings as errors)" "RUSTFLAGS='-D warnings' cargo check --quiet"
+else
+    run_test "Rust code compiles without errors" "cargo check --quiet"
+    run_test "Rust code has no warnings" "cargo check 2>&1 | grep -q 'warning:' && false || true"
+fi
 
 cd ../frontend
 
 run_test "TypeScript compiles" "npm run type-check"
 
-run_test "Frontend builds successfully" "npm run build"
+if [[ "$SKIP_FRONTEND_BUILD" -eq 1 ]]; then
+    print_warning "Skipping frontend build (SKIP_FRONTEND_BUILD=1)"
+elif [[ "$FAST" -eq 1 ]]; then
+    run_test "Frontend builds (fast)" "npm run build:fast"
+else
+    run_test "Frontend builds successfully" "npm run build"
+fi
 
 cd ..
 

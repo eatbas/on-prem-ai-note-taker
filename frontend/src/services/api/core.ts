@@ -10,7 +10,7 @@ export const apiBase = (() => {
 	return config.apiBaseUrl
 })()
 
-export function getUserId(): string | undefined {
+export function getUserId(): string {
 	try {
 		// Electron-preload may set window.USER_ID
 		// @ts-ignore
@@ -26,14 +26,17 @@ export function getUserId(): string | undefined {
 	} catch {}
 	
 	// Check localStorage for existing user ID
-	let userId = localStorage.getItem('user_id')
+	let userId: string | null = null
+	try {
+		userId = localStorage.getItem('user_id')
+	} catch {}
 	
 	// If no user ID exists, create one
 	if (!userId) {
 		userId = initializeUserId()
 	}
 	
-	return userId || undefined
+	return userId
 }
 
 function initializeUserId(): string {
@@ -80,7 +83,7 @@ export function getApiHeaders(): Record<string, string> {
 	return {
 		'Content-Type': 'application/json',
 		...getAuthHeader(),
-		...(userId && { 'X-User-Id': userId })
+		'X-User-Id': userId
 	}
 }
 

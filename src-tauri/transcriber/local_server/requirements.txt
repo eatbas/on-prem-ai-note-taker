@@ -4,4 +4,5 @@ numpy
 soundfile
 faster-whisper==1.*
 resampy
-
+python-multipart
+huggingface_hub[hf_xet]

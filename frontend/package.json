@@ -6,6 +6,7 @@
 	"scripts": {
 		"dev": "vite",
 		"build": "vite build",
+		"build:fast": "vite build --minify=false --sourcemap=false",
 		"build:analyze": "vite build --mode analyze && npm run analyze",
 		"analyze": "npx vite-bundle-analyzer dist",
 		"preview": "vite preview --port 5173",

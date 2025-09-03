@@ -144,7 +144,7 @@ fi
 # Backend dependencies (Rust)
 cd ../src-tauri
 print_info "Checking Rust dependencies..."
-cargo check --quiet
+cargo check
 print_status "Rust dependencies ready"
 
 cd ..
@@ -177,20 +177,6 @@ fi
 
 cd ..
 
-# =============================================================================
-# 4. PORT MANAGEMENT
-# =============================================================================
-
-print_info "🌐 Checking ports..."
-
-FRONTEND_PORT=5173
-BACKEND_PORT=8000
-
-if check_port $FRONTEND_PORT; then
-    print_warning "Port $FRONTEND_PORT is in use, killing existing process"
-    lsof -ti:$FRONTEND_PORT | xargs kill -9 2>/dev/null || true
-    sleep 2
-fi
 
 # =============================================================================
 # 5. START DEVELOPMENT SERVERS

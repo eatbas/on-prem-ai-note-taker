@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
-use std::{fs::OpenOptions, io::Write, path::PathBuf, sync::Arc};
+use std::{fs::OpenOptions, io::Write, path::PathBuf};
 use tauri::{AppHandle, Emitter};
-use tokio::sync::Mutex;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TranscriptPartial {

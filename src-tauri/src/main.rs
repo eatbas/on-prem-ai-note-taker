@@ -32,10 +32,6 @@ use env::load_environment;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 use tauri::Manager;
-use std::path::PathBuf;
-use std::sync::Arc as StdArc;
-use tokio::sync::Mutex as TokioMutex;
-use plugins::audio_capture::ChunkEvent;
 
 #[tauri::command]
 async fn get_audio_devices(
@@ -454,24 +450,11 @@ fn main() {
     let whisper_manager = Arc::new(Mutex::new(WhisperManager::new()));
 
     // Audio chunker for plugin-style capture
-    let sample_rate = 48000u32;
+    let sample_rate = 44100u32;
     let chunk_secs = 10u64;
     let mut audio_chunker = audio_capture_plugin::AudioChunker::new(sample_rate, chunk_secs);
 
     tauri::Builder::default()
-        .setup(|app| {
-            // Assign app handle to audio chunker after app build
-            audio_chunker.set_app_handle(app.handle().clone());
-            app.manage(StdArc::new(TokioMutex::new(audio_chunker)));
-
-            // Replace coordinator with real handle and subscribe to events
-            let coord = coordinator::Coordinator::new(app.handle().clone());
-            let coord_state = StdArc::new(TokioMutex::new(coord));
-            app.manage(coord_state.clone());
-
-            // Note: Coordinator is invoked directly from plugin on chunk emit
-            Ok(())
-        })
         .manage(audio_capture)
         .manage(window_manager.clone())
         .manage(perf_monitor)
@@ -533,6 +516,15 @@ fn main() {
             get_speaker_segments
         ])
         .setup(move |app| {
+            // Assign app handle to audio chunker after app build and manage it as state
+            audio_chunker.set_app_handle(app.handle().clone());
+            app.manage(Arc::new(Mutex::new(audio_chunker)));
+
+            // Replace coordinator with real handle and subscribe to events
+            let coord = coordinator::Coordinator::new(app.handle().clone());
+            let coord_state = Arc::new(tokio::sync::Mutex::new(coord));
+            app.manage(coord_state.clone());
+
             let tray_manager = Arc::new(Mutex::new(TrayManager::new_with_handle(app.handle().clone())));
 
             // Initialize IPC bridge with app handle

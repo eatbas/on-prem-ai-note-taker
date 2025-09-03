@@ -6,6 +6,7 @@ use tokio::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::collections::HashMap;
 use anyhow::{anyhow, Result};
+use futures::executor::block_on;
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct AudioSource {
@@ -263,46 +264,70 @@ impl MultiSourceAudioCapture {
         let device = devices.get(device_index)
             .ok_or_else(|| anyhow!("Microphone device not found"))?;
 
-        // Configure stream
-        let config = cpal::StreamConfig {
-            channels: source.channels,
-            sample_rate: cpal::SampleRate(source.sample_rate),
-            buffer_size: cpal::BufferSize::Fixed(self.config.buffer_size as u32),
+        // Prefer the device's default input config; otherwise pick a supported range (max rate)
+        let supported = match device.default_input_config() {
+            Ok(cfg) => cfg,
+            Err(_) => {
+                let mut iter = device
+                    .supported_input_configs()
+                    .map_err(|e| anyhow!("Failed to query supported input configs: {}", e))?;
+                let range = iter
+                    .next()
+                    .ok_or_else(|| anyhow!("No supported input configs"))?;
+                range.with_max_sample_rate()
+            }
         };
+
+        let config: cpal::StreamConfig = supported.clone().into();
 
         // Initialize buffer
         let mut buffers = self.audio_buffers.lock().await;
         buffers.insert(source.id.clone(), Vec::new());
         drop(buffers);
 
-        // Create audio stream
         let audio_buffers = Arc::clone(&self.audio_buffers);
         let source_id = source.id.clone();
 
-        let stream = device.build_input_stream(
-            &config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                let audio_buffers = Arc::clone(&audio_buffers);
-                let source_id = source_id.clone();
-
-                let data_copy = data.to_vec(); // Copy data to avoid lifetime issues
-                tokio::spawn(async move {
-                    if let Ok(mut buffers) = audio_buffers.try_lock() {
-                        if let Some(buffer) = buffers.get_mut(&source_id) {
-                            buffer.extend_from_slice(&data_copy);
-                        }
+        use cpal::SampleFormat;
+        let stream = match supported.sample_format() {
+            SampleFormat::F32 => device.build_input_stream(
+                &config,
+                move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                    let mut buffers = block_on(audio_buffers.lock());
+                    if let Some(buffer) = buffers.get_mut(&source_id) {
+                        buffer.extend_from_slice(data);
                     }
-                });
-            },
-            |err| {
-                eprintln!("❌ Microphone stream error: {}", err);
-            },
-            None,
-        )?;
+                },
+                |err| eprintln!("❌ Microphone stream error: {}", err),
+                None,
+            )?,
+            SampleFormat::I16 => device.build_input_stream(
+                &config,
+                move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                    let mut buffers = block_on(audio_buffers.lock());
+                    if let Some(buffer) = buffers.get_mut(&source_id) {
+                        for &s in data { buffer.push(s as f32 / i16::MAX as f32); }
+                    }
+                },
+                |err| eprintln!("❌ Microphone stream error: {}", err),
+                None,
+            )?,
+            SampleFormat::U16 => device.build_input_stream(
+                &config,
+                move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                    let mut buffers = block_on(audio_buffers.lock());
+                    if let Some(buffer) = buffers.get_mut(&source_id) {
+                        for &s in data { buffer.push(s as f32 / u16::MAX as f32 * 2.0 - 1.0); }
+                    }
+                },
+                |err| eprintln!("❌ Microphone stream error: {}", err),
+                None,
+            )?,
+            _ => return Err(anyhow!("Unsupported microphone sample format")),
+        };
 
         stream.play()?;
-        std::mem::forget(stream); // Keep stream alive
-
+        std::mem::forget(stream);
         Ok(())
     }
 
@@ -315,36 +340,141 @@ impl MultiSourceAudioCapture {
         let device = self.host.default_output_device()
             .ok_or_else(|| anyhow!("No output device found"))?;
 
-        let config = cpal::StreamConfig {
-            channels: 2,
-            sample_rate: cpal::SampleRate(44100),
-            buffer_size: cpal::BufferSize::Fixed(self.config.buffer_size as u32),
+        // Try to get an input config for loopback; if none, try output config; else fallback to Stereo Mix-like inputs
+        let supported_input_opt = match device.default_input_config() {
+            Ok(cfg) => Some(cfg),
+            Err(_) => device.supported_input_configs().ok().and_then(|mut it| it.next().map(|r| r.with_max_sample_rate())),
         };
 
-        let audio_buffers = Arc::clone(&self.audio_buffers);
-        let source_id = source_id.to_string();
-
-        let stream = device.build_input_stream(
-            &config,
-            move |data: &[f32], _: &cpal::InputCallbackInfo| {
-                let audio_buffers = Arc::clone(&audio_buffers);
-                let source_id = source_id.clone();
-
-                let data_copy = data.to_vec(); // Copy data to avoid lifetime issues
-                tokio::spawn(async move {
-                    if let Ok(mut buffers) = audio_buffers.try_lock() {
+        let use_device_stream = if let Some(supported) = supported_input_opt {
+            let config: cpal::StreamConfig = supported.clone().into();
+            let audio_buffers = Arc::clone(&self.audio_buffers);
+            let source_id = source_id.to_string();
+            use cpal::SampleFormat;
+            let stream = match supported.sample_format() {
+                SampleFormat::F32 => device.build_input_stream(
+                    &config,
+                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                        let mut buffers = block_on(audio_buffers.lock());
                         if let Some(buffer) = buffers.get_mut(&source_id) {
-                            buffer.extend_from_slice(&data_copy);
+                            buffer.extend_from_slice(data);
+                        }
+                    },
+                    |err| eprintln!("❌ WASAPI stream error: {}", err),
+                    None,
+                )?,
+                SampleFormat::I16 => device.build_input_stream(
+                    &config,
+                    move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                        let mut buffers = block_on(audio_buffers.lock());
+                        if let Some(buffer) = buffers.get_mut(&source_id) {
+                            for &s in data { buffer.push(s as f32 / i16::MAX as f32); }
+                        }
+                    },
+                    |err| eprintln!("❌ WASAPI stream error: {}", err),
+                    None,
+                )?,
+                SampleFormat::U16 => device.build_input_stream(
+                    &config,
+                    move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                        let mut buffers = block_on(audio_buffers.lock());
+                        if let Some(buffer) = buffers.get_mut(&source_id) {
+                            for &s in data { buffer.push(s as f32 / u16::MAX as f32 * 2.0 - 1.0); }
+                        }
+                    },
+                    |err| eprintln!("❌ WASAPI stream error: {}", err),
+                    None,
+                )?,
+                _ => return Err(anyhow!("Unsupported loopback sample format")),
+            };
+            stream.play()?;
+            std::mem::forget(stream);
+            true
+        } else if let Ok(output_cfg) = device.default_output_config() {
+            // Last-ditch: use output config to build input stream (some WASAPI loopback setups report only output configs)
+            let config: cpal::StreamConfig = output_cfg.clone().into();
+            let audio_buffers = Arc::clone(&self.audio_buffers);
+            let source_id = source_id.to_string();
+            let stream = device.build_input_stream(
+                &config,
+                move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                    let mut buffers = block_on(audio_buffers.lock());
+                    if let Some(buffer) = buffers.get_mut(&source_id) {
+                        buffer.extend_from_slice(data);
+                    }
+                },
+                |err| eprintln!("❌ WASAPI loopback (output-config) stream error: {}", err),
+                None,
+            );
+            if let Ok(stream) = stream {
+                stream.play()?;
+                std::mem::forget(stream);
+                true
+            } else { false }
+        } else { false };
+
+        if !use_device_stream {
+            // Fallback to Stereo Mix-like input devices
+            let candidates = ["stereo mix", "what u hear", "loopback", "output", "speaker"]; 
+            let mut found: Option<cpal::Device> = None;
+            if let Ok(inputs) = self.host.input_devices() {
+                for dev in inputs {
+                    if let Ok(name) = dev.name() {
+                        let lname = name.to_lowercase();
+                        if candidates.iter().any(|k| lname.contains(k)) {
+                            found = Some(dev);
+                            break;
                         }
                     }
-                });
-            },
-            |err| eprintln!("❌ WASAPI stream error: {}", err),
-            None,
-        )?;
+                }
+            }
+            let mic_dev = found.ok_or_else(|| anyhow!("No supported input configs for loopback"))?;
+            let supported = match mic_dev.default_input_config() {
+                Ok(cfg) => cfg,
+                Err(_) => {
+                    let mut it = mic_dev.supported_input_configs().map_err(|e| anyhow!("Failed to query fallback input configs: {}", e))?;
+                    let range = it.next().ok_or_else(|| anyhow!("No fallback input configs"))?;
+                    range.with_max_sample_rate()
+                }
+            };
+            let config: cpal::StreamConfig = supported.clone().into();
+            let audio_buffers = Arc::clone(&self.audio_buffers);
+            let sid = source_id.to_string();
+            use cpal::SampleFormat;
+            let stream = match supported.sample_format() {
+                SampleFormat::F32 => mic_dev.build_input_stream(
+                    &config,
+                    move |data: &[f32], _: &cpal::InputCallbackInfo| {
+                        let mut buffers = block_on(audio_buffers.lock());
+                        if let Some(buffer) = buffers.get_mut(&sid) { buffer.extend_from_slice(data); }
+                    },
+                    |err| eprintln!("❌ Fallback stream error: {}", err),
+                    None,
+                )?,
+                SampleFormat::I16 => mic_dev.build_input_stream(
+                    &config,
+                    move |data: &[i16], _: &cpal::InputCallbackInfo| {
+                        let mut buffers = block_on(audio_buffers.lock());
+                        if let Some(buffer) = buffers.get_mut(&sid) { for &s in data { buffer.push(s as f32 / i16::MAX as f32); } }
+                    },
+                    |err| eprintln!("❌ Fallback stream error: {}", err),
+                    None,
+                )?,
+                SampleFormat::U16 => mic_dev.build_input_stream(
+                    &config,
+                    move |data: &[u16], _: &cpal::InputCallbackInfo| {
+                        let mut buffers = block_on(audio_buffers.lock());
+                        if let Some(buffer) = buffers.get_mut(&sid) { for &s in data { buffer.push(s as f32 / u16::MAX as f32 * 2.0 - 1.0); } }
+                    },
+                    |err| eprintln!("❌ Fallback stream error: {}", err),
+                    None,
+                )?,
+                _ => return Err(anyhow!("Unsupported fallback sample format")),
+            };
+            stream.play()?;
+            std::mem::forget(stream);
+        }
 
-        stream.play()?;
-        std::mem::forget(stream);
         Ok(())
     }
 

@@ -235,6 +235,22 @@ export default function AppShell({
                   </button>
                   
                   <button
+                    onClick={() => navigate('/live')}
+                    style={{
+                      padding: '8px 16px',
+                      backgroundColor: location.pathname === '/live' ? '#3b82f6' : '#f3f4f6',
+                      color: location.pathname === '/live' ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '14px',
+                      cursor: 'pointer',
+                      fontWeight: '500'
+                    }}
+                  >
+                    🎤 Live
+                  </button>
+                  
+                  <button
                     onClick={() => navigate('/admin')}
                     style={{
                       padding: '8px 16px',
@@ -391,6 +407,26 @@ export default function AppShell({
                     }}
                   >
                     🏠 Home
+                  </button>
+                  
+                  <button
+                    onClick={() => {
+                      navigate('/live')
+                      setIsMobileMenuOpen(false)
+                    }}
+                    style={{
+                      padding: '12px 16px',
+                      backgroundColor: location.pathname === '/live' ? '#3b82f6' : '#f3f4f6',
+                      color: location.pathname === '/live' ? 'white' : '#374151',
+                      border: '1px solid #d1d5db',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                      fontWeight: '500',
+                      width: '100%'
+                    }}
+                  >
+                    🎤 Live
                   </button>
                   
                   <button

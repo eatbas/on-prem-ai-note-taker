@@ -11,6 +11,9 @@ const AdminDashboard = lazy(() => import('./features/admin/pages/AdminDashboard'
 // Import Recorder directly (small component, frequently used)
 import { Recorder } from './features/recording'
 
+// Import LiveTranscript component
+import LiveTranscript from './components/LiveTranscript'
+
 // Import shared utilities
 import { useToast, ErrorBoundary } from './components/common'
 import { watchOnline } from './services'
@@ -186,7 +189,7 @@ export default function App() {
                 <Route path="/live" element={
                   <div style={{ padding: 16 }}>
                     {/* Lightweight mount of LiveTranscript without the full shell if desired */}
-                    {React.createElement(require('./components/LiveTranscript').default)}
+                    <LiveTranscript />
                   </div>
                 } />
                 
